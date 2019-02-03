@@ -42,22 +42,41 @@
 
 namespace icecream
 {
+    template<std::size_t...>
+    struct index_sequence
+    {};
+
+    template <std::size_t N, std::size_t... Ints>
+    struct index_sequence_helper
+        : public index_sequence_helper<N-1U, N-1U, Ints...>
+    {};
+
+    template <std::size_t... Ints>
+    struct index_sequence_helper<0U, Ints...>
+    {
+        using type = index_sequence<Ints...>;
+    };
+
+    template <std::size_t N>
+    using make_index_sequence = typename index_sequence_helper<N>::type;
+
+
     template<typename... Ts>
-    auto head(std::tuple<Ts...> tup)
+    auto head(std::tuple<Ts...> tup) -> decltype(std::get<0>(tup))
     {
         return std::get<0>(tup);
     }
 
     template<std::size_t... Ns ,typename... Ts>
-    auto tail_(std::index_sequence<Ns...>, std::tuple<Ts...> tup)
+    auto tail_(index_sequence<Ns...>, std::tuple<Ts...> tup) -> decltype(std::make_tuple(std::get<Ns+1u>(tup)...))
     {
         return std::make_tuple(std::get<Ns+1u>(tup)...);
     }
 
     template<typename... Ts>
-    auto tail(std::tuple<Ts...> tup)
+    auto tail(std::tuple<Ts...> tup) -> decltype(tail_(make_index_sequence<sizeof...(Ts) - 1u>(), tup))
     {
-        return tail_(std::make_index_sequence<sizeof...(Ts) - 1u>(), tup);
+        return tail_(make_index_sequence<sizeof...(Ts) - 1u>(), tup);
     }
 
 
@@ -76,11 +95,11 @@ namespace icecream
             int line,
             std::string const& function,
             std::tuple<Ts...> args
-        )
+        ) -> void
         {
             std::cout << "ic| ";
 
-            // If used a empty IC macro, i.e.: IC().
+            // If used an empty IC macro, i.e.: IC().
             if (std::tuple_size<decltype(args)>::value == 0)
             {
                 std::string::size_type const n = file.rfind('/');
@@ -97,15 +116,15 @@ namespace icecream
     private:
 
         template<typename T>
-        auto print_arg(std::string const& name, T const& value)
+        auto print_arg(std::string const& name, T const& value) -> void
         {
             std::cout << name << ": " << value;
         }
 
-        // Print all elements on tupe, where the element at index `i` is string with the
-        // argument name, and index `i+1` is that argument value.
+        // Print all elements inside tupe, where the element at index `i` is a string with
+        // the argument name, and the index `i+1` is that argument value.
         template<typename... Ts>
-        auto print_all_args(std::tuple<Ts...>const& args)
+        auto print_all_args(std::tuple<Ts...>const& args) -> void
         {
             auto arg_name = head(args);
             auto arg_value = head(tail(args));
@@ -119,7 +138,7 @@ namespace icecream
             }
         }
 
-        auto print_all_args(std::tuple<> const&) {}
+        auto print_all_args(std::tuple<> const&) -> void {}
     };
 
     namespace
