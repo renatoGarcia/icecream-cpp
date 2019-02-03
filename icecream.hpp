@@ -30,6 +30,15 @@
 #include <utility>
 
 
+#if defined(__GNUC__)
+    #define ICECREAM_FUNCTION __PRETTY_FUNCTION__
+#elif defined(_MSC_VER)
+    #define ICECREAM_FUNCTION __FUNCSIG__
+#else
+    #define ICECREAM_FUNCTION __func__
+#endif
+
+
 #define ICECREAM_APPLY(macro, a0) macro(a0)
 
 #define ICECREAM_LIST_SIZE(...) ICECREAM_LIST_SIZE_(__VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
@@ -60,7 +69,7 @@
 
 #define ICECREAM_EXPAND_ARG(a0) #a0, a0
 
-#define IC(...) ::icecream::print{__FILE__, __LINE__, __PRETTY_FUNCTION__, ICECREAM_FOREACH(ICECREAM_EXPAND_ARG, (__VA_ARGS__))}
+#define IC(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, ICECREAM_FOREACH(ICECREAM_EXPAND_ARG, (__VA_ARGS__))}
 
 
 namespace icecream
@@ -172,14 +181,14 @@ namespace icecream
     struct print
     {
         // An empty IC() macro will expand to
-        // ::icecream::print{__FILE__, __LINE__, __PRETTY_FUNCTION__, "",}
+        // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "",}
         print(std::string const& file, int line, std::string const& function, char const*)
         {
             ::icecream::ic.print(file, line, function, std::make_tuple());
         }
 
         // A macro like IC(foo, bar) will expand to
-        // ::icecream::print{__FILE__, __LINE__, __PRETTY_FUNCTION__, "foo", foo, "bar", bar}
+        // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "foo", foo, "bar", bar}
         template<typename... Ts>
         print(std::string const& file, int line, std::string const& function, Ts&&... args)
         {
