@@ -83,9 +83,9 @@ finite integer number.
 
 ### Ongoing work
 
-This library is at a very early version, and I have only tested it on GCC 8.2 compiling
-with C++11, C++14 and C++17 flags. Some code could be needed to make it work with other
-compilers and older versions of GCC.
+This library is at an early version, and it was tested on GCC 8.2 compiling
+with C++11, C++14 and C++17 flags. Some minor code changes could be needed to make it work with other
+compilers and older versions of GCC. Please report any success or problems.
 
 Work must be done adding customization options to the Icecream class, and mimicking the
 relevant functionalities of the original Python IceCream library.
