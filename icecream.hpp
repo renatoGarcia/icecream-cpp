@@ -75,7 +75,11 @@
 
 #define ICECREAM_EXPAND_ARG(a0) #a0, a0
 
-#define IC(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, ICECREAM_FOREACH(ICECREAM_EXPAND_ARG, (__VA_ARGS__))}
+#if defined(ICECREAM_LONG_NAME)
+    #define ICECREAM(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, ICECREAM_FOREACH(ICECREAM_EXPAND_ARG, (__VA_ARGS__))}
+#else
+    #define IC(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, ICECREAM_FOREACH(ICECREAM_EXPAND_ARG, (__VA_ARGS__))}
+#endif
 
 
 namespace icecream

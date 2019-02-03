@@ -68,6 +68,15 @@ will work and print something like:
 
     ic| (sum(40, 2)): 42
 
+As `IC(...)` is a preprocessor macro, it can cause conflicts if there is some other `IC`
+identifier on code. To change the `IC(...)` macro to a longer `ICECREAM(...)` one, just
+define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` header:
+
+```C++
+#define ICECREAM_LONG_NAME
+#include "icecream.hpp"
+```
+
 Also, because of the preprocessor metaprogramming machinery, there are a maximum limit of
 16 arguments on `IC(...)` macro. That limit can be extended, but it will always be a
 finite integer number.
