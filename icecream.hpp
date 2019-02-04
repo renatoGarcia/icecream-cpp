@@ -26,7 +26,6 @@
 
 #include <iostream>
 #include <string>
-#include <tuple>
 #include <utility>
 
 
@@ -84,44 +83,6 @@
 
 namespace icecream
 {
-    template<std::size_t...>
-    struct index_sequence
-    {};
-
-    template <std::size_t N, std::size_t... Ints>
-    struct index_sequence_helper
-        : public index_sequence_helper<N-1U, N-1U, Ints...>
-    {};
-
-    template <std::size_t... Ints>
-    struct index_sequence_helper<0U, Ints...>
-    {
-        using type = index_sequence<Ints...>;
-    };
-
-    template <std::size_t N>
-    using make_index_sequence = typename index_sequence_helper<N>::type;
-
-
-    template<typename... Ts>
-    auto head(std::tuple<Ts...> const& tup) -> decltype(std::get<0>(tup))&
-    {
-        return std::get<0>(tup);
-    }
-
-    template<std::size_t... Ns ,typename... Ts>
-    auto tail_(index_sequence<Ns...>, std::tuple<Ts...>&& tup) -> decltype(std::forward_as_tuple(std::get<Ns+1u>(tup)...))
-    {
-        return std::forward_as_tuple(std::get<Ns+1u>(tup)...);
-    }
-
-    template<typename... Ts>
-    auto tail(std::tuple<Ts...>&& tup) -> decltype(tail_(make_index_sequence<sizeof...(Ts) - 1u>(), std::move(tup)))
-    {
-        return tail_(make_index_sequence<sizeof...(Ts) - 1u>(), std::move(tup));
-    }
-
-
     class Icecream
     {
     public:
@@ -136,20 +97,20 @@ namespace icecream
             std::string const& file,
             int line,
             std::string const& function,
-            std::tuple<Ts...>&& args
+            Ts&&... args
         ) -> void
         {
             std::cout << "ic| ";
 
             // If used an empty IC macro, i.e.: IC().
-            if (std::tuple_size<std::tuple<Ts...>>::value == 0)
+            if (sizeof...(Ts) == 0)
             {
                 std::string::size_type const n = file.rfind('/');
                 std::cout << file.substr(n+1) << ':' << line << " in \"" << function << '"';
             }
             else
             {
-                this->print_all_args(std::move(args));
+                this->print_all_args(std::forward<Ts>(args)...);
             }
 
             std::cout << std::endl;
@@ -165,22 +126,18 @@ namespace icecream
 
         // Print all elements inside tupe, where the element at index `i` is a string with
         // the argument name, and the index `i+1` is that argument value.
-        template<typename... Ts>
-        auto print_all_args(std::tuple<Ts...>&& args) -> void
+        template<typename TArg, typename... Ts>
+        auto print_all_args(std::string const& arg_name, TArg&& arg_value, Ts&&... args_tail) -> void
         {
-            auto const& arg_name = head(args);
-            auto&& arg_value = head(tail(std::move(args)));
-            auto&& args_tail = tail(tail(std::move(args)));
-
             this->print_arg(arg_name, arg_value);
-            if (std::tuple_size<std::tuple<Ts...>>::value > 2)
+            if (sizeof...(Ts) > 0)
             {
                 std::cout << ", ";
-                this->print_all_args(std::move(args_tail));
+                this->print_all_args(std::forward<Ts>(args_tail)...);
             }
         }
 
-        auto print_all_args(std::tuple<>&&) -> void {}
+        auto print_all_args() -> void {}
     };
 
     namespace
@@ -194,7 +151,7 @@ namespace icecream
         // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "",}
         print(std::string const& file, int line, std::string const& function, char const*)
         {
-            ::icecream::ic.print(file, line, function, std::make_tuple());
+            ::icecream::ic.print(file, line, function);
         }
 
         // A macro like IC(foo, bar) will expand to
@@ -202,7 +159,7 @@ namespace icecream
         template<typename... Ts>
         print(std::string const& file, int line, std::string const& function, Ts&&... args)
         {
-            ::icecream::ic.print(file, line, function, std::forward_as_tuple(args...));
+            ::icecream::ic.print(file, line, function, std::forward<Ts>(args)...);
         }
     };
 
