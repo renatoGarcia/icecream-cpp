@@ -21,8 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#ifndef _ICECREAM_HPP_
-#define _ICECREAM_HPP_
+#ifndef ICECREAM_HPP_INCLUDED
+#define ICECREAM_HPP_INCLUDED
 
 #include <iostream>
 #include <iterator>
@@ -172,4 +172,4 @@ namespace icecream
 } // namespace icecream
 
 
-#endif // _ICECREAM_HPP_
+#endif // ICECREAM_HPP_INCLUDED

@@ -60,7 +60,9 @@ auto sum(int i0, int i1) -> int
 }
 
 // ...
+
 IC((sum(40, 2)));
+
 // ...
 ```
 
@@ -76,6 +78,14 @@ define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` header:
 #define ICECREAM_LONG_NAME
 #include "icecream.hpp"
 ```
+
+### Similar projects
+
+The [CleanType](https://github.com/pthom/cleantype) library has a focus on printing
+readable types names, but there is support to print variables names and values alongside
+its types. An optional integration of CleanType with IceCream-Cpp, if the first is present
+on system, is being planed. With that would be possible to show the types of values within
+`IC(...)` macro.
 
 ### Ongoing work
 
