@@ -38,7 +38,7 @@ int main(int, char *[])
     IC(i0);
     IC(i0, d0);
     IC(i0, d0, 10, 30);
-    IC((sum(40, 2)));
+    IC((sum(40, 2)), i0   , (((sum(3, 5)))));
 
     MyClass mc {20};
     IC(mc);

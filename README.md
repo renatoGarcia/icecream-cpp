@@ -77,10 +77,6 @@ define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` header:
 #include "icecream.hpp"
 ```
 
-Also, because of the preprocessor metaprogramming machinery, there are a maximum limit of
-16 arguments on `IC(...)` macro. That limit can be extended, but it will always be a
-finite integer number.
-
 ### Ongoing work
 
 This library is at an early version, and it was tested on GCC 8.2 compiling

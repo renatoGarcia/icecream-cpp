@@ -25,8 +25,10 @@
 #define _ICECREAM_HPP_
 
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <utility>
+#include <vector>
 
 
 #define ICECREAM_MAJOR_VERSION 0
@@ -44,40 +46,10 @@
 #endif
 
 
-#define ICECREAM_APPLY(macro, a0) macro(a0)
-
-#define ICECREAM_LIST_SIZE(...) ICECREAM_LIST_SIZE_(__VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-#define ICECREAM_LIST_SIZE_(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, N, ...) N
-
-#define ICECREAM_HEAD(a0, ...) a0
-#define ICECREAM_TAIL(a0, ...) (__VA_ARGS__)
-
-#define ICECREAM_FOREACH(macro, list) ICECREAM_FOREACH_(ICECREAM_LIST_SIZE list, macro, list)
-#define ICECREAM_FOREACH_(N, macro, list) ICECREAM_FOREACH__(N, macro, list)
-#define ICECREAM_FOREACH__(N, macro, list) ICECREAM_FOREACH_##N(macro, list)
-#define ICECREAM_FOREACH_1(macro, list) macro list
-#define ICECREAM_FOREACH_2(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_1(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_3(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_2(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_4(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_3(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_5(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_4(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_6(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_5(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_7(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_6(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_8(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_7(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_9(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_8(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_10(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_9(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_11(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_10(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_12(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_11(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_13(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_12(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_14(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_13(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_15(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_14(macro, ICECREAM_TAIL list)
-#define ICECREAM_FOREACH_16(macro, list) ICECREAM_APPLY(macro, ICECREAM_HEAD list), ICECREAM_FOREACH_15(macro, ICECREAM_TAIL list)
-
-#define ICECREAM_EXPAND_ARG(a0) #a0, a0
-
 #if defined(ICECREAM_LONG_NAME)
-    #define ICECREAM(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, ICECREAM_FOREACH(ICECREAM_EXPAND_ARG, (__VA_ARGS__))}
+    #define ICECREAM(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__, __VA_ARGS__}
 #else
-    #define IC(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, ICECREAM_FOREACH(ICECREAM_EXPAND_ARG, (__VA_ARGS__))}
+    #define IC(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__, __VA_ARGS__}
 #endif
 
 
@@ -97,6 +69,7 @@ namespace icecream
             std::string const& file,
             int line,
             std::string const& function,
+            std::vector<std::string> const& arg_names,
             Ts&&... args
         ) -> void
         {
@@ -110,7 +83,7 @@ namespace icecream
             }
             else
             {
-                this->print_all_args(std::forward<Ts>(args)...);
+                this->print_all_args(std::begin(arg_names), std::forward<Ts>(args)...);
             }
 
             std::cout << std::endl;
@@ -124,20 +97,18 @@ namespace icecream
             std::cout << name << ": " << value;
         }
 
-        // Print all elements inside tupe, where the element at index `i` is a string with
-        // the argument name, and the index `i+1` is that argument value.
         template<typename TArg, typename... Ts>
-        auto print_all_args(std::string const& arg_name, TArg&& arg_value, Ts&&... args_tail) -> void
+        auto print_all_args(std::vector<std::string>::const_iterator arg_name, TArg&& arg_value, Ts&&... args_tail) -> void
         {
-            this->print_arg(arg_name, arg_value);
+            this->print_arg(*arg_name, arg_value);
             if (sizeof...(Ts) > 0)
             {
                 std::cout << ", ";
-                this->print_all_args(std::forward<Ts>(args_tail)...);
+                this->print_all_args(++arg_name, std::forward<Ts>(args_tail)...);
             }
         }
 
-        auto print_all_args() -> void {}
+        auto print_all_args(std::vector<std::string>::const_iterator) -> void {}
     };
 
     namespace
@@ -149,17 +120,52 @@ namespace icecream
     {
         // An empty IC() macro will expand to
         // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "",}
-        print(std::string const& file, int line, std::string const& function, char const*)
-        {
-            ::icecream::ic.print(file, line, function);
-        }
-
         // A macro like IC(foo, bar) will expand to
-        // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "foo", foo, "bar", bar}
+        // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "foo, bar", foo, bar}
         template<typename... Ts>
-        print(std::string const& file, int line, std::string const& function, Ts&&... args)
+        print(std::string const& file, int line, std::string const& function, std::string const& arg_names, Ts&&... args)
         {
-            ::icecream::ic.print(file, line, function, std::forward<Ts>(args)...);
+            auto split_names = std::vector<std::string> {};
+            auto b_it = std::begin(arg_names);
+            auto it = std::begin(arg_names);
+            int par_count = 0;
+
+            // Split the the arg_names
+            while (true)
+            {
+                if (it == std::end(arg_names) || (*it == ',' && par_count == 0))
+                {
+                    // Remove the trailing spaces
+                    auto e_it = std::prev(it);
+                    while (*e_it == ' ') --e_it;
+                    ++e_it;
+
+                    // Remove the leading spaces
+                    while (*b_it == ' ') ++b_it;
+
+                    split_names.emplace_back(b_it, e_it);
+                    b_it = std::next(it);
+                }
+                else if (*it == '(')
+                {
+                    ++par_count;
+                }
+                else if (*it == ')')
+                {
+                    --par_count;
+                }
+
+                if (it == std::end(arg_names))
+                {
+                    break;
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+
+            ::icecream::ic.print(file, line, function, split_names, std::forward<Ts>(args)...);
         }
     };
 
