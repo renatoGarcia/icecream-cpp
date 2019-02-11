@@ -26,11 +26,11 @@
 
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
-#include <type_traits>
-#include <memory>
 
 
 #define ICECREAM_MAJOR_VERSION 0
@@ -67,11 +67,12 @@ namespace boost
     template <typename T> class weak_ptr;
 }
 
+
 namespace icecream
 {
     namespace detail
     {
-        // ---------- Check if a type T is a instantiation of a template class U
+        // ---------- Check if a type T is an instantiation of a template class U
         template <template<typename...> class, typename...>
         struct is_instantiation: std::false_type {};
 
@@ -111,28 +112,28 @@ namespace icecream
             begin(std::declval<T&>()) != end(std::declval<T&>()),   // begin end operator!=
             ++std::declval<decltype(begin(std::declval<T&>()))&>(), // operator++
             *begin(std::declval<T&>()),                             // operator*
-            std::true_type{}
+            std::true_type {}
         );
 
         template <typename T>
         auto is_iterable_impl(...) -> std::false_type;
 
-        template<typename T>
-        using is_iterable = decltype(detail::is_iterable_impl<T>(0));
+        template <typename T>
+        using is_iterable = decltype(is_iterable_impl<T>(0));
 
 
         // -------------------------------------------------- has_insertion
         template <typename T>
         auto has_insertion_impl(int) -> decltype (
             std::declval<std::ostream&>() << std::declval<T&>(),
-            std::true_type{}
+            std::true_type {}
         );
 
         template <typename T>
-        std::false_type has_insertion_impl(...);
+        auto has_insertion_impl(...) -> std::false_type;
 
         template <typename T>
-        using has_insertion = decltype(detail::has_insertion_impl<T>(0));
+        using has_insertion = decltype(has_insertion_impl<T>(0));
 
 
         // -------------------------------------------------- is_optional
@@ -185,7 +186,7 @@ namespace icecream
             return *this;
         }
 
-        template<typename... Ts>
+        template <typename... Ts>
         auto print(
             std::string const& file,
             int line,
@@ -199,7 +200,7 @@ namespace icecream
             // If used an empty IC macro, i.e.: IC().
             if (sizeof...(Ts) == 0)
             {
-                std::string::size_type const n = file.rfind('/');
+                auto const n = file.rfind('/');
                 std::cout << file.substr(n+1) << ':' << line << " in \"" << function << '"';
             }
             else
@@ -221,7 +222,6 @@ namespace icecream
                 detail::is_pointer_like<T>::value
             >::type
         {
-
             if (!this->show_pointed_value_)
             {
                 std::cout << value;
@@ -237,7 +237,7 @@ namespace icecream
             }
         }
 
-        // Until C++20 std::unique_ptr has not an operator<<(ostream&) overload
+        // Until C++20 std::unique_ptr had not an operator<<(ostream&) overload
         template <typename T>
         auto print_value(T const& value) -> typename
             std::enable_if<
@@ -257,7 +257,8 @@ namespace icecream
             this->print_value(value.lock());
         }
 
-        // Print any class that overloads operator<<(std::ostream&, T)
+        // Print any class that overloads operator<<(std::ostream&, T) and is not a
+        // pointer like.
         template <typename T>
         auto print_value(T const& value) -> typename
             std::enable_if<
@@ -313,14 +314,14 @@ namespace icecream
         }
 
         // Print the pair argument name and argument value
-        template<typename T>
+        template <typename T>
         auto print_arg(std::string const& name, T const& value) -> void
         {
             std::cout << name << ": ";
             this->print_value(value);
         }
 
-        template<typename TArg, typename... Ts>
+        template <typename TArg, typename... Ts>
         auto print_all_args(std::vector<std::string>::const_iterator arg_name, TArg&& arg_value, Ts&&... args_tail) -> void
         {
             this->print_arg(*arg_name, std::forward<TArg>(arg_value));
@@ -345,13 +346,13 @@ namespace icecream
         // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "",}
         // A macro like IC(foo, bar) will expand to
         // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "foo, bar", foo, bar}
-        template<typename... Ts>
+        template <typename... Ts>
         print(std::string const& file, int line, std::string const& function, std::string const& arg_names, Ts&&... args)
         {
             auto split_names = std::vector<std::string> {};
             auto b_it = std::begin(arg_names);
             auto it = std::begin(arg_names);
-            int par_count = 0;
+            auto par_count = int {0};
 
             // Split the the arg_names
             while (true)
