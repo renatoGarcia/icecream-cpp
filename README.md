@@ -10,7 +10,7 @@ auto my_function(int i, double d) -> void
     std::cout << "1" << std::endl;
     if (condition)
         std::cout << "2" << std::endl;
-    else:
+    else
         std::cout << "3" << std::endl;
 }
 ```
@@ -23,7 +23,7 @@ auto my_function(int i, double d) -> void
     IC();
     if (condition)
         IC();
-    else:
+    else
         IC();
 }
 ```
