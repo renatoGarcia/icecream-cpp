@@ -2,20 +2,71 @@
 
 IceCream-Cpp is a little library to help with the print debugging on C++11 and forward.
 
+With IceCream-Cpp, an execution inspection:
+
+```c++
+auto my_function(int i, double d) -> void
+{
+    std::cout << "1" << std::endl;
+    if (condition)
+        std::cout << "2" << std::endl;
+    else:
+        std::cout << "3" << std::endl;
+}
+```
+
+can be coded instead:
+
+```c++
+auto my_function(int i, double d) -> void
+{
+    IC();
+    if (condition)
+        IC();
+    else:
+        IC();
+}
+```
+
+and will print something like:
+
+    ic| test.cpp:34 in "void my_function(int, double)"
+    ic| test.cpp:36 in "void my_function(int, double)"
+
+And any variable inspection like:
+
+```c++
+std::cout << "a: " << a
+          << ", b: " << b
+          << ", sum(a, b): " << sum(a, b)
+          << std::endl;
+```
+
+can be simplified to:
+
+```c++
+IC(a, b, (sum(a, b)));
+```
+
+that will print:
+
+    ic| a: 7, b: 2, (sum(a, b)): 9
+
 This library is inspired by and aims to behave the most identical as possible to the
-original Python [IceCream](https://github.com/gruns/icecream) library.
+original [Python IceCream](https://github.com/gruns/icecream) library.
 
 ## Install
 
-The IceCream-Cpp is a header only library, having the STL as its only dependency. To
-install it just copy the `icecream.hpp` header anywhere the compiler can find it.
+The IceCream-Cpp is a one file, header only library, having the STL as its only
+dependency. To install it just copy the `icecream.hpp` header anywhere the compiler can
+find it.
 
 ## Usage
 
-After including the header on source `test.cpp`:
+After including the `icecream.hpp` header on a source file, `test.cpp` for this example:
 
 ```C++
-#include <icecream.hpp>
+#include "icecream.hpp"
 ```
 
 A macro `IC(...)` will be defined. If called with no arguments it will print the prefix
@@ -31,7 +82,7 @@ auto my_function(int foo, double bar) -> void
 }
 ```
 
-Will print something like:
+will print:
 
     ic| test.cpp:34 in "void my_function(int, double)"
 
@@ -39,16 +90,16 @@ If called with arguments, it will print the prefix, those arguments names, and i
 The code:
 
 ```C++
-auto i0 = int {7};
+auto v0 = std::vector<int> {1, 2, 3};
 auto s0 = std::string {"bla"};
-IC(i0, s0, 3.14);
+IC(v0, s0, 3.14);
 ```
 
-will print something like:
+will print:
 
-    ic| i0: 7, s0: bla, 3.14: 3.14
+    ic| v0: [1, 2, 3], s0: bla, 3.14: 3.14
 
-### Printing function
+### Printing logic
 
 Except by some especial types described bellow, an overload of the `operator<<(ostream&,
 T)` function must exist to all printed types `T`. If an overload of `operator<<` could not
@@ -73,7 +124,7 @@ will print something like:
 
     ic| v0: 7 at 0x55587b6f5410, v1: nullptr
 
-To disable this functionality and to print only the pointer value, set the
+To disable this functionality and print only the pointer value, just set the
 `show_pointed_value` option to `false`:
 
 ```C++
@@ -86,7 +137,8 @@ Having set the option to `false`, the same code above would print:
 
 #### Optional type
 
-A `std::optional` variable will print its value, if it has one, or *nullopt* otherwise.
+A `std::optional<T>` typed variable will print its value, if it has one, or *nullopt*
+otherwise.
 
 The code:
 
@@ -107,12 +159,14 @@ will be used instead. The code:
 auto operator<<(std::ostream& os, std::optional<std::string> const& value) -> std::ostream&
 {
     if (value.has_value())
-        std::cout << "Has string " << *value;
+        os << "Has string " << *value;
     else
-        std::cout << "No string";
-
+        os << "No string";
     return os;
 }
+
+// ...
+
 auto v2 = std::optional<std::string> {"bla"};
 IC(v2);
 ```
@@ -124,7 +178,7 @@ will print:
 
 #### Iterable types
 
-If for an instance `a` of a type `A`, all operations below are valid:
+If for a type `A` with an instance `a`, all operations below are valid:
 
 ```C++
 auto it = begin(a);
@@ -145,21 +199,19 @@ will print:
 
     ic| v0: [10, 20, 30]
 
-If there are any suitable overload resolution to `operator<<(ostream&, A)`, it will take
+If there is any suitable overload resolution to `operator<<(ostream&, A)`, it will take
 precedence and used instead. The code:
 
 ```C++
-template<typename T>
+template <typename T>
 auto operator<<(std::ostream& os, std::vector<T> const& value) -> std::ostream&
 {
-    std::cout << "Vector - { ";
-    auto c = int {0};
+    os << "Vector - { ";
     for (auto& i : value)
     {
-        std::cout << "(" << c << ":" << i << ") ";
-        ++c;
+        os << "(" << i << ") ";
     }
-    std::cout << "}";
+    os << "}";
     return os;
 }
 
@@ -169,7 +221,7 @@ IC(v1);
 
 will print:
 
-    ic| v1: Vector - { (0:a) (1:b) (2:c) }
+    ic| v1: Vector - { (a) (b) (c) }
 
 ## Pitfalls
 
@@ -185,24 +237,22 @@ auto sum(int i0, int i1) -> int
 // ...
 
 IC((sum(40, 2)));
-
-// ...
 ```
 
 will work and print something like:
 
     ic| (sum(40, 2)): 42
 
-As `IC(...)` is a preprocessor macro, it can cause conflicts if there is some other `IC`
-identifier on code. To change the `IC(...)` macro to a longer `ICECREAM(...)` one, just
-define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` header:
+Also, since `IC(...)` is a preprocessor macro, it can cause conflicts if there is some
+other `IC` identifier on code. To change the `IC(...)` macro to a longer `ICECREAM(...)`
+one, just define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` header:
 
 ```C++
 #define ICECREAM_LONG_NAME
 #include "icecream.hpp"
 ```
 
-### Similar projects
+## Similar projects
 
 The [CleanType](https://github.com/pthom/cleantype) library has a focus on printing
 readable types names, but there is support to print variables names and values alongside
@@ -210,7 +260,7 @@ its types. An optional integration of CleanType with IceCream-Cpp, if the first 
 on system, is being planed. With that would be possible to show the types of values within
 `IC(...)` macro.
 
-### Ongoing work
+## Ongoing work
 
 This library is at an early version, and it was tested on GCC 8.2 compiling
 with C++11, C++14 and C++17 flags. Some minor code changes could be needed to make it work with other
