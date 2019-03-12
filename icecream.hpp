@@ -58,6 +58,7 @@
 namespace std
 {
     template <typename T> class optional;
+    template <typename T1, typename T2> struct pair;
 }
 
 namespace boost
@@ -139,6 +140,11 @@ namespace icecream
         // -------------------------------------------------- is_optional
         template <typename T>
         struct is_optional: is_instantiation<std::optional, T> {};
+
+
+        // -------------------------------------------------- is_pair
+        template <typename T>
+        struct is_pair: is_instantiation<std::pair, T> {};
 
 
         // -------------------------------------------------- is_pointer_like
@@ -287,6 +293,17 @@ namespace icecream
             {
                 std::cout << "nullopt";
             }
+        }
+
+        // Print std::pair<> class
+        template <typename T>
+        auto print_value(T const& value) -> typename
+            std::enable_if<
+                detail::is_pair<T>::value
+                && !detail::has_insertion<T>::value
+            >::type
+        {
+            std::cout << "(" << value.first << ", " << value.second << ")";
         }
 
         // Print all items of any iterable class

@@ -71,6 +71,25 @@ auto test_optional() -> void
 }
 
 
+// -------------------------------------------------- Test pair
+
+#include <utility>
+auto operator<<(std::ostream& os, std::pair<int, double> const& value) -> std::ostream&
+{
+    std::cout << "{" << value.first << "," << value.second << "}";
+    return os;
+}
+
+auto test_pair() -> void
+{
+    auto s0 = std::pair<int, double> {10, 3.14};
+    auto s1 = std::make_pair("oi", 'b');
+
+    IC(s0);
+    IC(s1);
+}
+
+
 // -------------------------------------------------- Test iterable
 
 template<typename T>
@@ -144,6 +163,7 @@ int main(int, char *[])
 {
     test_common();
     test_optional();
+    test_pair();
     test_iterable();
     test_pointer_like();
 

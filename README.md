@@ -175,6 +175,23 @@ will print:
 
     ic| v2: Has string bla
 
+#### Pair type
+
+A `std::pair<T1, T2>` typed variable will print both its values.
+
+The code:
+
+```C++
+auto v0 = std::make_pair(10, 3.14);
+IC(v0);
+```
+
+will print:
+
+    ic| v0: (10, 3.14)
+
+As with other default print methods, any possible overload resolution of
+`operator<<(ostream&, T)` will take precedence and will be used instead.
 
 #### Iterable types
 
