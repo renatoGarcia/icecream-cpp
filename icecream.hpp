@@ -318,8 +318,11 @@ namespace icecream
                 && !detail::has_insertion<T>::value
             >::type
         {
-            auto it = std::begin(value);
-            auto const e_it = std::end(value);
+            using std::begin;
+            using std::end;
+
+            auto it = begin(value);
+            auto const e_it = end(value);
             std::cout << "[";
             if (it != e_it)
             {
