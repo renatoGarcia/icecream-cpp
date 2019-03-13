@@ -303,7 +303,11 @@ namespace icecream
                 && !detail::has_insertion<T>::value
             >::type
         {
-            std::cout << "(" << value.first << ", " << value.second << ")";
+            std::cout << "(";
+            this->print_value(value.first);
+            std::cout << ", ";
+            this->print_value(value.second);
+            std::cout << ")";
         }
 
         // Print all items of any iterable class
