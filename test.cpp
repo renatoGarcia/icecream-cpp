@@ -170,6 +170,27 @@ auto test_prefix() -> void
     IC(1, 2);
 }
 
+// -------------------------------------------------- Test char_p
+auto test_char_p() -> void
+{
+    char const* str0 = "Icecream test";
+    IC(str0);
+
+    char const* const str1 = "Icecream test";
+    IC(str1);
+
+    char str2[] = "string 2";
+    IC(str2);
+
+    char* const str3 = str2;
+    IC(str3);
+
+    char const*& str4 = str0;
+    IC(str4);
+    // char const* const str1 = "Icecream test";
+}
+
+// --------------------------------------------------
 
 int main(int, char *[])
 {
@@ -179,6 +200,7 @@ int main(int, char *[])
     test_iterable();
     test_pointer_like();
     test_prefix();
+    test_char_p();
 
     return 0;
 }

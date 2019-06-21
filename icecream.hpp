@@ -148,26 +148,38 @@ namespace icecream
         struct is_pair: is_instantiation<std::pair, T> {};
 
 
-        // -------------------------------------------------- is_pointer_like
+        // -------------------------------------------------- is_c_str
         template <typename T>
-        struct is_pointer_like: disjunction<
-            std::is_pointer<T>,
-            is_instantiation<std::shared_ptr, T>,
-            is_instantiation<boost::scoped_ptr, T>,
-            is_instantiation<boost::shared_ptr, T>
+        struct is_c_str: disjunction<
+            std::is_same<T, char const*>,
+            std::is_same<T, char*>
         > {};
 
+
+        // -------------------------------------------------- is_unique_pointer
         // Until C++20 std::unique_ptr has not an operator<<(ostream&) overload, so it
         // must have an own print method overload too.
         template <typename T>
         struct is_unique_ptr: is_instantiation<std::unique_ptr, T> {};
 
 
-        // -------------------------------------------------- is_weak_pointer
+        // -------------------------------------------------- is_weak_ptr
         template <typename T>
-        struct is_weak_pointer: disjunction<
+        struct is_weak_ptr: disjunction<
             is_instantiation<std::weak_ptr, T>,
             is_instantiation<boost::weak_ptr, T>
+        > {};
+
+
+        // -------------------------------------------------- is_pointer_like
+        template <typename T>
+        struct is_pointer_like: disjunction<
+            std::is_pointer<T>,
+            is_unique_ptr<T>,
+            is_weak_ptr<T>,
+            is_instantiation<std::shared_ptr, T>,
+            is_instantiation<boost::scoped_ptr, T>,
+            is_instantiation<boost::shared_ptr, T>
         > {};
 
     } // namespace detail
@@ -177,26 +189,16 @@ namespace icecream
     {
     public:
         Icecream()
-            : show_pointed_value_ {true}
-            , str_prefix {"ic| "}
+            : str_prefix {"ic| "}
             , func_prefix {nullptr}
+            , show_c_string_ {true}
+            , show_pointed_value_ {true}
         {}
 
         Icecream(Icecream const&) = delete;
         Icecream(Icecream&&) = delete;
         Icecream& operator=(Icecream const&) = delete;
         Icecream& operator=(Icecream&&) = delete;
-
-        auto show_pointed_value() const noexcept -> bool
-        {
-            return this->show_pointed_value_;
-        }
-
-        auto show_pointed_value(bool value) noexcept -> Icecream&
-        {
-            this->show_pointed_value_ = value;
-            return *this;
-        }
 
         auto prefix(std::string const& value) -> Icecream&
         {
@@ -209,6 +211,28 @@ namespace icecream
         {
             this->str_prefix.clear();
             this->func_prefix = value;
+            return *this;
+        }
+
+        auto show_pointed_value() const noexcept -> bool
+        {
+            return this->show_pointed_value_;
+        }
+
+        auto show_pointed_value(bool value) noexcept -> Icecream&
+        {
+            this->show_pointed_value_ = value;
+            return *this;
+        }
+
+        auto show_c_string() const noexcept -> bool
+        {
+            return this->show_c_string_;
+        }
+
+        auto show_c_string(bool value) noexcept -> Icecream&
+        {
+            this->show_c_string_ = value;
             return *this;
         }
 
@@ -240,17 +264,57 @@ namespace icecream
         }
 
     private:
-        bool show_pointed_value_;
-
         // The prefix will be one and only one of this two.
         std::string str_prefix;
         std::function<std::string()> func_prefix;
+
+        bool show_c_string_;
+
+        bool show_pointed_value_;
+
+        // Print any class that overloads operator<<(std::ostream&, T)
+        template <typename T>
+        auto print_value(T const& value) -> typename
+            std::enable_if<
+                detail::has_insertion<T>::value
+                && !detail::is_pointer_like<T>::value
+            >::type
+        {
+            std::cout << value;
+        }
+
+        // Print C string
+        template <typename T>
+        auto print_value(T const& value) -> typename
+            std::enable_if<
+                detail::is_c_str<T>::value
+            >::type
+        {
+            if (this->show_c_string_)
+            {
+                if (value == nullptr)
+                    std::cout << "nullptr";
+                else
+                    std::cout << value;
+            }
+            else if (!this->show_pointed_value_)
+            {
+                std::cout << reinterpret_cast<void const*>(value);
+            }
+            else
+            {
+                std::cout << "'" << *value << "' at " << reinterpret_cast<void const*>(value);
+            }
+        }
 
         // Print pointer like classes
         template <typename T>
         auto print_value(T const& value) -> typename
             std::enable_if<
                 detail::is_pointer_like<T>::value
+                && !detail::is_c_str<T>::value
+                && !detail::is_unique_ptr<T>::value
+                && !detail::is_weak_ptr<T>::value
             >::type
         {
             if (!this->show_pointed_value_)
@@ -282,24 +346,10 @@ namespace icecream
         template <typename T>
         auto print_value(T const& value) -> typename
             std::enable_if<
-                detail::is_weak_pointer<T>::value
+                detail::is_weak_ptr<T>::value
             >::type
         {
             this->print_value(value.lock());
-        }
-
-        // Print any class that overloads operator<<(std::ostream&, T) and is not a
-        // pointer like.
-        template <typename T>
-        auto print_value(T const& value) -> typename
-            std::enable_if<
-                detail::has_insertion<T>::value
-                && !detail::is_pointer_like<T>::value
-                && !detail::is_unique_ptr<T>::value
-                && !detail::is_weak_pointer<T>::value
-            >::type
-        {
-            std::cout << value;
         }
 
         // Print std::optional<> classes
