@@ -159,6 +159,18 @@ auto test_common() -> void
     IC(mc);
 }
 
+// -------------------------------------------------- Test prefix
+auto test_prefix() -> void
+{
+    icecream::ic.prefix("pref -> ");
+    IC(1, 2);
+    icecream::ic.prefix([](){return "icecream -- ";});
+    IC(1, 2);
+    icecream::ic.prefix("ic| ");
+    IC(1, 2);
+}
+
+
 int main(int, char *[])
 {
     test_common();
@@ -166,6 +178,7 @@ int main(int, char *[])
     test_pair();
     test_iterable();
     test_pointer_like();
+    test_prefix();
 
     return 0;
 }

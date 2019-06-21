@@ -24,6 +24,7 @@
 #ifndef ICECREAM_HPP_INCLUDED
 #define ICECREAM_HPP_INCLUDED
 
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -175,7 +176,12 @@ namespace icecream
     class Icecream
     {
     public:
-        Icecream() = default;
+        Icecream()
+            : show_pointed_value_ {true}
+            , str_prefix {"ic| "}
+            , func_prefix {nullptr}
+        {}
+
         Icecream(Icecream const&) = delete;
         Icecream(Icecream&&) = delete;
         Icecream& operator=(Icecream const&) = delete;
@@ -192,6 +198,20 @@ namespace icecream
             return *this;
         }
 
+        auto prefix(std::string const& value) -> Icecream&
+        {
+            this->str_prefix = value;
+            this->func_prefix = nullptr;
+            return *this;
+        }
+
+        auto prefix(std::function<std::string()> const& value) -> Icecream&
+        {
+            this->str_prefix.clear();
+            this->func_prefix = value;
+            return *this;
+        }
+
         template <typename... Ts>
         auto print(
             std::string const& file,
@@ -201,7 +221,9 @@ namespace icecream
             Ts&&... args
         ) -> void
         {
-            std::cout << "ic| ";
+            auto const prefix = this->func_prefix ? this->func_prefix() : this->str_prefix;
+
+            std::cout << prefix;
 
             // If used an empty IC macro, i.e.: IC().
             if (sizeof...(Ts) == 0)
@@ -218,8 +240,11 @@ namespace icecream
         }
 
     private:
-        bool show_pointed_value_ = true;
+        bool show_pointed_value_;
 
+        // The prefix will be one and only one of this two.
+        std::string str_prefix;
+        std::function<std::string()> func_prefix;
 
         // Print pointer like classes
         template <typename T>
