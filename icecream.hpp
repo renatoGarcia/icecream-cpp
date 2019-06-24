@@ -170,18 +170,6 @@ namespace icecream
             is_instantiation<boost::weak_ptr, T>
         > {};
 
-
-        // -------------------------------------------------- is_pointer_like
-        template <typename T>
-        struct is_pointer_like: disjunction<
-            std::is_pointer<T>,
-            is_unique_ptr<T>,
-            is_weak_ptr<T>,
-            is_instantiation<std::shared_ptr, T>,
-            is_instantiation<boost::scoped_ptr, T>,
-            is_instantiation<boost::shared_ptr, T>
-        > {};
-
     } // namespace detail
 
 
@@ -192,7 +180,6 @@ namespace icecream
             : str_prefix {"ic| "}
             , func_prefix {nullptr}
             , show_c_string_ {true}
-            , show_pointed_value_ {true}
         {}
 
         Icecream(Icecream const&) = delete;
@@ -211,17 +198,6 @@ namespace icecream
         {
             this->str_prefix.clear();
             this->func_prefix = value;
-            return *this;
-        }
-
-        auto show_pointed_value() const noexcept -> bool
-        {
-            return this->show_pointed_value_;
-        }
-
-        auto show_pointed_value(bool value) noexcept -> Icecream&
-        {
-            this->show_pointed_value_ = value;
             return *this;
         }
 
@@ -270,14 +246,13 @@ namespace icecream
 
         bool show_c_string_;
 
-        bool show_pointed_value_;
 
         // Print any class that overloads operator<<(std::ostream&, T)
         template <typename T>
         auto print_value(T const& value) -> typename
             std::enable_if<
                 detail::has_insertion<T>::value
-                && !detail::is_pointer_like<T>::value
+                && !detail::is_c_str<T>::value
             >::type
         {
             std::cout << value;
@@ -292,43 +267,11 @@ namespace icecream
         {
             if (this->show_c_string_)
             {
-                if (value == nullptr)
-                    std::cout << "nullptr";
-                else
-                    std::cout << value;
-            }
-            else if (!this->show_pointed_value_)
-            {
-                std::cout << reinterpret_cast<void const*>(value);
-            }
-            else
-            {
-                std::cout << "'" << *value << "' at " << reinterpret_cast<void const*>(value);
-            }
-        }
-
-        // Print pointer like classes
-        template <typename T>
-        auto print_value(T const& value) -> typename
-            std::enable_if<
-                detail::is_pointer_like<T>::value
-                && !detail::is_c_str<T>::value
-                && !detail::is_unique_ptr<T>::value
-                && !detail::is_weak_ptr<T>::value
-            >::type
-        {
-            if (!this->show_pointed_value_)
-            {
                 std::cout << value;
             }
-            else if (value == nullptr)
-            {
-                std::cout << "nullptr";
-            }
             else
             {
-                this->print_value(*value);
-                std::cout << " at " << value;
+                std::cout << reinterpret_cast<void const*>(value);
             }
         }
 
@@ -349,7 +292,10 @@ namespace icecream
                 detail::is_weak_ptr<T>::value
             >::type
         {
-            this->print_value(value.lock());
+            if (value.expired())
+                std::cout << "expired weak_ptr";
+            else
+                std::cout << "valid weak_ptr";
         }
 
         // Print std::optional<> classes

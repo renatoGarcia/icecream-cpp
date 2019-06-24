@@ -129,13 +129,6 @@ auto test_pointer_like() -> void
     IC(v3);
     IC(v4);
     IC(v5);
-    ic.show_pointed_value(false);
-    IC(v0);
-    IC(v1);
-    IC(v2);
-    IC(v3);
-    IC(v4);
-    IC(v5);
 
     delete v2;
 }
@@ -187,7 +180,11 @@ auto test_char_p() -> void
 
     char const*& str4 = str0;
     IC(str4);
-    // char const* const str1 = "Icecream test";
+
+    char const* const str5 = "string 5";
+    icecream::ic.show_c_string(false);
+    IC(str5);
+    icecream::ic.show_c_string(true);
 }
 
 // --------------------------------------------------
