@@ -204,16 +204,21 @@ namespace icecream
     public:
         using size_type = std::size_t;
 
-        Icecream()
-            : str_prefix {"ic| "}
-            , func_prefix {nullptr}
-            , show_c_string_ {true}
-        {}
-
+        Icecream() = default;
         Icecream(Icecream const&) = delete;
         Icecream(Icecream&&) = delete;
         Icecream& operator=(Icecream const&) = delete;
         Icecream& operator=(Icecream&&) = delete;
+
+        auto stream() -> std::ostream&
+        {
+            return this->stream_;
+        }
+
+        auto stream() const -> std::ostream const&
+        {
+            return this->stream_;
+        }
 
         auto prefix(std::string const& value) -> Icecream&
         {
@@ -262,13 +267,13 @@ namespace icecream
         {
             auto const prefix = this->func_prefix ? this->func_prefix() : this->str_prefix;
 
-            std::cout << prefix;
+            this->stream_ << prefix;
 
             // If used an empty IC macro, i.e.: IC().
             if (sizeof...(Ts) == 0)
             {
                 auto const n = file.rfind('/');
-                std::cout << file.substr(n+1) << ':' << line << " in \"" << function << '"';
+                this->stream_ << file.substr(n+1) << ':' << line << " in \"" << function << '"';
             }
             else
             {
@@ -278,20 +283,24 @@ namespace icecream
                 this->print_forest(forest, prefix.size());
             }
 
-            std::cout << std::endl;
+            this->stream_ << std::endl;
         }
 
     private:
 
         constexpr static size_type INDENT_BASE = 4;
 
+
+        std::ostream stream_ {std::cout.rdbuf()};
+
         // The prefix will be one and only one of this two.
-        std::string str_prefix;
-        std::function<std::string()> func_prefix;
+        std::string str_prefix = "ic| ";
+        std::function<std::string()> func_prefix = nullptr;
 
         std::size_t lineWrapWidth_ = 70;
 
-        bool show_c_string_;
+        bool show_c_string_ = true;
+
 
         // Print any class that overloads operator<<(std::ostream&, T)
         template <typename T>
@@ -446,11 +455,11 @@ namespace icecream
         {
             if (node.is_leaf)
             {
-                std::cout << node.str;
+                this->stream_ << node.str;
             }
             else
             {
-                std::cout << "[";
+                this->stream_ << "[";
                 for (auto it = node.children.begin(); it != node.children.end(); ++it)
                 {
                     auto const multiline = count_chars(node) + indent > this->lineWrapWidth_;
@@ -458,12 +467,12 @@ namespace icecream
                     if (it+1 != node.children.end())
                     {
                         if (multiline)
-                            std::cout << ",\n" << std::string(indent+1, ' ');
+                            this->stream_ << ",\n" << std::string(indent+1, ' ');
                         else
-                            std::cout << ", ";
+                            this->stream_ << ", ";
                     }
                 }
-                std::cout << "]";
+                this->stream_ << "]";
             }
         }
 
@@ -475,7 +484,7 @@ namespace icecream
             for (auto it = forest.begin(); it != forest.end(); ++it)
             {
                 auto const& arg_name = std::get<0>(*it);
-                std::cout << arg_name << ": ";
+                this->stream_ << arg_name << ": ";
 
                 auto indent = size_type {0};
                 if (it == forest.begin())
@@ -485,7 +494,7 @@ namespace icecream
 
                 this->print_tree(std::get<1>(*it), indent);
                 if (it+1 != forest.end())
-                    std::cout <<  ", ";
+                    this->stream_ <<  ", ";
             }
         }
     };
