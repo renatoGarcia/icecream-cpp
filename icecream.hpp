@@ -28,6 +28,7 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -170,12 +171,39 @@ namespace icecream
             is_instantiation<boost::weak_ptr, T>
         > {};
 
+
+        // -------------------------------------------------------------------------------
+        struct Node
+        {
+            std::string str;
+            std::vector<Node> children;
+            bool is_leaf;
+        };
+
+        // Returns the sum of characters of the whole tree defined by `node` as root.
+        inline auto count_chars(Node const& node) -> int
+        {
+            if (node.is_leaf)
+            {
+                return node.str.size();
+            }
+            else
+            {
+                auto result = int {0};
+                for (auto const& child : node.children)
+                    result += count_chars(child);
+                return result;
+            }
+        }
+
     } // namespace detail
 
 
     class Icecream
     {
     public:
+        using size_type = std::size_t;
+
         Icecream()
             : str_prefix {"ic| "}
             , func_prefix {nullptr}
@@ -212,6 +240,17 @@ namespace icecream
             return *this;
         }
 
+        auto lineWrapWidth() const noexcept -> std::size_t
+        {
+            return this->lineWrapWidth_;
+        }
+
+        auto lineWrapWidth(std::size_t value) noexcept -> Icecream&
+        {
+            this->lineWrapWidth_ = value;
+            return *this;
+        }
+
         template <typename... Ts>
         auto print(
             std::string const& file,
@@ -233,151 +272,222 @@ namespace icecream
             }
             else
             {
-                this->print_all_args(std::begin(arg_names), std::forward<Ts>(args)...);
+                auto const forest = this->build_forest(
+                    std::begin(arg_names), std::forward<Ts>(args)...
+                );
+                this->print_forest(forest, prefix.size());
             }
 
             std::cout << std::endl;
         }
 
     private:
+
+        constexpr static size_type INDENT_BASE = 4;
+
         // The prefix will be one and only one of this two.
         std::string str_prefix;
         std::function<std::string()> func_prefix;
 
-        bool show_c_string_;
+        std::size_t lineWrapWidth_ = 70;
 
+        bool show_c_string_;
 
         // Print any class that overloads operator<<(std::ostream&, T)
         template <typename T>
-        auto print_value(T const& value) -> typename
+        auto value_to_tree(T const& value) -> typename
             std::enable_if<
                 detail::has_insertion<T>::value
-                && !detail::is_c_str<T>::value
+                && !detail::is_c_str<T>::value,
+                detail::Node
             >::type
         {
-            std::cout << value;
+            auto buf = std::ostringstream {};
+            buf << value;
+            return {buf.str(), {}, true};
         }
 
         // Print C string
         template <typename T>
-        auto print_value(T const& value) -> typename
+        auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_c_str<T>::value
+                detail::is_c_str<T>::value,
+                detail::Node
             >::type
         {
+            auto buf = std::ostringstream {};
+
             if (this->show_c_string_)
-            {
-                std::cout << value;
-            }
+                buf << value;
             else
-            {
-                std::cout << reinterpret_cast<void const*>(value);
-            }
+                buf << reinterpret_cast<void const*>(value);
+
+            return {buf.str(), {}, true};
         }
 
         // Until C++20 std::unique_ptr had not an operator<<(ostream&) overload
         template <typename T>
-        auto print_value(T const& value) -> typename
+        auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_unique_ptr<T>::value
+                detail::is_unique_ptr<T>::value,
+                detail::Node
             >::type
         {
-            this->print_value(value.get());
+            auto buf = std::ostringstream {};
+            buf << reinterpret_cast<void const*>(value.get());
+            return {buf.str(), {}, true};
         }
 
         // Print weak pointer classes
         template <typename T>
-        auto print_value(T const& value) -> typename
+        auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_weak_ptr<T>::value
+                detail::is_weak_ptr<T>::value,
+                detail::Node
             >::type
         {
+            auto buf = std::ostringstream {};
+
             if (value.expired())
-                std::cout << "expired weak_ptr";
+                buf << "expired weak_ptr";
             else
-                std::cout << "valid weak_ptr";
+                buf << "valid weak_ptr";
+
+            return {buf.str(), {}, true};
         }
 
         // Print std::optional<> classes
         template <typename T>
-        auto print_value(T const& value) -> typename
+        auto value_to_tree(T const& value) -> typename
             std::enable_if<
                 detail::is_optional<T>::value
-                && !detail::has_insertion<T>::value
+                && !detail::has_insertion<T>::value,
+                detail::Node
             >::type
         {
             if (value.has_value())
-            {
-                this->print_value(*value);
-            }
+                return this->value_to_tree(*value);
             else
-            {
-                std::cout << "nullopt";
-            }
+                return {"nullopt", {}, true};
         }
 
         // Print std::pair<> class
         template <typename T>
-        auto print_value(T const& value) -> typename
+        auto value_to_tree(T const& value) -> typename
             std::enable_if<
                 detail::is_pair<T>::value
-                && !detail::has_insertion<T>::value
+                && !detail::has_insertion<T>::value,
+                detail::Node
             >::type
         {
-            std::cout << "(";
-            this->print_value(value.first);
-            std::cout << ", ";
-            this->print_value(value.second);
-            std::cout << ")";
+            auto node = detail::Node {"", {}, false};
+            node.children.push_back(this->value_to_tree(value.first));
+            node.children.push_back(this->value_to_tree(value.second));
+            return node;
         }
 
         // Print all items of any iterable class
         template <typename T>
-        auto print_value(T const& value) -> typename
+        auto value_to_tree(T const& value) -> typename
             std::enable_if<
                 detail::is_iterable<T>::value
-                && !detail::has_insertion<T>::value
+                && !detail::has_insertion<T>::value,
+                detail::Node
             >::type
         {
             using std::begin;
             using std::end;
 
+            auto node = detail::Node {"", {}, false};
+
             auto it = begin(value);
             auto const e_it = end(value);
-            std::cout << "[";
             if (it != e_it)
             {
-                this->print_value(*it);
+                node.children.push_back(this->value_to_tree(*it));
                 ++it;
                 for (; it != e_it; ++it)
                 {
-                    std::cout << ", ";
-                    this->print_value(*it);
+                    node.children.push_back(this->value_to_tree(*it));
                 }
             }
-            std::cout << "]";
-        }
 
-        // Print the pair argument name and argument value
-        template <typename T>
-        auto print_arg(std::string const& name, T const& value) -> void
-        {
-            std::cout << name << ": ";
-            this->print_value(value);
+            return node;
         }
 
         template <typename TArg, typename... Ts>
-        auto print_all_args(std::vector<std::string>::const_iterator arg_name, TArg&& arg_value, Ts&&... args_tail) -> void
+        auto build_forest(
+            std::vector<std::string>::const_iterator arg_name,
+            TArg&& arg_value,
+            Ts&&... args_tail
+        ) -> std::vector<std::tuple<std::string, detail::Node>>
         {
-            this->print_arg(*arg_name, std::forward<TArg>(arg_value));
-            if (sizeof...(Ts) > 0)
+            auto tree = std::make_tuple(
+               *arg_name, this->value_to_tree(std::forward<TArg>(arg_value))
+            );
+
+            auto forest = this->build_forest(
+                ++arg_name,
+                std::forward<Ts>(args_tail)...
+            );
+
+            forest.push_back(std::move(tree));
+            return forest;
+        }
+
+        auto build_forest(
+            std::vector<std::string>::const_iterator
+        ) -> std::vector<std::tuple<std::string, detail::Node>>
+        {
+            return std::vector<std::tuple<std::string, detail::Node>> {};
+        }
+
+        auto print_tree(detail::Node const& node, size_type const indent) -> void
+        {
+            if (node.is_leaf)
             {
-                std::cout << ", ";
-                this->print_all_args(++arg_name, std::forward<Ts>(args_tail)...);
+                std::cout << node.str;
+            }
+            else
+            {
+                std::cout << "[";
+                for (auto it = node.children.begin(); it != node.children.end(); ++it)
+                {
+                    auto const multiline = count_chars(node) + indent > this->lineWrapWidth_;
+                    this->print_tree(*it, indent);
+                    if (it+1 != node.children.end())
+                    {
+                        if (multiline)
+                            std::cout << ",\n" << std::string(indent+1, ' ');
+                        else
+                            std::cout << ", ";
+                    }
+                }
+                std::cout << "]";
             }
         }
 
-        auto print_all_args(std::vector<std::string>::const_iterator) -> void {}
+        auto print_forest(
+            std::vector<std::tuple<std::string, detail::Node>> const& forest,
+            size_type const prefix_width
+        ) -> void
+        {
+            for (auto it = forest.begin(); it != forest.end(); ++it)
+            {
+                auto const& arg_name = std::get<0>(*it);
+                std::cout << arg_name << ": ";
+
+                auto indent = size_type {0};
+                if (it == forest.begin())
+                    indent = prefix_width + arg_name.size() + 2;
+                else
+                    indent = Icecream::INDENT_BASE + arg_name.size() + 2;
+
+                this->print_tree(std::get<1>(*it), indent);
+                if (it+1 != forest.end())
+                    std::cout <<  ", ";
+            }
+        }
     };
 
     namespace

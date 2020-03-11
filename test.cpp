@@ -41,14 +41,14 @@ auto sum(int i0, int i1) -> int
 #include <boost/optional/optional_io.hpp>
 auto operator<<(std::ostream& os, std::optional<MyClass> const& value) -> std::ostream&
 {
-    std::cout << "||opt MyClass|| ";
+    os << "||opt MyClass|| ";
     if (value.has_value())
     {
-        std::cout << *value;
+        os << *value;
     }
     else
     {
-        std::cout << "nullopt";
+        os << "nullopt";
     }
     return os;
 }
@@ -76,7 +76,7 @@ auto test_optional() -> void
 #include <utility>
 auto operator<<(std::ostream& os, std::pair<int, double> const& value) -> std::ostream&
 {
-    std::cout << "{" << value.first << "," << value.second << "}";
+    os << "{" << value.first << "," << value.second << "}";
     return os;
 }
 
@@ -95,7 +95,7 @@ auto test_pair() -> void
 template<typename T>
 auto operator<<(std::ostream& os, std::vector<T> const&) -> std::ostream&
 {
-    std::cout << "print vector";
+    os << "print vector";
     return os;
 }
 
@@ -191,6 +191,8 @@ auto test_char_p() -> void
 
 int main(int, char *[])
 {
+    icecream::ic.lineWrapWidth(5);
+
     test_common();
     test_optional();
     test_pair();
