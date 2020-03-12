@@ -481,19 +481,20 @@ namespace icecream
             size_type const prefix_width
         ) -> void
         {
-            for (auto it = forest.begin(); it != forest.end(); ++it)
+            // The forest is built with trees in reverse order.
+            for (auto it = forest.rbegin(); it != forest.rend(); ++it)
             {
                 auto const& arg_name = std::get<0>(*it);
                 this->stream_ << arg_name << ": ";
 
                 auto indent = size_type {0};
-                if (it == forest.begin())
+                if (it == forest.rbegin())
                     indent = prefix_width + arg_name.size() + 2;
                 else
                     indent = Icecream::INDENT_BASE + arg_name.size() + 2;
 
                 this->print_tree(std::get<1>(*it), indent);
-                if (it+1 != forest.end())
+                if (it+1 != forest.rend())
                     this->stream_ <<  ", ";
             }
         }
