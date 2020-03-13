@@ -189,9 +189,17 @@ namespace icecream
             }
             else
             {
-                auto result = int {0};
+                // The enclosing [].
+                auto result = 2;
+
+                // count the size of each child
                 for (auto const& child : node.children)
                     result += count_chars(child);
+
+                // The ", " separators.
+                if (node.children.size() > 1)
+                   result += (node.children.size() - 1) * 2;
+
                 return result;
             }
         }
@@ -451,7 +459,7 @@ namespace icecream
             return std::vector<std::tuple<std::string, detail::Node>> {};
         }
 
-        auto print_tree(detail::Node const& node, size_type const indent) -> void
+        auto print_tree(detail::Node const& node, size_type indent) -> void
         {
             if (node.is_leaf)
             {
@@ -459,15 +467,20 @@ namespace icecream
             }
             else
             {
+                auto const multiline = indent + count_chars(node) > this->lineWrapWidth_;
+
                 this->stream_ << "[";
+
+                if (multiline)
+                    indent += 1;
+
                 for (auto it = node.children.begin(); it != node.children.end(); ++it)
                 {
-                    auto const multiline = count_chars(node) + indent > this->lineWrapWidth_;
                     this->print_tree(*it, indent);
                     if (it+1 != node.children.end())
                     {
                         if (multiline)
-                            this->stream_ << ",\n" << std::string(indent+1, ' ');
+                            this->stream_ << ",\n" << std::string(indent, ' ');
                         else
                             this->stream_ << ", ";
                     }
@@ -481,21 +494,36 @@ namespace icecream
             size_type const prefix_width
         ) -> void
         {
+            auto line_width = prefix_width;
+            for (auto const& t : forest)
+                line_width += std::get<0>(t).size() + 2 + count_chars(std::get<1>(t));
+
+            // The ", " separators.
+            if (forest.size() > 1)
+                line_width += (forest.size() - 1) * 2;
+
             // The forest is built with trees in reverse order.
             for (auto it = forest.rbegin(); it != forest.rend(); ++it)
             {
                 auto const& arg_name = std::get<0>(*it);
                 this->stream_ << arg_name << ": ";
 
-                auto indent = size_type {0};
+                auto indent = arg_name.size() + 2;
                 if (it == forest.rbegin())
-                    indent = prefix_width + arg_name.size() + 2;
+                    indent += prefix_width;
                 else
-                    indent = Icecream::INDENT_BASE + arg_name.size() + 2;
+                    indent += Icecream::INDENT_BASE;
 
                 this->print_tree(std::get<1>(*it), indent);
+
                 if (it+1 != forest.rend())
-                    this->stream_ <<  ", ";
+                {
+                    if (line_width > this->lineWrapWidth_)
+                        this->stream_ <<  ",\n" << std::string(Icecream::INDENT_BASE, ' ');
+                    else
+                        this->stream_ <<  ", ";
+                }
+
             }
         }
     };
