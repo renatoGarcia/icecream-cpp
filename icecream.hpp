@@ -24,9 +24,11 @@
 #ifndef ICECREAM_HPP_INCLUDED
 #define ICECREAM_HPP_INCLUDED
 
+#include <codecvt>
 #include <functional>
 #include <iostream>
 #include <iterator>
+#include <locale>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -75,6 +77,16 @@ namespace icecream
 {
     namespace detail
     {
+        // utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
+        template<class Facet>
+        struct deletable_facet : Facet
+        {
+            template<class ...Args>
+            deletable_facet(Args&& ...args) : Facet(std::forward<Args>(args)...) {}
+            ~deletable_facet() {}
+        };
+
+
         // ---------- Check if a type T is an instantiation of a template class U
         template <template<typename...> class, typename...>
         struct is_instantiation: std::false_type {};
@@ -107,6 +119,19 @@ namespace icecream
         // ---------- To allow ADL with custom begin/end
         using std::begin;
         using std::end;
+
+
+        // -------------------------------------------------- is_bounded_array
+        template <typename T>
+        struct is_bounded_array_impl: std::false_type {};
+
+        template <typename T, std::size_t N>
+        struct is_bounded_array_impl<T[N]>: std::true_type {};
+
+        template <typename T>
+        using is_bounded_array = typename is_bounded_array_impl<
+            typename std::remove_reference<T>::type
+        >::type;
 
 
         // -------------------------------------------------- is_iterable
@@ -149,12 +174,53 @@ namespace icecream
         struct is_pair: is_instantiation<std::pair, T> {};
 
 
-        // -------------------------------------------------- is_c_str
+        // -------------------------------------------------- is_character
         template <typename T>
-        struct is_c_str: disjunction<
-            std::is_same<T, char const*>,
-            std::is_same<T, char*>
-        > {};
+        using is_character = disjunction<
+            std::is_same<typename std::decay<T>::type, char>,
+            std::is_same<typename std::decay<T>::type, signed char>,
+            std::is_same<typename std::decay<T>::type, unsigned char>,
+            std::is_same<typename std::decay<T>::type, wchar_t>,
+        #if defined(__cpp_char8_t)
+            std::is_same<typename std::decay<T>::type, char8_t>,
+        #endif
+            std::is_same<typename std::decay<T>::type, char16_t>,
+            std::is_same<typename std::decay<T>::type, char32_t>
+        >;
+
+
+        // -------------------------------------------------- is_c_string
+        // char* and char[] are C strings, char[N] is not.
+        template <typename T>
+        using is_c_string = typename conjunction<
+            negation<is_bounded_array<T>>,
+            disjunction<
+                std::is_same<typename std::decay<T>::type, char*>,
+                std::is_same<typename std::decay<T>::type, char const*>,
+                std::is_same<typename std::decay<T>::type, signed char*>,
+                std::is_same<typename std::decay<T>::type, signed char const*>,
+                std::is_same<typename std::decay<T>::type, unsigned char*>,
+                std::is_same<typename std::decay<T>::type, unsigned char const*>,
+                std::is_same<typename std::decay<T>::type, wchar_t*>,
+                std::is_same<typename std::decay<T>::type, wchar_t const*>,
+            #if defined(__cpp_char8_t)
+                std::is_same<typename std::decay<T>::type, char8_t*>,
+                std::is_same<typename std::decay<T>::type, char8_t const*>,
+            #endif
+                std::is_same<typename std::decay<T>::type, char16_t*>,
+                std::is_same<typename std::decay<T>::type, char16_t const*>,
+                std::is_same<typename std::decay<T>::type, char32_t*>,
+                std::is_same<typename std::decay<T>::type, char32_t const*>
+            >
+        >::type;
+
+
+        // -------------------------------------------------- is_std_string
+        template <typename T>
+        using is_std_string = is_instantiation<
+            std::basic_string,
+            typename std::decay<T>::type
+        >;
 
 
         // -------------------------------------------------- is_unique_pointer
@@ -315,7 +381,10 @@ namespace icecream
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
                 detail::has_insertion<T>::value
-                && !detail::is_c_str<T>::value,
+                && !detail::is_c_string<T>::value
+                && !detail::is_character<T>::value
+                && !detail::is_std_string<T>::value
+                && !std::is_array<T>::value,
                 detail::Node
             >::type
         {
@@ -328,19 +397,82 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_c_str<T>::value,
+                detail::is_c_string<T>::value,
                 detail::Node
             >::type
         {
+            using DT = typename std::decay<
+                typename std::remove_pointer<
+                    typename std::decay<T>::type
+                >::type
+            >::type;
+
+            std::wstring_convert<
+                detail::deletable_facet<std::codecvt<DT, char, std::mbstate_t>>, DT
+            > cv {};
+
             auto buf = std::ostringstream {};
 
             if (this->show_c_string_)
-                buf << value;
+                buf << '"' << cv.to_bytes(value) << '"';
             else
                 buf << reinterpret_cast<void const*>(value);
 
             return {buf.str(), {}, true};
         }
+
+        // Print std::string
+        template <typename T>
+        auto value_to_tree(T const& value) -> typename
+            std::enable_if<
+                detail::is_std_string<T>::value,
+                detail::Node
+            >::type
+        {
+            std::wstring_convert<
+                detail::deletable_facet<
+                    std::codecvt<typename T::value_type, char, std::mbstate_t>
+                >,
+                typename T::value_type
+            > cv {};
+
+            auto buf = std::ostringstream {};
+            buf << '"' << cv.to_bytes(value) << '"';
+            return {buf.str(), {}, true};
+        }
+
+        // Print character
+        template <typename T>
+        auto value_to_tree(T const& value) -> typename
+            std::enable_if<
+                detail::is_character<T>::value,
+                detail::Node
+            >::type
+        {
+            std::wstring_convert<
+                detail::deletable_facet<
+                    std::codecvt<typename std::decay<T>::type, char, std::mbstate_t>
+                >,
+                typename std::decay<T>::type
+            > cv {};
+
+            auto str = std::string {};
+            switch (value)
+            {
+            case T{'\0'}:
+                str = "\\0";
+                break;
+
+            default:
+                str = cv.to_bytes(value);
+                break;
+            }
+
+            auto buf = std::ostringstream {};
+            buf << '\'' << str << '\'';
+            return {buf.str(), {}, true};
+        }
+
 
         // Until C++20 std::unique_ptr had not an operator<<(ostream&) overload
         template <typename T>
@@ -407,8 +539,12 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_iterable<T>::value
-                && !detail::has_insertion<T>::value,
+                (
+                    detail::is_iterable<T>::value
+                    && !detail::has_insertion<T>::value
+                    && !detail::is_std_string<T>::value
+                )
+                || std::is_array<T>::value,
                 detail::Node
             >::type
         {

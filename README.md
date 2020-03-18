@@ -99,6 +99,54 @@ will print:
 
     ic| v0: [1, 2, 3], s0: bla, 3.14: 3.14
 
+### Configuration
+
+#### show_c_string
+
+Controls if a `char*` variable should be interpreted as a null-terminated C string or a
+pointer to `char`. The default value is `true`.
+
+- get:
+    ```C++
+    ic.show_c_string();
+    ```
+- set:
+    ```C++
+    ic.show_c_string(false);
+    ```
+
+the code:
+
+```C++
+char const* flavor = "mango";
+
+ic.show_c_string(true);
+IC(flavor);
+
+ic.show_c_string(false);
+IC(flavor);
+```
+
+will print:
+
+```
+ic| flavor: "mango";
+ic| flavor: 0x55587b6f5410
+```
+
+#### lineWrapWidth
+
+fds
+
+- get:
+    ```C++
+    ic.lineWrapWidth();
+    ```
+- set:
+    ```C++
+    ic.lineWrapWidth(35);
+    ```
+
 ### Printing logic
 
 Except by some especial types described bellow, an overload of the `operator<<(ostream&,
@@ -134,6 +182,50 @@ icecream::ic.show_pointed_value(false)
 Having set the option to `false`, the same code above would print:
 
     ic| v0: 0x55587b6f5410, v1: 0
+
+
+#### C strings
+
+C strings are ambiguous. Should a `char* foo` variable be interpreted as a pointer to a
+single `char` or as a null-terminated string? Likewise, is the `char bar[]` variable an
+array of single characters or a null-terminated string? Is `char baz[3]` an array with
+three single characters or a string of size three?
+
+Each one of those interpretations of `foo`, `bar`, and `baz` would be printed in a
+distinct way. To the code:
+
+```C++
+char flavor[] = "pistachio";
+IC(flavor);
+```
+
+all three outputs below are correct, each one having a distinct interpretation of what is
+the `flavor` variable.
+
+```
+ic| flavor: 0x55587b6f5410
+ic| flavor: ['p', 'i', 's', 't', 'a', 'c', 'h', 'i', 'o', '\0']
+ic| flavor: "pistachio"
+```
+
+The IceCream-Cpp adopted policy is to handle any bounded `char` array (i.e.: array with a
+known size) as an array of single characters. So the code:
+
+```C++
+char flavor[] = "chocolate";
+IC(flavor);
+```
+
+will print:
+
+```
+ic| flavor: ['c', 'h', 'o', 'c', 'o', 'l', 'a', 't', 'e', '\0']
+```
+
+unbounded `char[]` arrays (i.e.: array with an unknown size) will decay to `char*`
+pointers, and will be printed either as a string or a pointer as configured by the
+[show_c_string](#show_c_string) option.
+
 
 #### Optional type
 

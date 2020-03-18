@@ -110,7 +110,7 @@ TEST_CASE("boost_optional")
 }
 
 
-#ifdef CPP_17
+#if defined(__cpp_lib_optional)
 auto operator<<(std::ostream& os, std::optional<MyClass> const& value) -> std::ostream&
 {
     os << "||opt MyClass|| ";
@@ -168,11 +168,11 @@ TEST_CASE("pair")
     auto s2 = std::pair<int, double> {10, 3.14};
 
     IC(s0);
-    REQUIRE(sstr.str() == "ic| s0: [5, a]\n");
+    REQUIRE(sstr.str() == "ic| s0: [5, 'a']\n");
     sstr.str("");
 
     IC(s1);
-    REQUIRE(sstr.str() == "ic| s1: {oi, b}\n");
+    REQUIRE(sstr.str() == "ic| s1: {oi, b}\n"); // will use the function above
     sstr.str("");
 
     IC(s2);
@@ -181,8 +181,36 @@ TEST_CASE("pair")
 }
 
 
-// -------------------------------------------------- Test iterable
+// -------------------------------------------------- Test arrays
+TEST_CASE("arrays")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
 
+    {
+        int v0[] = {1, 2, 3};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: [1, 2, 3]\n");
+        sstr.str("");
+    }
+
+    {
+        char v0[] = {'1', '2', '3'};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: ['1', '2', '3']\n");
+        sstr.str("");
+    }
+
+    {
+        char v0[] = "abc";
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: ['a', 'b', 'c', '\\0']\n");
+        sstr.str("");
+    }
+}
+
+
+// -------------------------------------------------- Test iterable
 TEST_CASE("iterable")
 {
     auto sstr = std::stringstream {};
@@ -190,6 +218,7 @@ TEST_CASE("iterable")
 
     auto v0 = std::list<int> {10, 20, 30};
     auto v1 = std::vector<float> {1.1, 1.2};
+    int v2[] = {1, 2, 3};
 
     IC(v0);
     REQUIRE(sstr.str() == "ic| v0: [10, 20, 30]\n");
@@ -197,6 +226,10 @@ TEST_CASE("iterable")
 
     IC(v1);
     REQUIRE(sstr.str() == "ic| v1: [1.1, 1.2]\n");
+    sstr.str("");
+
+    IC(v2);
+    REQUIRE(sstr.str() == "ic| v2: [1, 2, 3]\n");
     sstr.str("");
 }
 
@@ -272,43 +305,172 @@ TEST_CASE("prefix")
     sstr.str("");
 }
 
-// -------------------------------------------------- Test char_p
-TEST_CASE("char_p")
+// -------------------------------------------------- Test character
+TEST_CASE("character")
 {
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
-    char const* str0 = "Icecream test";
-    IC(str0);
-    REQUIRE(sstr.str() == "ic| str0: Icecream test\n");
-    sstr.str("");
+    {
+        auto v0 = char {'a'};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 'a'\n");
+        sstr.str("");
+    }
 
-    char const* const str1 = "Icecream test";
-    IC(str1);
-    REQUIRE(sstr.str() == "ic| str1: Icecream test\n");
-    sstr.str("");
+    {
+        auto v0 = wchar_t {L'a'};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 'a'\n");
+        sstr.str("");
+    }
 
-    char str2[] = "string 2";
-    IC(str2);
-    REQUIRE(sstr.str() == "ic| str2: string 2\n");
-    sstr.str("");
+#if defined(__cpp_char8_t)
+    {
+        auto v0 = char8_t {u8'a'};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 'a'\n");
+        sstr.str("");
+    }
+#endif
 
-    char* const str3 = str2;
-    IC(str3);
-    REQUIRE(sstr.str() == "ic| str3: string 2\n");
-    sstr.str("");
+    {
+        auto v0 = char16_t {u'a'};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 'a'\n");
+        sstr.str("");
+    }
 
-    char const*& str4 = str0;
-    IC(str4);
-    REQUIRE(sstr.str() == "ic| str4: Icecream test\n");
-    sstr.str("");
+    {
+        auto v0 = char32_t {U'a'};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 'a'\n");
+        sstr.str("");
+    }
 
-    char const* const str5 = "string 5";
-    icecream::ic.show_c_string(false);
-    IC(str5);
-    REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| str5: 0x[0-9a-f]+\n"));
-    sstr.str("");
+    {
+        auto v0 = char16_t {u'\0'};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: '\\0'\n");
+        sstr.str("");
+    }
+
+}
+
+
+// -------------------------------------------------- Test std::string
+TEST_CASE("std_string")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
+
+    {
+        auto v0 = std::string {"str 1"};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"str 1\"\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = std::wstring {L"wstr 1"};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"wstr 1\"\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = std::u16string {u"u16str 1"};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"u16str 1\"\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = std::u32string {U"u32str 1"};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"u32str 1\"\n");
+        sstr.str("");
+    }
+}
+
+
+// -------------------------------------------------- Test C string
+TEST_CASE("c_string")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
+
     icecream::ic.show_c_string(true);
+
+    {
+        char const* v0 = "Icecream test";
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"Icecream test\"\n");
+        sstr.str("");
+    }
+
+    {
+        char const* const v0 = "Icecream test";
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"Icecream test\"\n");
+        sstr.str("");
+    }
+
+    {
+        char v0[] = "string 2";
+        char* const v1 = v0;
+        IC(v1);
+        REQUIRE(sstr.str() == "ic| v1: \"string 2\"\n");
+        sstr.str("");
+    }
+
+    {
+        char const* v0 = "Icecream test";
+        char const*& v1 = v0;
+        IC(v1);
+        REQUIRE(sstr.str() == "ic| v1: \"Icecream test\"\n");
+        sstr.str("");
+    }
+
+    {
+        char const* const v0 = "string 5";
+        icecream::ic.show_c_string(false);
+        IC(v0);
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        sstr.str("");
+        icecream::ic.show_c_string(true);
+    }
+
+    {
+        wchar_t const* v0 = L"wchar_t test";
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"wchar_t test\"\n");
+        sstr.str("");
+    }
+
+    {
+        char16_t const* v0 = u"char16_t test";
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"char16_t test\"\n");
+        sstr.str("");
+    }
+
+    {
+        char16_t const* v0 = u"char16_t test";
+        icecream::ic.show_c_string(false);
+        IC(v0);
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        sstr.str("");
+        icecream::ic.show_c_string(true);
+    }
+
+    {
+        char32_t const* const v0 = U"char32_t test";
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"char32_t test\"\n");
+        sstr.str("");
+    }
+
 }
 
 // -------------------------------------------------- Test line wrap
