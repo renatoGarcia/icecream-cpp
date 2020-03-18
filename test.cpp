@@ -288,21 +288,33 @@ TEST_CASE("prefix")
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
-    icecream::ic.prefix("pref -> ");
-    IC(1, 2);
-    REQUIRE(sstr.str() == "pref -> 1: 1, 2: 2\n");
-    sstr.str("");
+    {
+        icecream::ic.prefix("pref -> ");
+        IC(1, 2);
+        REQUIRE(sstr.str() == "pref -> 1: 1, 2: 2\n");
+        sstr.str("");
+    }
 
+    {
+        icecream::ic.prefix([](){return "icecream -- ";});
+        IC(1, 2);
+        REQUIRE(sstr.str() == "icecream -- 1: 1, 2: 2\n");
+        sstr.str("");
+    }
 
-    icecream::ic.prefix([](){return "icecream -- ";});
-    IC(1, 2);
-    REQUIRE(sstr.str() == "icecream -- 1: 1, 2: 2\n");
-    sstr.str("");
+    {
+        icecream::ic.prefix("ic ", []{return 5;}, "| ");
+        IC(1, 2);
+        REQUIRE(sstr.str() == "ic 5| 1: 1, 2: 2\n");
+        sstr.str("");
+    }
 
-    icecream::ic.prefix("ic| ");
-    IC(1, 2);
-    REQUIRE(sstr.str() == "ic| 1: 1, 2: 2\n");
-    sstr.str("");
+    {
+        icecream::ic.prefix("ic| ");
+        IC(1, 2);
+        REQUIRE(sstr.str() == "ic| 1: 1, 2: 2\n");
+        sstr.str("");
+    }
 }
 
 // -------------------------------------------------- Test character

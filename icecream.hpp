@@ -134,6 +134,20 @@ namespace icecream
         >::type;
 
 
+        // -------------------------------------------------- is_invocable
+        template <typename T>
+        auto is_invocable_impl(int) -> decltype (
+            std::declval<T&>()(),
+            std::true_type {}
+        );
+
+        template <typename T>
+        auto is_invocable_impl(...) -> std::false_type;
+
+        template <typename T>
+        using is_invocable = decltype(is_invocable_impl<T>(0));
+
+
         // -------------------------------------------------- is_iterable
         template <typename T>
         auto is_iterable_impl(int) -> decltype (
@@ -238,6 +252,15 @@ namespace icecream
         > {};
 
 
+        // -------------------------------------------------- is_valid_prefix
+        template <typename T>
+        struct is_valid_prefix: disjunction<
+            is_std_string<T>,
+            is_c_string<typename std::decay<T>::type>,
+            is_invocable<T>
+        > {};
+
+
         // -------------------------------------------------------------------------------
         struct Node
         {
@@ -270,6 +293,108 @@ namespace icecream
             }
         }
 
+        // --------------------------------------------------
+
+        // If value is invocable, do nothing, If it is a string, returns an function that
+        // returns it.
+        template <
+            typename T,
+            typename std::enable_if <
+                detail::is_std_string<T>::value
+                || detail::is_c_string<typename std::decay<T>::type>::value,
+            int>::type = 0
+        >
+        auto to_invocable(T&& value) -> std::function<std::string()>
+        {
+            auto str = std::string {value};
+            return [str](){return str;};
+        }
+
+        template <
+            typename T,
+            typename std::enable_if<
+                detail::is_invocable<T>::value,
+            int>::type = 0
+        >
+        auto to_invocable(T&& value) -> T&&
+        {
+            return std::forward<T>(value);
+        }
+
+
+        // --------------------------------------------------
+        class Prefix
+        {
+            struct ErasedFunction
+            {
+                virtual std::string operator()() = 0;
+                virtual ~ErasedFunction() {};
+            };
+
+            template <typename T>
+            struct Function
+                : public ErasedFunction
+            {
+                static_assert(is_invocable<T>::value, "");
+                static_assert(!std::is_reference<T>::value, "");
+
+                Function() = delete;
+                Function(Function const&) = delete;
+                Function(Function&&) = default;
+                Function& operator=(Function const&) = delete;
+                Function& operator=(Function&&) = default;
+
+                Function (T&& func)
+                    : func {std::move(func)}
+                {}
+
+                std::string operator()() override
+                {
+                    auto buf = std::ostringstream {};
+                    buf << this->func();
+                    return buf.str();
+                }
+
+                T func;
+            };
+
+            std::vector<std::unique_ptr<ErasedFunction>> functions;
+
+        public:
+            Prefix() = delete;
+            Prefix(Prefix const&) = delete;
+            Prefix(Prefix&&) = default;
+            Prefix& operator=(Prefix const&) = delete;
+            Prefix& operator=(Prefix&&) = default;
+
+            template <typename... Ts>
+            Prefix(Ts&& ...func)
+                : functions {}
+            {
+                (void) std::initializer_list<int> {
+                    (
+                        (void) this->functions.emplace_back(
+                            new Function<typename std::decay<Ts>::type> {
+                                std::forward<Ts>(func)
+                            }
+                        ),
+                        0
+                     )...
+                };
+            }
+
+            std::string operator()()
+            {
+                auto result = std::string {};
+                for (auto const& func : this->functions)
+                {
+                    result.append((*func)());
+                }
+
+                return result;
+            }
+        };
+
     } // namespace detail
 
 
@@ -294,17 +419,17 @@ namespace icecream
             return this->stream_;
         }
 
-        auto prefix(std::string const& value) -> Icecream&
+        template <
+            typename... Ts,
+            typename std::enable_if<
+                detail::conjunction<detail::is_valid_prefix<Ts>...>::value,
+            int>::type = 0
+        >
+        auto prefix(Ts&& ...value) -> Icecream&
         {
-            this->str_prefix = value;
-            this->func_prefix = nullptr;
-            return *this;
-        }
-
-        auto prefix(std::function<std::string()> const& value) -> Icecream&
-        {
-            this->str_prefix.clear();
-            this->func_prefix = value;
+            this->prefix_ = detail::Prefix {
+                detail::to_invocable(std::forward<Ts>(value))...
+            };
             return *this;
         }
 
@@ -339,7 +464,7 @@ namespace icecream
             Ts&&... args
         ) -> void
         {
-            auto const prefix = this->func_prefix ? this->func_prefix() : this->str_prefix;
+            auto const prefix = this->prefix_();
 
             this->stream_ << prefix;
 
@@ -367,9 +492,7 @@ namespace icecream
 
         std::ostream stream_ {std::cout.rdbuf()};
 
-        // The prefix will be one and only one of this two.
-        std::string str_prefix = "ic| ";
-        std::function<std::string()> func_prefix = nullptr;
+        detail::Prefix prefix_ {[]{return "ic| ";}};
 
         std::size_t lineWrapWidth_ = 70;
 

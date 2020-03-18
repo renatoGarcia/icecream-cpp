@@ -101,10 +101,50 @@ will print:
 
 ### Configuration
 
+#### stream
+
+The `std::ostream` output stream.
+
+- get:
+    ```C++
+    ic.stream()
+    ```
+
+#### prefix
+
+The prefix is a string that will be printed before each output. It can be set to a string,
+a nullary callable that returns an object that has an overload of `operator<<(ostream&,
+T)`, or any number of instances of those two. The printed prefix will be a concatenation
+of all elements.
+
+- set:
+    ```C++
+    ic.prefix("icecream| ");
+    // ...
+    ic.prefix([]{return "icecream -- ";});
+    // ...
+    ic.prefix("thread ", std::this_thread::get_id, " | ");
+    ```
+
+With those prefixes the code:
+```C++
+IC();
+```
+
+will print respectively:
+
+```
+icecream| test.cpp:34 in "void my_function(int, double)"
+// ...
+icecream -- test.cpp:34 in "void my_function(int, double)"
+// ...
+thread 1 | test.cpp:34 in "void my_function(int, double)"
+```
+
 #### show_c_string
 
-Controls if a `char*` variable should be interpreted as a null-terminated C string or a
-pointer to `char`. The default value is `true`.
+Controls if a `char*` variable should be interpreted as a null-terminated C string
+(`true`) or a pointer to `char` (`false`). The default value is `true`.
 
 - get:
     ```C++
