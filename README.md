@@ -2,6 +2,23 @@
 
 IceCream-Cpp is a little library to help with the print debugging on C++11 and forward.
 
+**Contents**
+* [Install](#install)
+* [Usage](#usage)
+  * [Configuration](#configuration)
+     * [stream](#stream)
+     * [prefix](#prefix)
+     * [show_c_string](#show_c_string)
+     * [lineWrapWidth](#linewrapwidth)
+  * [Printing logic](#printing-logic)
+     * [C strings](#c-strings)
+     * [Pointer like types](#pointer-like-types)
+     * [Optional types](#optional-types)
+     * [Pair types](#pair-types)
+     * [Iterable types](#iterable-types)
+* [Pitfalls](#pitfalls)
+* [Similar projects](#similar-projects)
+
 With IceCream-Cpp, an execution inspection:
 
 ```c++
@@ -33,7 +50,7 @@ and will print something like:
     ic| test.cpp:34 in "void my_function(int, double)"
     ic| test.cpp:36 in "void my_function(int, double)"
 
-And any variable inspection like:
+Also, any variable inspection like:
 
 ```c++
 std::cout << "a: " << a
@@ -63,7 +80,8 @@ find it.
 
 ## Usage
 
-After including the `icecream.hpp` header on a source file, `test.cpp` for this example:
+After including the `icecream.hpp` header on a source file, assuming `test.cpp` for this
+example:
 
 ```C++
 #include "icecream.hpp"
@@ -97,32 +115,55 @@ IC(v0, s0, 3.14);
 
 will print:
 
-    ic| v0: [1, 2, 3], s0: bla, 3.14: 3.14
+    ic| v0: [1, 2, 3], s0: "bla", 3.14: 3.14
 
 ### Configuration
 
+The `Icecream` class is internally implemented as a singleton. All the configuration
+changes will be done on to unique object, and shared across all the program and threads.
+
+All configurations are done/viewed through accessor methods, using the `icecream::ic`
+object, and to enable the method chaining idiom all the set methods return a reference of
+the `ic` object:
+
+```C++
+icecream::ic
+    .prefix("ic: ")
+    .show_c_string(false)
+    .lineWrapWidth(70);
+```
+
+To simplify the code, on examples below a `using icecream::ic;` statement will be
+presumed.
+
 #### stream
 
-The `std::ostream` output stream.
+The `std::ostream` where the output will be streamed.
 
 - get:
     ```C++
     ic.stream()
     ```
 
+The default stream buffer associated is the same as `std::cout`, but that can be changed.
+For instance, to stream the output to a string:
+
+```C++
+auto sstr = std::stringstream {};
+ic.stream().rdbuf(sstr.rdbuf());
+```
+
 #### prefix
 
-The prefix is a string that will be printed before each output. It can be set to a string,
-a nullary callable that returns an object that has an overload of `operator<<(ostream&,
-T)`, or any number of instances of those two. The printed prefix will be a concatenation
-of all elements.
+The prefix is the text that is printed before each output. It can be set to a string, a
+nullary callable that returns an object that has an overload of `operator<<(ostream&, T)`,
+or any number of instances of those two. The printed prefix will be a concatenation of all
+elements.
 
 - set:
     ```C++
     ic.prefix("icecream| ");
-    // ...
-    ic.prefix([]{return "icecream -- ";});
-    // ...
+    ic.prefix([]{return 42;}, ": ");
     ic.prefix("thread ", std::this_thread::get_id, " | ");
     ```
 
@@ -135,9 +176,9 @@ will print respectively:
 
 ```
 icecream| test.cpp:34 in "void my_function(int, double)"
-// ...
-icecream -- test.cpp:34 in "void my_function(int, double)"
-// ...
+
+42: test.cpp:34 in "void my_function(int, double)"
+
 thread 1 | test.cpp:34 in "void my_function(int, double)"
 ```
 
@@ -176,7 +217,8 @@ ic| flavor: 0x55587b6f5410
 
 #### lineWrapWidth
 
-fds
+The maximum number of characters before the output be broken on multiple lines. Default
+value of `70`.
 
 - get:
     ```C++
@@ -189,40 +231,16 @@ fds
 
 ### Printing logic
 
-Except by some especial types described bellow, an overload of the `operator<<(ostream&,
-T)` function must exist to all printed types `T`. If an overload of `operator<<` could not
-be resolved at `IC(...)` usage, the compilation will fail.
+The guiding principle to print a type `T` is to use the function `operator<<(ostream&, T)`
+always when an overload is available. The exceptions to that rule are strings (C and
+`std::string`), `char` and bounded arrays. Strings are enclosed by `"`, `char` are
+enclosed by `'`, and arrays are considered iterables rather than decay to raw pointers.
 
-#### Pointer like types
-
-When printing a pointer or pointer like type (`std::unique_ptr`, `boost::shared_ptr`,
-etc), the pointed value will be printed alongside the pointer value (the memory address).
-A null pointer won't be dereferenced, however a dangling or invalid pointer will
-potentially to cause a segmentation fault.
-
-A code like:
-
-```C++
-auto v0 = std::make_shared<int>(7);
-float* v1 = nullptr;
-IC(v0, v1);
-```
-
-will print something like:
-
-    ic| v0: 7 at 0x55587b6f5410, v1: nullptr
-
-To disable this functionality and print only the pointer value, just set the
-`show_pointed_value` option to `false`:
-
-```C++
-icecream::ic.show_pointed_value(false)
-```
-
-Having set the option to `false`, the same code above would print:
-
-    ic| v0: 0x55587b6f5410, v1: 0
-
+In general if an overload of `operator<<(ostream&, T)` is not available to a type `T` a
+call to `IC(t)` will result on a compilation error. Exceptions to that rule, when
+IceCream-Cpp will print a type `T` even without a `operator<<` overload are discussed
+below. Note however that if a user implements a custom `operator<<(ostream&, T)` that will
+take precedence and used instead.
 
 #### C strings
 
@@ -266,8 +284,31 @@ unbounded `char[]` arrays (i.e.: array with an unknown size) will decay to `char
 pointers, and will be printed either as a string or a pointer as configured by the
 [show_c_string](#show_c_string) option.
 
+#### Pointer like types
 
-#### Optional type
+The `std::unique_ptr<T>` (before C++20) and `boost::scoped_ptr<T>` types will be printed
+like usual raw pointers.
+
+The `std::weak_ptr<T>` and `boost::weak_ptr<T>` types will print their address if they are
+valid or "expired" otherwise. The code:
+
+```C++
+auto v0 = std::make_shared<int>(7);
+auto v1 = std::weak_ptr<int> {v0};
+
+IC(v1);
+v0.reset();
+IC(v1);
+```
+
+will print:
+
+```
+ic| v1: 0x55bcbd840ec0
+ic| v1: expired
+```
+
+#### Optional types
 
 A `std::optional<T>` typed variable will print its value, if it has one, or *nullopt*
 otherwise.
@@ -284,30 +325,7 @@ will print:
 
     ic| v0: 10, v1: nullopt
 
-Any possible overload resolution of `operator<<(ostream&, T)` will take precedence and
-will be used instead. The code:
-
-```C++
-auto operator<<(std::ostream& os, std::optional<std::string> const& value) -> std::ostream&
-{
-    if (value.has_value())
-        os << "Has string " << *value;
-    else
-        os << "No string";
-    return os;
-}
-
-// ...
-
-auto v2 = std::optional<std::string> {"bla"};
-IC(v2);
-```
-
-will print:
-
-    ic| v2: Has string bla
-
-#### Pair type
+#### Pair types
 
 A `std::pair<T1, T2>` typed variable will print both its values.
 
@@ -321,9 +339,6 @@ IC(v0);
 will print:
 
     ic| v0: (10, 3.14)
-
-As with other default print methods, any possible overload resolution of
-`operator<<(ostream&, T)` will take precedence and will be used instead.
 
 #### Iterable types
 
@@ -347,30 +362,6 @@ IC(v0);
 will print:
 
     ic| v0: [10, 20, 30]
-
-If there is any suitable overload resolution to `operator<<(ostream&, A)`, it will take
-precedence and used instead. The code:
-
-```C++
-template <typename T>
-auto operator<<(std::ostream& os, std::vector<T> const& value) -> std::ostream&
-{
-    os << "Vector - { ";
-    for (auto& i : value)
-    {
-        os << "(" << i << ") ";
-    }
-    os << "}";
-    return os;
-}
-
-auto v1 = std::vector<char> {'a', 'b', 'c'};
-IC(v1);
-```
-
-will print:
-
-    ic| v1: Vector - { (a) (b) (c) }
 
 ## Pitfalls
 
@@ -408,14 +399,3 @@ readable types names, but there is support to print variables names and values a
 its types. An optional integration of CleanType with IceCream-Cpp, if the first is present
 on system, is being planed. With that would be possible to show the types of values within
 `IC(...)` macro.
-
-## Ongoing work
-
-This library is at an early version, and it was tested on GCC 8.2 compiling
-with C++11, C++14 and C++17 flags. Some minor code changes could be needed to make it work with other
-compilers and older versions of GCC. Please report any success or problems.
-
-Work must be done adding customization options to the Icecream class, and mimicking the
-relevant functionalities of the original Python IceCream library.
-
-Any help is welcome :-)
