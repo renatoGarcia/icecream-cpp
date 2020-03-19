@@ -30,6 +30,7 @@
 #include <iterator>
 #include <locale>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -417,6 +418,7 @@ namespace icecream{ namespace detail
         template <typename... Ts>
         auto prefix(Ts&& ...value) -> void
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
             this->prefix_ = Prefix {
                 to_invocable(std::forward<Ts>(value))...
             };
@@ -429,6 +431,7 @@ namespace icecream{ namespace detail
 
         auto show_c_string(bool value) noexcept -> void
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
             this->show_c_string_ = value;
         }
 
@@ -439,6 +442,7 @@ namespace icecream{ namespace detail
 
         auto lineWrapWidth(std::size_t value) noexcept -> void
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
             this->lineWrapWidth_ = value;
         }
 
@@ -451,6 +455,8 @@ namespace icecream{ namespace detail
             Ts&&... args
         ) -> void
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
+
             auto const prefix = this->prefix_();
 
             this->stream_ << prefix;
@@ -476,6 +482,7 @@ namespace icecream{ namespace detail
 
         constexpr static size_type INDENT_BASE = 4;
 
+        std::mutex mutex;
 
         std::ostream stream_ {std::cerr.rdbuf()};
 
