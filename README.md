@@ -9,7 +9,7 @@ IceCream-Cpp is a little library to help with the print debugging on C++11 and f
      * [stream](#stream)
      * [prefix](#prefix)
      * [show_c_string](#show_c_string)
-     * [lineWrapWidth](#linewrapwidth)
+     * [line_wrap_width](#line_wrap_width)
   * [Printing logic](#printing-logic)
      * [C strings](#c-strings)
      * [Pointer like types](#pointer-like-types)
@@ -130,7 +130,7 @@ the `ic` object:
 icecream::ic
     .prefix("ic: ")
     .show_c_string(false)
-    .lineWrapWidth(70);
+    .line_wrap_width(70);
 ```
 
 To simplify the code, on examples below a `using icecream::ic;` statement will be
@@ -215,18 +215,18 @@ ic| flavor: "mango";
 ic| flavor: 0x55587b6f5410
 ```
 
-#### lineWrapWidth
+#### line_wrap_width
 
 The maximum number of characters before the output be broken on multiple lines. Default
 value of `70`.
 
 - get:
     ```C++
-    ic.lineWrapWidth();
+    ic.line_wrap_width();
     ```
 - set:
     ```C++
-    ic.lineWrapWidth(35);
+    ic.line_wrap_width(35);
     ```
 
 ### Printing logic

@@ -518,7 +518,7 @@ TEST_CASE("line_wrap")
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
-    icecream::ic.lineWrapWidth(20);
+    icecream::ic.line_wrap_width(20);
 
     {
         auto v0 = std::vector<float> {1.1, 1.2};
@@ -571,5 +571,5 @@ TEST_CASE("line_wrap")
         icecream::ic.prefix("ic| ");
     }
 
-    icecream::ic.lineWrapWidth(70);
+    icecream::ic.line_wrap_width(70);
 }

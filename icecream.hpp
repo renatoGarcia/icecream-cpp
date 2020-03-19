@@ -435,15 +435,15 @@ namespace icecream{ namespace detail
             this->show_c_string_ = value;
         }
 
-        auto lineWrapWidth() const noexcept -> std::size_t
+        auto line_wrap_width() const noexcept -> std::size_t
         {
-            return this->lineWrapWidth_;
+            return this->line_wrap_width_;
         }
 
-        auto lineWrapWidth(std::size_t value) noexcept -> void
+        auto line_wrap_width(std::size_t value) noexcept -> void
         {
             std::lock_guard<std::mutex> guard(this->mutex);
-            this->lineWrapWidth_ = value;
+            this->line_wrap_width_ = value;
         }
 
         template <typename... Ts>
@@ -488,7 +488,7 @@ namespace icecream{ namespace detail
 
         Prefix prefix_ {[]{return "ic| ";}};
 
-        std::size_t lineWrapWidth_ = 70;
+        std::size_t line_wrap_width_ = 70;
 
         bool show_c_string_ = true;
 
@@ -727,7 +727,7 @@ namespace icecream{ namespace detail
             }
             else
             {
-                auto const multiline = indent + count_chars(node) > this->lineWrapWidth_;
+                auto const multiline = indent + count_chars(node) > this->line_wrap_width_;
 
                 this->stream_ << "[";
 
@@ -778,7 +778,7 @@ namespace icecream{ namespace detail
 
                 if (it+1 != forest.rend())
                 {
-                    if (line_width > this->lineWrapWidth_)
+                    if (line_width > this->line_wrap_width_)
                         this->stream_ <<  ",\n" << std::string(Icecream::INDENT_BASE, ' ');
                     else
                         this->stream_ <<  ", ";
@@ -833,14 +833,14 @@ namespace icecream
             return *this;
         }
 
-        auto lineWrapWidth() const noexcept -> std::size_t
+        auto line_wrap_width() const noexcept -> std::size_t
         {
-            return detail::Icecream::instance().lineWrapWidth();
+            return detail::Icecream::instance().line_wrap_width();
         }
 
-        auto lineWrapWidth(std::size_t value) noexcept -> IcecreamAPI&
+        auto line_wrap_width(std::size_t value) noexcept -> IcecreamAPI&
         {
-            detail::Icecream::instance().lineWrapWidth(value);
+            detail::Icecream::instance().line_wrap_width(value);
             return *this;
         }
 
