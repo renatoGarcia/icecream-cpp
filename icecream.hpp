@@ -73,329 +73,325 @@ namespace boost
 }
 
 
-namespace icecream
+namespace icecream{ namespace detail
 {
-    namespace detail
+    // utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
+    template<class Facet>
+    struct deletable_facet : Facet
     {
-        // utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
-        template<class Facet>
-        struct deletable_facet : Facet
-        {
-            template<class ...Args>
-            deletable_facet(Args&& ...args) : Facet(std::forward<Args>(args)...) {}
-            ~deletable_facet() {}
-        };
+        template<class ...Args>
+        deletable_facet(Args&& ...args) : Facet(std::forward<Args>(args)...) {}
+        ~deletable_facet() {}
+    };
 
 
-        // ---------- Check if a type T is an instantiation of a template class U
-        template <template<typename...> class, typename...>
-        struct is_instantiation: std::false_type {};
+    // ---------- Check if a type T is an instantiation of a template class U
+    template <template<typename...> class, typename...>
+    struct is_instantiation: std::false_type {};
 
-        template <template<typename...> class U, typename... T>
-        struct is_instantiation<U, U<T...>>: std::true_type {};
-
-
-        // ---------- Logical AND
-        template <typename... Ts>
-        struct conjunction: std::true_type {};
-
-        template <typename T, typename... Ts>
-        struct conjunction<T, Ts...>: std::conditional<T::value, conjunction<Ts...>, std::false_type>::type {};
+    template <template<typename...> class U, typename... T>
+    struct is_instantiation<U, U<T...>>: std::true_type {};
 
 
-        // ---------- Logical OR
-        template <typename... Ts>
-        struct disjunction: std::false_type { };
+    // ---------- Logical AND
+    template <typename... Ts>
+    struct conjunction: std::true_type {};
 
-        template <typename T, typename... Ts>
-        struct disjunction<T, Ts...>: std::conditional<T::value, std::true_type, disjunction<Ts...>>::type {};
-
-
-        // ---------- Logical NOT
-        template <typename T>
-        struct negation: std::conditional<T::value, std::false_type, std::true_type>::type {};
+    template <typename T, typename... Ts>
+    struct conjunction<T, Ts...>: std::conditional<T::value, conjunction<Ts...>, std::false_type>::type {};
 
 
-        // ---------- To allow ADL with custom begin/end
-        using std::begin;
-        using std::end;
+    // ---------- Logical OR
+    template <typename... Ts>
+    struct disjunction: std::false_type { };
+
+    template <typename T, typename... Ts>
+    struct disjunction<T, Ts...>: std::conditional<T::value, std::true_type, disjunction<Ts...>>::type {};
 
 
-        // -------------------------------------------------- is_bounded_array
-        template <typename T>
-        struct is_bounded_array_impl: std::false_type {};
-
-        template <typename T, std::size_t N>
-        struct is_bounded_array_impl<T[N]>: std::true_type {};
-
-        template <typename T>
-        using is_bounded_array = typename is_bounded_array_impl<
-            typename std::remove_reference<T>::type
-        >::type;
+    // ---------- Logical NOT
+    template <typename T>
+    struct negation: std::conditional<T::value, std::false_type, std::true_type>::type {};
 
 
-        // -------------------------------------------------- is_invocable
-        template <typename T>
-        auto is_invocable_impl(int) -> decltype (
-            std::declval<T&>()(),
-            std::true_type {}
-        );
-
-        template <typename T>
-        auto is_invocable_impl(...) -> std::false_type;
-
-        template <typename T>
-        using is_invocable = decltype(is_invocable_impl<T>(0));
+    // ---------- To allow ADL with custom begin/end
+    using std::begin;
+    using std::end;
 
 
-        // -------------------------------------------------- is_iterable
-        template <typename T>
-        auto is_iterable_impl(int) -> decltype (
-            begin(std::declval<T&>()) != end(std::declval<T&>()),   // begin end operator!=
-            ++std::declval<decltype(begin(std::declval<T&>()))&>(), // operator++
-            *begin(std::declval<T&>()),                             // operator*
-            std::true_type {}
-        );
+    // -------------------------------------------------- is_bounded_array
+    template <typename T>
+    struct is_bounded_array_impl: std::false_type {};
 
-        template <typename T>
-        auto is_iterable_impl(...) -> std::false_type;
+    template <typename T, std::size_t N>
+    struct is_bounded_array_impl<T[N]>: std::true_type {};
 
-        template <typename T>
-        using is_iterable = decltype(is_iterable_impl<T>(0));
+    template <typename T>
+    using is_bounded_array = typename is_bounded_array_impl<
+        typename std::remove_reference<T>::type
+    >::type;
 
 
-        // -------------------------------------------------- has_insertion
-        template <typename T>
-        auto has_insertion_impl(int) -> decltype (
-            std::declval<std::ostream&>() << std::declval<T&>(),
-            std::true_type {}
-        );
+    // -------------------------------------------------- is_invocable
+    template <typename T>
+    auto is_invocable_impl(int) -> decltype (
+        std::declval<T&>()(),
+        std::true_type {}
+    );
 
-        template <typename T>
-        auto has_insertion_impl(...) -> std::false_type;
+    template <typename T>
+    auto is_invocable_impl(...) -> std::false_type;
 
-        template <typename T>
-        using has_insertion = decltype(has_insertion_impl<T>(0));
-
-
-        // -------------------------------------------------- is_optional
-        template <typename T>
-        struct is_optional: is_instantiation<std::optional, T> {};
+    template <typename T>
+    using is_invocable = decltype(is_invocable_impl<T>(0));
 
 
-        // -------------------------------------------------- is_pair
-        template <typename T>
-        struct is_pair: is_instantiation<std::pair, T> {};
+    // -------------------------------------------------- is_iterable
+    template <typename T>
+    auto is_iterable_impl(int) -> decltype (
+        begin(std::declval<T&>()) != end(std::declval<T&>()),   // begin end operator!=
+        ++std::declval<decltype(begin(std::declval<T&>()))&>(), // operator++
+        *begin(std::declval<T&>()),                             // operator*
+        std::true_type {}
+    );
+
+    template <typename T>
+    auto is_iterable_impl(...) -> std::false_type;
+
+    template <typename T>
+    using is_iterable = decltype(is_iterable_impl<T>(0));
 
 
-        // -------------------------------------------------- is_character
-        template <typename T>
-        using is_character = disjunction<
-            std::is_same<typename std::decay<T>::type, char>,
-            std::is_same<typename std::decay<T>::type, signed char>,
-            std::is_same<typename std::decay<T>::type, unsigned char>,
-            std::is_same<typename std::decay<T>::type, wchar_t>,
+    // -------------------------------------------------- has_insertion
+    template <typename T>
+    auto has_insertion_impl(int) -> decltype (
+        std::declval<std::ostream&>() << std::declval<T&>(),
+        std::true_type {}
+    );
+
+    template <typename T>
+    auto has_insertion_impl(...) -> std::false_type;
+
+    template <typename T>
+    using has_insertion = decltype(has_insertion_impl<T>(0));
+
+
+    // -------------------------------------------------- is_optional
+    template <typename T>
+    struct is_optional: is_instantiation<std::optional, T> {};
+
+
+    // -------------------------------------------------- is_pair
+    template <typename T>
+    struct is_pair: is_instantiation<std::pair, T> {};
+
+
+    // -------------------------------------------------- is_character
+    template <typename T>
+    using is_character = disjunction<
+        std::is_same<typename std::decay<T>::type, char>,
+        std::is_same<typename std::decay<T>::type, signed char>,
+        std::is_same<typename std::decay<T>::type, unsigned char>,
+        std::is_same<typename std::decay<T>::type, wchar_t>,
+    #if defined(__cpp_char8_t)
+        std::is_same<typename std::decay<T>::type, char8_t>,
+    #endif
+        std::is_same<typename std::decay<T>::type, char16_t>,
+        std::is_same<typename std::decay<T>::type, char32_t>
+    >;
+
+
+    // -------------------------------------------------- is_c_string
+    // char* and char[] are C strings, char[N] is not.
+    template <typename T>
+    using is_c_string = typename conjunction<
+        negation<is_bounded_array<T>>,
+        disjunction<
+            std::is_same<typename std::decay<T>::type, char*>,
+            std::is_same<typename std::decay<T>::type, char const*>,
+            std::is_same<typename std::decay<T>::type, signed char*>,
+            std::is_same<typename std::decay<T>::type, signed char const*>,
+            std::is_same<typename std::decay<T>::type, unsigned char*>,
+            std::is_same<typename std::decay<T>::type, unsigned char const*>,
+            std::is_same<typename std::decay<T>::type, wchar_t*>,
+            std::is_same<typename std::decay<T>::type, wchar_t const*>,
         #if defined(__cpp_char8_t)
-            std::is_same<typename std::decay<T>::type, char8_t>,
+            std::is_same<typename std::decay<T>::type, char8_t*>,
+            std::is_same<typename std::decay<T>::type, char8_t const*>,
         #endif
-            std::is_same<typename std::decay<T>::type, char16_t>,
-            std::is_same<typename std::decay<T>::type, char32_t>
-        >;
+            std::is_same<typename std::decay<T>::type, char16_t*>,
+            std::is_same<typename std::decay<T>::type, char16_t const*>,
+            std::is_same<typename std::decay<T>::type, char32_t*>,
+            std::is_same<typename std::decay<T>::type, char32_t const*>
+        >
+    >::type;
 
 
-        // -------------------------------------------------- is_c_string
-        // char* and char[] are C strings, char[N] is not.
-        template <typename T>
-        using is_c_string = typename conjunction<
-            negation<is_bounded_array<T>>,
-            disjunction<
-                std::is_same<typename std::decay<T>::type, char*>,
-                std::is_same<typename std::decay<T>::type, char const*>,
-                std::is_same<typename std::decay<T>::type, signed char*>,
-                std::is_same<typename std::decay<T>::type, signed char const*>,
-                std::is_same<typename std::decay<T>::type, unsigned char*>,
-                std::is_same<typename std::decay<T>::type, unsigned char const*>,
-                std::is_same<typename std::decay<T>::type, wchar_t*>,
-                std::is_same<typename std::decay<T>::type, wchar_t const*>,
-            #if defined(__cpp_char8_t)
-                std::is_same<typename std::decay<T>::type, char8_t*>,
-                std::is_same<typename std::decay<T>::type, char8_t const*>,
-            #endif
-                std::is_same<typename std::decay<T>::type, char16_t*>,
-                std::is_same<typename std::decay<T>::type, char16_t const*>,
-                std::is_same<typename std::decay<T>::type, char32_t*>,
-                std::is_same<typename std::decay<T>::type, char32_t const*>
-            >
-        >::type;
+    // -------------------------------------------------- is_std_string
+    template <typename T>
+    using is_std_string = is_instantiation<
+        std::basic_string,
+        typename std::decay<T>::type
+    >;
 
 
-        // -------------------------------------------------- is_std_string
-        template <typename T>
-        using is_std_string = is_instantiation<
-            std::basic_string,
-            typename std::decay<T>::type
-        >;
+    // -------------------------------------------------- is_unique_pointer
+    // Until C++20 std::unique_ptr has not an operator<<(ostream&) overload, so it
+    // must have an own print method overload too.
+    template <typename T>
+    struct is_unique_ptr: is_instantiation<std::unique_ptr, T> {};
 
 
-        // -------------------------------------------------- is_unique_pointer
-        // Until C++20 std::unique_ptr has not an operator<<(ostream&) overload, so it
-        // must have an own print method overload too.
-        template <typename T>
-        struct is_unique_ptr: is_instantiation<std::unique_ptr, T> {};
+    // -------------------------------------------------- is_weak_ptr
+    template <typename T>
+    struct is_weak_ptr: disjunction<
+        is_instantiation<std::weak_ptr, T>,
+        is_instantiation<boost::weak_ptr, T>
+    > {};
 
 
-        // -------------------------------------------------- is_weak_ptr
-        template <typename T>
-        struct is_weak_ptr: disjunction<
-            is_instantiation<std::weak_ptr, T>,
-            is_instantiation<boost::weak_ptr, T>
-        > {};
+    // -------------------------------------------------- is_valid_prefix
+    template <typename T>
+    struct is_valid_prefix: disjunction<
+        is_std_string<T>,
+        is_c_string<typename std::decay<T>::type>,
+        is_invocable<T>
+    > {};
 
 
-        // -------------------------------------------------- is_valid_prefix
-        template <typename T>
-        struct is_valid_prefix: disjunction<
-            is_std_string<T>,
-            is_c_string<typename std::decay<T>::type>,
-            is_invocable<T>
-        > {};
+    // -------------------------------------------------------------------------------
+    struct Node
+    {
+        std::string str;
+        std::vector<Node> children;
+        bool is_leaf;
+    };
 
-
-        // -------------------------------------------------------------------------------
-        struct Node
+    // Returns the sum of characters of the whole tree defined by `node` as root.
+    inline auto count_chars(Node const& node) -> int
+    {
+        if (node.is_leaf)
         {
-            std::string str;
-            std::vector<Node> children;
-            bool is_leaf;
+            return node.str.size();
+        }
+        else
+        {
+            // The enclosing [].
+            auto result = 2;
+
+            // count the size of each child
+            for (auto const& child : node.children)
+                result += count_chars(child);
+
+            // The ", " separators.
+            if (node.children.size() > 1)
+               result += (node.children.size() - 1) * 2;
+
+            return result;
+        }
+    }
+
+    // --------------------------------------------------
+
+    // If value is invocable, do nothing, If it is a string, returns an function that
+    // returns it.
+    template <
+        typename T,
+        typename std::enable_if <
+            is_std_string<T>::value
+            || is_c_string<typename std::decay<T>::type>::value,
+        int>::type = 0
+    >
+    auto to_invocable(T&& value) -> std::function<std::string()>
+    {
+        auto str = std::string {value};
+        return [str](){return str;};
+    }
+
+    template <
+        typename T,
+        typename std::enable_if<
+            is_invocable<T>::value,
+        int>::type = 0
+    >
+    auto to_invocable(T&& value) -> T&&
+    {
+        return std::forward<T>(value);
+    }
+
+
+    // --------------------------------------------------
+    class Prefix
+    {
+        struct ErasedFunction
+        {
+            virtual std::string operator()() = 0;
+            virtual ~ErasedFunction() {};
         };
 
-        // Returns the sum of characters of the whole tree defined by `node` as root.
-        inline auto count_chars(Node const& node) -> int
+        template <typename T>
+        struct Function
+            : public ErasedFunction
         {
-            if (node.is_leaf)
+            static_assert(is_invocable<T>::value, "");
+            static_assert(!std::is_reference<T>::value, "");
+
+            Function() = delete;
+            Function(Function const&) = delete;
+            Function(Function&&) = default;
+            Function& operator=(Function const&) = delete;
+            Function& operator=(Function&&) = default;
+
+            Function (T&& func)
+                : func {std::move(func)}
+            {}
+
+            std::string operator()() override
             {
-                return node.str.size();
-            }
-            else
-            {
-                // The enclosing [].
-                auto result = 2;
-
-                // count the size of each child
-                for (auto const& child : node.children)
-                    result += count_chars(child);
-
-                // The ", " separators.
-                if (node.children.size() > 1)
-                   result += (node.children.size() - 1) * 2;
-
-                return result;
-            }
-        }
-
-        // --------------------------------------------------
-
-        // If value is invocable, do nothing, If it is a string, returns an function that
-        // returns it.
-        template <
-            typename T,
-            typename std::enable_if <
-                detail::is_std_string<T>::value
-                || detail::is_c_string<typename std::decay<T>::type>::value,
-            int>::type = 0
-        >
-        auto to_invocable(T&& value) -> std::function<std::string()>
-        {
-            auto str = std::string {value};
-            return [str](){return str;};
-        }
-
-        template <
-            typename T,
-            typename std::enable_if<
-                detail::is_invocable<T>::value,
-            int>::type = 0
-        >
-        auto to_invocable(T&& value) -> T&&
-        {
-            return std::forward<T>(value);
-        }
-
-
-        // --------------------------------------------------
-        class Prefix
-        {
-            struct ErasedFunction
-            {
-                virtual std::string operator()() = 0;
-                virtual ~ErasedFunction() {};
-            };
-
-            template <typename T>
-            struct Function
-                : public ErasedFunction
-            {
-                static_assert(is_invocable<T>::value, "");
-                static_assert(!std::is_reference<T>::value, "");
-
-                Function() = delete;
-                Function(Function const&) = delete;
-                Function(Function&&) = default;
-                Function& operator=(Function const&) = delete;
-                Function& operator=(Function&&) = default;
-
-                Function (T&& func)
-                    : func {std::move(func)}
-                {}
-
-                std::string operator()() override
-                {
-                    auto buf = std::ostringstream {};
-                    buf << this->func();
-                    return buf.str();
-                }
-
-                T func;
-            };
-
-            std::vector<std::unique_ptr<ErasedFunction>> functions;
-
-        public:
-            Prefix() = delete;
-            Prefix(Prefix const&) = delete;
-            Prefix(Prefix&&) = default;
-            Prefix& operator=(Prefix const&) = delete;
-            Prefix& operator=(Prefix&&) = default;
-
-            template <typename... Ts>
-            Prefix(Ts&& ...func)
-                : functions {}
-            {
-                (void) std::initializer_list<int> {
-                    (
-                        (void) this->functions.emplace_back(
-                            new Function<typename std::decay<Ts>::type> {
-                                std::forward<Ts>(func)
-                            }
-                        ),
-                        0
-                     )...
-                };
+                auto buf = std::ostringstream {};
+                buf << this->func();
+                return buf.str();
             }
 
-            std::string operator()()
-            {
-                auto result = std::string {};
-                for (auto const& func : this->functions)
-                {
-                    result.append((*func)());
-                }
-
-                return result;
-            }
+            T func;
         };
 
-    } // namespace detail
+        std::vector<std::unique_ptr<ErasedFunction>> functions;
+
+    public:
+        Prefix() = delete;
+        Prefix(Prefix const&) = delete;
+        Prefix(Prefix&&) = default;
+        Prefix& operator=(Prefix const&) = delete;
+        Prefix& operator=(Prefix&&) = default;
+
+        template <typename... Ts>
+        Prefix(Ts&& ...func)
+            : functions {}
+        {
+            (void) std::initializer_list<int> {
+                (
+                    (void) this->functions.emplace_back(
+                        new Function<typename std::decay<Ts>::type> {
+                            std::forward<Ts>(func)
+                        }
+                    ),
+                    0
+                 )...
+            };
+        }
+
+        std::string operator()()
+        {
+            auto result = std::string {};
+            for (auto const& func : this->functions)
+            {
+                result.append((*func)());
+            }
+
+            return result;
+        }
+    };
 
 
     class Icecream
@@ -403,29 +399,28 @@ namespace icecream
     public:
         using size_type = std::size_t;
 
-        Icecream() = default;
         Icecream(Icecream const&) = delete;
         Icecream(Icecream&&) = delete;
         Icecream& operator=(Icecream const&) = delete;
         Icecream& operator=(Icecream&&) = delete;
+
+        static auto instance() -> Icecream&
+        {
+            static Icecream ic;
+            return ic;
+        }
 
         auto stream() -> std::ostream&
         {
             return this->stream_;
         }
 
-        template <
-            typename... Ts,
-            typename std::enable_if<
-                detail::conjunction<detail::is_valid_prefix<Ts>...>::value,
-            int>::type = 0
-        >
-        auto prefix(Ts&& ...value) -> Icecream&
+        template <typename... Ts>
+        auto prefix(Ts&& ...value) -> void
         {
-            this->prefix_ = detail::Prefix {
-                detail::to_invocable(std::forward<Ts>(value))...
+            this->prefix_ = Prefix {
+                to_invocable(std::forward<Ts>(value))...
             };
-            return *this;
         }
 
         auto show_c_string() const noexcept -> bool
@@ -433,10 +428,9 @@ namespace icecream
             return this->show_c_string_;
         }
 
-        auto show_c_string(bool value) noexcept -> Icecream&
+        auto show_c_string(bool value) noexcept -> void
         {
             this->show_c_string_ = value;
-            return *this;
         }
 
         auto lineWrapWidth() const noexcept -> std::size_t
@@ -444,10 +438,9 @@ namespace icecream
             return this->lineWrapWidth_;
         }
 
-        auto lineWrapWidth(std::size_t value) noexcept -> Icecream&
+        auto lineWrapWidth(std::size_t value) noexcept -> void
         {
             this->lineWrapWidth_ = value;
-            return *this;
         }
 
         template <typename... Ts>
@@ -487,23 +480,24 @@ namespace icecream
 
         std::ostream stream_ {std::cout.rdbuf()};
 
-        detail::Prefix prefix_ {[]{return "ic| ";}};
+        Prefix prefix_ {[]{return "ic| ";}};
 
         std::size_t lineWrapWidth_ = 70;
 
         bool show_c_string_ = true;
 
+        Icecream() = default;
 
         // Print any class that overloads operator<<(std::ostream&, T)
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::has_insertion<T>::value
-                && !detail::is_c_string<T>::value
-                && !detail::is_character<T>::value
-                && !detail::is_std_string<T>::value
+                has_insertion<T>::value
+                && !is_c_string<T>::value
+                && !is_character<T>::value
+                && !is_std_string<T>::value
                 && !std::is_array<T>::value,
-                detail::Node
+                Node
             >::type
         {
             auto buf = std::ostringstream {};
@@ -515,8 +509,8 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_c_string<T>::value,
-                detail::Node
+                is_c_string<T>::value,
+                Node
             >::type
         {
             using DT = typename std::decay<
@@ -526,7 +520,7 @@ namespace icecream
             >::type;
 
             std::wstring_convert<
-                detail::deletable_facet<std::codecvt<DT, char, std::mbstate_t>>, DT
+                deletable_facet<std::codecvt<DT, char, std::mbstate_t>>, DT
             > cv {};
 
             auto buf = std::ostringstream {};
@@ -543,12 +537,12 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_std_string<T>::value,
-                detail::Node
+                is_std_string<T>::value,
+                Node
             >::type
         {
             std::wstring_convert<
-                detail::deletable_facet<
+                deletable_facet<
                     std::codecvt<typename T::value_type, char, std::mbstate_t>
                 >,
                 typename T::value_type
@@ -563,12 +557,12 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_character<T>::value,
-                detail::Node
+                is_character<T>::value,
+                Node
             >::type
         {
             std::wstring_convert<
-                detail::deletable_facet<
+                deletable_facet<
                     std::codecvt<typename std::decay<T>::type, char, std::mbstate_t>
                 >,
                 typename std::decay<T>::type
@@ -596,8 +590,8 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_unique_ptr<T>::value,
-                detail::Node
+                is_unique_ptr<T>::value,
+                Node
             >::type
         {
             auto buf = std::ostringstream {};
@@ -609,8 +603,8 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_weak_ptr<T>::value,
-                detail::Node
+                is_weak_ptr<T>::value,
+                Node
             >::type
         {
             auto buf = std::ostringstream {};
@@ -627,9 +621,9 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_optional<T>::value
-                && !detail::has_insertion<T>::value,
-                detail::Node
+                is_optional<T>::value
+                && !has_insertion<T>::value,
+                Node
             >::type
         {
             if (value.has_value())
@@ -642,12 +636,12 @@ namespace icecream
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                detail::is_pair<T>::value
-                && !detail::has_insertion<T>::value,
-                detail::Node
+                is_pair<T>::value
+                && !has_insertion<T>::value,
+                Node
             >::type
         {
-            auto node = detail::Node {"", {}, false};
+            auto node = Node {"", {}, false};
             node.children.push_back(this->value_to_tree(value.first));
             node.children.push_back(this->value_to_tree(value.second));
             return node;
@@ -658,18 +652,18 @@ namespace icecream
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
                 (
-                    detail::is_iterable<T>::value
-                    && !detail::has_insertion<T>::value
-                    && !detail::is_std_string<T>::value
+                    is_iterable<T>::value
+                    && !has_insertion<T>::value
+                    && !is_std_string<T>::value
                 )
                 || std::is_array<T>::value,
-                detail::Node
+                Node
             >::type
         {
             using std::begin;
             using std::end;
 
-            auto node = detail::Node {"", {}, false};
+            auto node = Node {"", {}, false};
 
             auto it = begin(value);
             auto const e_it = end(value);
@@ -691,7 +685,7 @@ namespace icecream
             std::vector<std::string>::const_iterator arg_name,
             TArg&& arg_value,
             Ts&&... args_tail
-        ) -> std::vector<std::tuple<std::string, detail::Node>>
+        ) -> std::vector<std::tuple<std::string, Node>>
         {
             auto tree = std::make_tuple(
                *arg_name, this->value_to_tree(std::forward<TArg>(arg_value))
@@ -708,12 +702,12 @@ namespace icecream
 
         auto build_forest(
             std::vector<std::string>::const_iterator
-        ) -> std::vector<std::tuple<std::string, detail::Node>>
+        ) -> std::vector<std::tuple<std::string, Node>>
         {
-            return std::vector<std::tuple<std::string, detail::Node>> {};
+            return std::vector<std::tuple<std::string, Node>> {};
         }
 
-        auto print_tree(detail::Node const& node, size_type indent) -> void
+        auto print_tree(Node const& node, size_type indent) -> void
         {
             if (node.is_leaf)
             {
@@ -744,7 +738,7 @@ namespace icecream
         }
 
         auto print_forest(
-            std::vector<std::tuple<std::string, detail::Node>> const& forest,
+            std::vector<std::tuple<std::string, Node>> const& forest,
             size_type const prefix_width
         ) -> void
         {
@@ -781,10 +775,81 @@ namespace icecream
             }
         }
     };
+}} // namespace icecream::detail
+
+
+namespace icecream
+{
+    // The Icecream class is a singleton. This IcecreamAPI class only task is be a
+    // syntactic sugar to make possible call ic.stream() instead of
+    // Icecream::instance().stream().
+    class IcecreamAPI
+    {
+    public:
+
+        IcecreamAPI() = default;
+        IcecreamAPI(IcecreamAPI const&) = delete;
+        IcecreamAPI(IcecreamAPI&&) = delete;
+        IcecreamAPI& operator=(IcecreamAPI const&) = delete;
+        IcecreamAPI& operator=(IcecreamAPI&&) = delete;
+
+        auto stream() -> std::ostream&
+        {
+            return detail::Icecream::instance().stream();
+        }
+
+        template <
+            typename... Ts,
+            typename std::enable_if<
+                detail::conjunction<detail::is_valid_prefix<Ts>...>::value,
+            int>::type = 0
+        >
+        auto prefix(Ts&& ...value) -> IcecreamAPI&
+        {
+            detail::Icecream::instance().prefix(std::forward<Ts>(value)...);
+            return *this;
+        }
+
+        auto show_c_string() const noexcept -> bool
+        {
+            return detail::Icecream::instance().show_c_string();
+        }
+
+        auto show_c_string(bool value) noexcept -> IcecreamAPI&
+        {
+            detail::Icecream::instance().show_c_string(value);
+            return *this;
+        }
+
+        auto lineWrapWidth() const noexcept -> std::size_t
+        {
+            return detail::Icecream::instance().lineWrapWidth();
+        }
+
+        auto lineWrapWidth(std::size_t value) noexcept -> IcecreamAPI&
+        {
+            detail::Icecream::instance().lineWrapWidth(value);
+            return *this;
+        }
+
+        template <typename... Ts>
+        auto print(
+            std::string const& file,
+            int line,
+            std::string const& function,
+            std::vector<std::string> const& arg_names,
+            Ts&&... args
+        ) -> void
+        {
+            detail::Icecream::instance().print(
+                file, line, function, arg_names, std::forward<Ts>(args)...
+            );
+        }
+    };
 
     namespace
     {
-        Icecream ic {};
+        IcecreamAPI ic {};
     }
 
     struct print
