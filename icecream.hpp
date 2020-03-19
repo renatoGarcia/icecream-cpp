@@ -495,16 +495,17 @@ namespace icecream{ namespace detail
         Icecream() = default;
 
         // Print any class that overloads operator<<(std::ostream&, T)
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 has_insertion<T>::value
                 && !is_c_string<T>::value
                 && !is_character<T>::value
                 && !is_std_string<T>::value
                 && !std::is_array<T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             auto buf = std::ostringstream {};
             buf << value;
@@ -512,12 +513,13 @@ namespace icecream{ namespace detail
         }
 
         // Print C string
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 is_c_string<T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             using DT = typename std::decay<
                 typename std::remove_pointer<
@@ -540,12 +542,13 @@ namespace icecream{ namespace detail
         }
 
         // Print std::string
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 is_std_string<T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             std::wstring_convert<
                 deletable_facet<
@@ -560,12 +563,13 @@ namespace icecream{ namespace detail
         }
 
         // Print character
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 is_character<T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             std::wstring_convert<
                 deletable_facet<
@@ -593,13 +597,14 @@ namespace icecream{ namespace detail
 
 
         // Until C++20 std::unique_ptr had not an operator<<(ostream&) overload
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 is_unique_ptr<T>::value
                 || is_instantiation<boost::scoped_ptr, T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             auto buf = std::ostringstream {};
             buf << reinterpret_cast<void const*>(value.get());
@@ -607,12 +612,13 @@ namespace icecream{ namespace detail
         }
 
         // Print weak pointer classes
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 is_weak_ptr<T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             if (value.expired())
                 return {"expired", {}, true};
@@ -621,13 +627,14 @@ namespace icecream{ namespace detail
         }
 
         // Print std::optional<> classes
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 is_optional<T>::value
                 && !has_insertion<T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             if (value.has_value())
                 return this->value_to_tree(*value);
@@ -636,13 +643,14 @@ namespace icecream{ namespace detail
         }
 
         // Print std::pair<> class
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 is_pair<T>::value
                 && !has_insertion<T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             auto node = Node {"", {}, false};
             node.children.push_back(this->value_to_tree(value.first));
@@ -651,17 +659,18 @@ namespace icecream{ namespace detail
         }
 
         // Print all items of any iterable class
-        template <typename T>
-        auto value_to_tree(T const& value) -> typename
-            std::enable_if<
+        template <
+            typename T,
+            typename std::enable_if<
                 (
                     is_iterable<T>::value
                     && !has_insertion<T>::value
                     && !is_std_string<T>::value
                 )
                 || std::is_array<T>::value,
-                Node
-            >::type
+            int>::type = 0
+        >
+        auto value_to_tree(T const& value) -> Node
         {
             using std::begin;
             using std::end;
