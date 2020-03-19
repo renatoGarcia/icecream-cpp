@@ -477,7 +477,7 @@ namespace icecream{ namespace detail
         constexpr static size_type INDENT_BASE = 4;
 
 
-        std::ostream stream_ {std::cout.rdbuf()};
+        std::ostream stream_ {std::cerr.rdbuf()};
 
         Prefix prefix_ {[]{return "ic| ";}};
 

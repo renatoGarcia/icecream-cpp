@@ -145,7 +145,7 @@ The `std::ostream` where the output will be streamed.
     ic.stream()
     ```
 
-The default stream buffer associated is the same as `std::cout`, but that can be changed.
+The default stream buffer associated is the same as `std::cerr`, but that can be changed.
 For instance, to stream the output to a string:
 
 ```C++
