@@ -414,11 +414,6 @@ namespace icecream
             return this->stream_;
         }
 
-        auto stream() const -> std::ostream const&
-        {
-            return this->stream_;
-        }
-
         template <
             typename... Ts,
             typename std::enable_if<
