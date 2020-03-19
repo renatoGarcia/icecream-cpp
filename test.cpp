@@ -242,43 +242,62 @@ TEST_CASE("pointer_like")
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
-    auto v0 = std::make_shared<int>(7);
-    auto v1 = boost::make_shared<int>(33);
-    int* v2 = new int {40};
-    float* v3 = nullptr;
-    auto v4 = std::unique_ptr<double> {};
-    auto v5 = std::weak_ptr<int> {v0};
+    {
+        auto v0 = std::unique_ptr<int> {new int {10}};
+        IC(v0);
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        sstr.str("");
+    }
 
-    IC(v0);
-    REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
-    sstr.str("");
+    {
+        auto v0 = std::make_shared<int>(7);
+        IC(v0);
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        sstr.str("");
+    }
 
-    IC(v1);
-    REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v1: 0x[0-9a-f]+\n"));
-    sstr.str("");
+    {
+        auto v0 = boost::make_shared<int>(33);
+        IC(v0);
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        sstr.str("");
+    }
 
-    IC(v2);
-    REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v2: 0x[0-9a-f]+\n"));
-    sstr.str("");
+    {
+        int* v0 = new int {40};
+        IC(v0);
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        sstr.str("");
+        delete v0;
+    }
 
-    IC(v3);
-    REQUIRE(sstr.str() == "ic| v3: 0\n");
-    sstr.str("");
+    {
+        float* v0 = nullptr;
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 0\n");
+        sstr.str("");
+    }
 
-    IC(v4);
-    REQUIRE(sstr.str() == "ic| v4: 0\n");
-    sstr.str("");
+    {
+        auto v0 = std::unique_ptr<double> {};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 0\n");
+        sstr.str("");
+    }
 
-    IC(v5);
-    REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v5: valid weak_ptr\n"));
-    sstr.str("");
+    {
+        auto v0 = std::make_shared<int>(7);
+        auto v1 = std::weak_ptr<int> {v0};
+        IC(v1);
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v1: 0x[0-9a-f]+\n"));
+        sstr.str("");
 
-    v0.reset();
-    IC(v5);
-    REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v5: expired weak_ptr\n"));
-    sstr.str("");
+        v0.reset();
+        IC(v1);
+        REQUIRE(sstr.str() == "ic| v1: expired\n");
+        sstr.str("");
+    }
 
-    delete v2;
 }
 
 

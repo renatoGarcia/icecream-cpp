@@ -607,14 +607,10 @@ namespace icecream{ namespace detail
                 Node
             >::type
         {
-            auto buf = std::ostringstream {};
-
             if (value.expired())
-                buf << "expired weak_ptr";
+                return {"expired", {}, true};
             else
-                buf << "valid weak_ptr";
-
-            return {buf.str(), {}, true};
+                return this->value_to_tree(value.lock());
         }
 
         // Print std::optional<> classes
