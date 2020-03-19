@@ -68,7 +68,6 @@ namespace std
 namespace boost
 {
     template <typename T> class scoped_ptr;
-    template <typename T> class shared_ptr;
     template <typename T> class weak_ptr;
 }
 
@@ -590,7 +589,8 @@ namespace icecream{ namespace detail
         template <typename T>
         auto value_to_tree(T const& value) -> typename
             std::enable_if<
-                is_unique_ptr<T>::value,
+                is_unique_ptr<T>::value
+                || is_instantiation<boost::scoped_ptr, T>::value,
                 Node
             >::type
         {

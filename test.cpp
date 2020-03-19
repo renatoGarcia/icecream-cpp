@@ -264,6 +264,13 @@ TEST_CASE("pointer_like")
     }
 
     {
+        boost::scoped_ptr<int> v0 {new int {33}};
+        IC(v0);
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        sstr.str("");
+    }
+
+    {
         int* v0 = new int {40};
         IC(v0);
         REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
