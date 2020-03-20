@@ -530,12 +530,14 @@ TEST_CASE("line_wrap")
     {
         auto v0 = std::list<int> {10, 20, 30, 40, 50, 60};
         auto const result =
-            "ic| v0: [10,\n"
-            "         20,\n"
-            "         30,\n"
-            "         40,\n"
-            "         50,\n"
-            "         60]\n";
+            "ic| v0: [\n"
+            "        10,\n"
+            "        20,\n"
+            "        30,\n"
+            "        40,\n"
+            "        50,\n"
+            "        60\n"
+            "    ]\n";
         IC(v0);
         REQUIRE(sstr.str() == result);
         sstr.str("");
@@ -544,14 +546,18 @@ TEST_CASE("line_wrap")
     {
         auto v0 = std::vector<std::vector<int>> {{1, 2}, {10, 20, 30, 40, 50, 60}, {3, 4}};
         auto const result =
-            "ic| v0: [[1, 2],\n"
-            "         [10,\n"
-            "          20,\n"
-            "          30,\n"
-            "          40,\n"
-            "          50,\n"
-            "          60],\n"
-            "         [3, 4]]\n";
+            "ic| v0: [\n"
+            "        [1, 2],\n"
+            "        [\n"
+            "            10,\n"
+            "            20,\n"
+            "            30,\n"
+            "            40,\n"
+            "            50,\n"
+            "            60\n"
+            "        ],\n"
+            "        [3, 4]\n"
+            "    ]\n";
         IC(v0);
         REQUIRE(sstr.str() == result);
         sstr.str("");
@@ -562,8 +568,10 @@ TEST_CASE("line_wrap")
         auto v0 = std::vector<float> {1.1, 1.2};
         auto v1 = std::vector<int> {11, 12};
         auto const result =
-            "pref -> v0: [1.1,\n"
-            "             1.2],\n"
+            "pref -> v0: [\n"
+            "        1.1,\n"
+            "        1.2\n"
+            "    ]\n"
             "    v1: [11, 12]\n";
         IC(v0, v1);
         REQUIRE(sstr.str() == result);

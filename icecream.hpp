@@ -446,6 +446,28 @@ namespace icecream{ namespace detail
             this->line_wrap_width_ = value;
         }
 
+        auto include_context() const noexcept -> bool
+        {
+            return this->include_context_;
+        }
+
+        auto include_context(bool value) noexcept -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->include_context_ = value;
+        }
+
+        auto context_delimiter() const noexcept -> std::string
+        {
+            return this->context_delimiter_;
+        }
+
+        auto context_delimiter(std::string value) noexcept -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->context_delimiter_ = value;
+        }
+
         template <typename... Ts>
         auto print(
             std::string const& file,
@@ -458,21 +480,25 @@ namespace icecream{ namespace detail
             std::lock_guard<std::mutex> guard(this->mutex);
 
             auto const prefix = this->prefix_();
-
-            this->stream_ << prefix;
+            auto context = std::string {};
 
             // If used an empty IC macro, i.e.: IC().
-            if (sizeof...(Ts) == 0)
+            if (sizeof...(Ts) == 0 || this->include_context_)
             {
                 auto const n = file.rfind('/');
-                this->stream_ << file.substr(n+1) << ':' << line << " in \"" << function << '"';
+                context = file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
+            }
+
+            if (sizeof...(Ts) == 0)
+            {
+                this->stream_ << prefix << context;
             }
             else
             {
                 auto const forest = this->build_forest(
                     std::begin(arg_names), std::forward<Ts>(args)...
                 );
-                this->print_forest(forest, prefix.size());
+                this->print_forest(prefix, context, forest);
             }
 
             this->stream_ << std::endl;
@@ -488,9 +514,13 @@ namespace icecream{ namespace detail
 
         Prefix prefix_ {[]{return "ic| ";}};
 
+        std::string context_delimiter_ = "- ";
+
         std::size_t line_wrap_width_ = 70;
 
         bool show_c_string_ = true;
+
+        bool include_context_ = false;
 
         Icecream() = default;
 
@@ -719,71 +749,138 @@ namespace icecream{ namespace detail
             return std::vector<std::tuple<std::string, Node>> {};
         }
 
-        auto print_tree(Node const& node, size_type indent) -> void
+        auto print_tree(
+            Node const& node,
+            size_type const indent_level,
+            bool const multiline
+        ) -> void
         {
+            auto const break_line = [&](int indent)
+            {
+                this->stream_
+                    << "\n"
+                    << std::string(indent * Icecream::INDENT_BASE, ' ');
+            };
+
             if (node.is_leaf)
             {
                 this->stream_ << node.str;
             }
             else
             {
-                auto const multiline = indent + count_chars(node) > this->line_wrap_width_;
-
                 this->stream_ << "[";
-
                 if (multiline)
-                    indent += 1;
+                    break_line(indent_level+1);
 
                 for (auto it = node.children.begin(); it != node.children.end(); ++it)
                 {
-                    this->print_tree(*it, indent);
+                    auto const child_multiline = [&]
+                    {
+                        // If the whole tree is single line all childs are too.
+                        if (!multiline)
+                            return false;
+
+                        auto const line_width =
+                            (indent_level+1) * Icecream::INDENT_BASE
+                            + count_chars(*it);
+
+                        return line_width > this->line_wrap_width_;
+                    }();
+
+                    this->print_tree(*it, indent_level+1, child_multiline);
+
                     if (it+1 != node.children.end())
                     {
+                        this->stream_ << ",";
                         if (multiline)
-                            this->stream_ << ",\n" << std::string(indent, ' ');
+                            break_line(indent_level+1);
                         else
-                            this->stream_ << ", ";
+                            this->stream_ << " ";
                     }
+                    else if (multiline)
+                        break_line(indent_level);
                 }
+
                 this->stream_ << "]";
             }
         }
 
         auto print_forest(
-            std::vector<std::tuple<std::string, Node>> const& forest,
-            size_type const prefix_width
+            std::string const& prefix,
+            std::string const& context,
+            std::vector<std::tuple<std::string, Node>> const& forest
         ) -> void
         {
-            auto line_width = prefix_width;
-            for (auto const& t : forest)
-                line_width += std::get<0>(t).size() + 2 + count_chars(std::get<1>(t));
+            auto const forest_multiline = [&]
+            {
+                auto r = prefix.size();
 
-            // The ", " separators.
-            if (forest.size() > 1)
-                line_width += (forest.size() - 1) * 2;
+                if (!context.empty())
+                    r += context.size() + this->context_delimiter_.size();
+
+                // The variables name, the separator ": ", and content
+                for (auto const& t : forest)
+                    r += std::get<0>(t).size() + 2 + count_chars(std::get<1>(t));
+
+                // The ", " separators between variables.
+                if (forest.size() > 1)
+                    r += (forest.size() - 1) * 2;
+
+                return r > this->line_wrap_width_;
+            }();
+
+            // Print prefix and context
+            this->stream_ << prefix;
+            if (!context.empty())
+            {
+                this->stream_ << context;
+                if (forest_multiline)
+                    this->stream_ << '\n' << std::string(Icecream::INDENT_BASE, ' ');
+                else
+                    this->stream_ << this->context_delimiter_;
+            }
 
             // The forest is built with trees in reverse order.
             for (auto it = forest.rbegin(); it != forest.rend(); ++it)
             {
                 auto const& arg_name = std::get<0>(*it);
+                auto const& node = std::get<1>(*it);
+
+                auto const tree_multiline = [&]
+                {
+                    // If the whole forest is single line all trees are too.
+                    if (!forest_multiline)
+                        return false;
+
+                    auto const line_width = [&]
+                    {
+                        if (it == forest.rbegin() && context.empty())
+                            return
+                                prefix.size()
+                                + arg_name.size()
+                                + 2
+                                + count_chars(node);
+                        else
+                            return
+                                Icecream::INDENT_BASE
+                                + arg_name.size()
+                                + 2
+                                + count_chars(node);
+                    }();
+
+                    return line_width > this->line_wrap_width_;
+                }();
+
                 this->stream_ << arg_name << ": ";
-
-                auto indent = arg_name.size() + 2;
-                if (it == forest.rbegin())
-                    indent += prefix_width;
-                else
-                    indent += Icecream::INDENT_BASE;
-
-                this->print_tree(std::get<1>(*it), indent);
+                this->print_tree(node, 1, tree_multiline);
 
                 if (it+1 != forest.rend())
                 {
-                    if (line_width > this->line_wrap_width_)
-                        this->stream_ <<  ",\n" << std::string(Icecream::INDENT_BASE, ' ');
+                    if (forest_multiline)
+                        this->stream_ <<  "\n" << std::string(Icecream::INDENT_BASE, ' ');
                     else
                         this->stream_ <<  ", ";
                 }
-
             }
         }
     };
@@ -841,6 +938,28 @@ namespace icecream
         auto line_wrap_width(std::size_t value) noexcept -> IcecreamAPI&
         {
             detail::Icecream::instance().line_wrap_width(value);
+            return *this;
+        }
+
+        auto include_context() const noexcept -> bool
+        {
+            return detail::Icecream::instance().include_context();
+        }
+
+        auto include_context(bool value) noexcept -> IcecreamAPI&
+        {
+            detail::Icecream::instance().include_context(value);
+            return *this;
+        }
+
+        auto context_delimiter() const noexcept -> std::string
+        {
+            return detail::Icecream::instance().context_delimiter();
+        }
+
+        auto context_delimiter(std::string value) noexcept -> IcecreamAPI&
+        {
+            detail::Icecream::instance().context_delimiter(value);
             return *this;
         }
 

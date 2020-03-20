@@ -10,6 +10,8 @@ IceCream-Cpp is a little library to help with the print debugging on C++11 and f
      * [prefix](#prefix)
      * [show_c_string](#show_c_string)
      * [line_wrap_width](#line_wrap_width)
+     * [include_context](#include_context)
+     * [context_delimiter](#context_delimiter)
   * [Printing logic](#printing-logic)
      * [C strings](#c-strings)
      * [Pointer like types](#pointer-like-types)
@@ -227,6 +229,33 @@ value of `70`.
 - set:
     ```C++
     ic.line_wrap_width(35);
+    ```
+
+#### include_context
+
+If the context (source name, line number, and function name) should be printed even when
+printing variables. Default value is `false`.
+
+- get:
+    ```C++
+    ic.include_context();
+    ```
+- set:
+    ```C++
+    ic.include_context(true);
+    ```
+
+#### context_delimiter
+
+The string separating the context text from the variables values. Default value is `"- "`.
+
+- get:
+    ```C++
+    ic.context_delimiter();
+    ```
+- set:
+    ```C++
+    ic.context_delimiter(" # ");
     ```
 
 ### Printing logic
