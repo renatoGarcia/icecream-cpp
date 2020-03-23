@@ -85,6 +85,39 @@ TEST_CASE("base")
 }
 
 
+// -------------------------------------------------- Test return
+TEST_CASE("return")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
+
+    {
+        auto v0 = IC(7);
+        REQUIRE(std::is_same<decltype(v0), int>::value);
+        REQUIRE(v0 == 7);
+    }
+
+    {
+        auto v0 = 'r';
+        auto v1 = IC(v0);
+        REQUIRE(std::is_same<decltype(v1), char>::value);
+        REQUIRE(v1 == 'r');
+    }
+
+    {
+        auto v0 = IC(7, 3.14);
+        REQUIRE(std::is_same<decltype(v0), std::tuple<int, double>>::value);
+        REQUIRE(v0 == std::make_tuple(7, 3.14));
+    }
+
+    {
+        REQUIRE(std::is_same<decltype(IC()), void>::value);
+    }
+
+}
+
+
+
 // -------------------------------------------------- Test optional
 
 #include <boost/optional.hpp>

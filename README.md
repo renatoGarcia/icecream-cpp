@@ -119,6 +119,20 @@ will print:
 
     ic| v0: [1, 2, 3], s0: "bla", 3.14: 3.14
 
+
+If called with no arguments the `IC(...)` macro will return `void`, if called with one argument it will return the argument itself, and if called with multiple arguments it will return a tuple with all of them:
+
+
+```C++
+auto a = int {7};
+auto b = std::string {"bla"};
+auto c = float {3.14};
+
+IC();
+int& d = IC(a);
+tuple<std::string&, float&> e = IC(b, c);
+```
+
 ### Configuration
 
 The `Icecream` class is internally implemented as a singleton. All the configuration

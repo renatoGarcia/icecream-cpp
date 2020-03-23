@@ -54,9 +54,9 @@
 
 
 #if defined(ICECREAM_LONG_NAME)
-    #define ICECREAM(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__, __VA_ARGS__}
+    #define ICECREAM(...) (::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}).ret(__VA_ARGS__)
 #else
-    #define IC(...) ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__, __VA_ARGS__}
+    #define IC(...) (::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}).ret(__VA_ARGS__)
 #endif
 
 
@@ -983,14 +983,39 @@ namespace icecream
         IcecreamAPI ic {};
     }
 
-    struct print
+} // namespace icecream
+
+namespace icecream{ namespace detail
+{
+    // The use of this struct instead of a free function is a needed hack because of the
+    // trailing comma problem with __VA_ARGS__ expansion. A macro like:
+    //
+    // IC(...) print(__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__, __VA_ARGS__)
+    //
+    // when used with no arguments would expand to:
+    //
+    // print("foo.cpp", 42, "void bar()", "",)
+    struct Dispatcher
     {
-        // An empty IC() macro will expand to
-        // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "",}
-        // A macro like IC(foo, bar) will expand to
-        // ::icecream::print{__FILE__, __LINE__, ICECREAM_FUNCTION, "foo, bar", foo, bar}
+        std::string const& file;
+        int line;
+        std::string const& function;
+        std::string const& arg_names;
+
+        Dispatcher(
+            std::string const& file,
+            int line,
+            std::string const& function,
+            std::string const& arg_names
+        )
+            : file {file}
+            , line {line}
+            , function {function}
+            , arg_names {arg_names}
+        {}
+
         template <typename... Ts>
-        print(std::string const& file, int line, std::string const& function, std::string const& arg_names, Ts&&... args)
+        auto print(Ts&&... args) -> void
         {
             auto split_names = std::vector<std::string> {};
             auto b_it = std::begin(arg_names);
@@ -1034,9 +1059,28 @@ namespace icecream
 
             ::icecream::ic.print(file, line, function, split_names, std::forward<Ts>(args)...);
         }
+
+        template <typename... Ts>
+        auto ret(Ts&&... args) -> std::tuple<Ts...>
+        {
+            this->print(args...);
+            return {std::forward<Ts>(args)...};
+        }
+
+        template <typename T>
+        auto ret(T&& arg) -> T
+        {
+            this->print(arg);
+            return std::forward<T>(arg);
+        }
+
+        auto ret() -> void
+        {
+            this->print();
+        }
     };
 
-} // namespace icecream
+}} // namespace icecream::detail
 
 
 #endif // ICECREAM_HPP_INCLUDED
