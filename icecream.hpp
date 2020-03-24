@@ -410,6 +410,18 @@ namespace icecream{ namespace detail
             return ic;
         }
 
+        auto enable() -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->enabled_ = true;
+        }
+
+        auto disable() -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->enabled_ = false;
+        }
+
         auto stream() -> std::ostream&
         {
             return this->stream_;
@@ -479,6 +491,9 @@ namespace icecream{ namespace detail
         {
             std::lock_guard<std::mutex> guard(this->mutex);
 
+            if (!this->enabled_)
+                return;
+
             auto const prefix = this->prefix_();
             auto context = std::string {};
 
@@ -509,6 +524,8 @@ namespace icecream{ namespace detail
         constexpr static size_type INDENT_BASE = 4;
 
         std::mutex mutex;
+
+        bool enabled_ = true;
 
         std::ostream stream_ {std::cerr.rdbuf()};
 
@@ -901,6 +918,18 @@ namespace icecream
         IcecreamAPI(IcecreamAPI&&) = delete;
         IcecreamAPI& operator=(IcecreamAPI const&) = delete;
         IcecreamAPI& operator=(IcecreamAPI&&) = delete;
+
+        auto enable() -> IcecreamAPI&
+        {
+            detail::Icecream::instance().enable();
+            return *this;
+        }
+
+        auto disable() -> IcecreamAPI&
+        {
+            detail::Icecream::instance().disable();
+            return *this;
+        }
 
         auto stream() -> std::ostream&
         {

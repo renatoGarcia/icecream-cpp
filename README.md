@@ -6,6 +6,7 @@ IceCream-Cpp is a little library to help with the print debugging on C++11 and f
 * [Install](#install)
 * [Usage](#usage)
   * [Configuration](#configuration)
+     * [enable/disable](#enabledisable)
      * [stream](#stream)
      * [prefix](#prefix)
      * [show_c_string](#show_c_string)
@@ -151,6 +152,25 @@ icecream::ic
 
 To simplify the code, on examples below a `using icecream::ic;` statement will be
 presumed.
+
+#### enable/disable
+
+Enable or disable the output of `IC(...)` macro, *enabled* default. The code:
+
+```C++
+IC(1);
+ic.disable();
+IC(2);
+ic.enable();
+IC(3);
+```
+
+will print:
+
+```
+ic| 1: 1
+ic| 3: 3
+```
 
 #### stream
 

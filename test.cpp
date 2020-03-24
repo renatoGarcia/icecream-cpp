@@ -55,33 +55,56 @@ TEST_CASE("base")
     auto v0 = std::vector<int> {1, 2, 3, 4, 5};
     MyClass mc {20};
 
-    test_empty_ic();
-    REQUIRE(sstr.str() == "ic| test.cpp:14 in \"void test_empty_ic()\"\n");
-    sstr.str("");
+    {
+        icecream::ic.disable();
+        IC(i0);
+        REQUIRE(sstr.str() == "");
+        sstr.str("");
+        icecream::ic.enable();
+    }
 
-    IC(i0);
-    REQUIRE(sstr.str() == "ic| i0: 7\n");
-    sstr.str("");
 
-    IC(i0, d0);
-    REQUIRE(sstr.str() == "ic| i0: 7, d0: 3.14\n");
-    sstr.str("");
+    {
+        test_empty_ic();
+        REQUIRE(sstr.str() == "ic| test.cpp:14 in \"void test_empty_ic()\"\n");
+        sstr.str("");
+    }
 
-    IC(i0, d0, 10, 30);
-    REQUIRE(sstr.str() == "ic| i0: 7, d0: 3.14, 10: 10, 30: 30\n");
-    sstr.str("");
+    {
+        IC(i0);
+        REQUIRE(sstr.str() == "ic| i0: 7\n");
+        sstr.str("");
+    }
 
-    IC((sum(40, 2)), i0   , (((sum(3, 5)))));
-    REQUIRE(sstr.str() == "ic| (sum(40, 2)): 42, i0: 7, (((sum(3, 5)))): 8\n");
-    sstr.str("");
+    {
+        IC(i0, d0);
+        REQUIRE(sstr.str() == "ic| i0: 7, d0: 3.14\n");
+        sstr.str("");
+    }
 
-    IC(v0);
-    REQUIRE(sstr.str() == "ic| v0: [1, 2, 3, 4, 5]\n");
-    sstr.str("");
+    {
+        IC(i0, d0, 10, 30);
+        REQUIRE(sstr.str() == "ic| i0: 7, d0: 3.14, 10: 10, 30: 30\n");
+        sstr.str("");
+    }
 
-    IC(mc);
-    REQUIRE(sstr.str() == "ic| mc: <MyClass 20>\n");
-    sstr.str("");
+    {
+        IC((sum(40, 2)), i0   , (((sum(3, 5)))));
+        REQUIRE(sstr.str() == "ic| (sum(40, 2)): 42, i0: 7, (((sum(3, 5)))): 8\n");
+        sstr.str("");
+    }
+
+    {
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: [1, 2, 3, 4, 5]\n");
+        sstr.str("");
+    }
+
+    {
+        IC(mc);
+        REQUIRE(sstr.str() == "ic| mc: <MyClass 20>\n");
+        sstr.str("");
+    }
 }
 
 
