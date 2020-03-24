@@ -260,39 +260,301 @@ namespace icecream{ namespace detail
 
 
     // -------------------------------------------------------------------------------
-    struct Node
+    // Needed to access the Icecream::show_c_string() method before the class declaration
+    auto show_c_string() -> bool;
+
+    struct Tree
     {
-        std::string str;
-        std::vector<Node> children;
         bool is_leaf;
+
+        union U
+        {
+            std::string text;
+            std::vector<Tree> children;
+
+            U(bool is_leaf)
+            {
+                if (is_leaf)
+                    new (&text) std::string;
+                else
+                    new (&children) std::vector<Tree>;
+            }
+
+            ~U()
+            {}
+        } content;
+
+
+        Tree() = delete;
+        Tree(Tree const&) = delete;
+
+        Tree(Tree&& other)
+            : is_leaf {other.is_leaf}
+            , content {other.is_leaf}
+        {
+            if (this->is_leaf)
+                this->content.text = std::move(other.content.text);
+            else
+                this->content.children = std::move(other.content.children);
+        }
+
+        Tree& operator=(Tree const&) = delete;
+
+        Tree& operator=(Tree&& other)
+        {
+            if (this->is_leaf != other.is_leaf)
+            {
+                this->~Tree();
+                this->is_leaf = other.is_leaf;
+                new (&this->content) U {this->is_leaf};
+            }
+
+            if (this->is_leaf)
+                this->content.text = std::move(other.content.text);
+            else
+                this->content.children = std::move(other.content.children);
+
+            return *this;
+        }
+
+        ~Tree()
+        {
+            if (this->is_leaf)
+                this->content.text.~basic_string();
+            else
+                this->content.children.~vector();
+        }
+
+        // Returns the sum of characters of the whole tree defined by `node` as root.
+        auto count_chars() const -> int
+        {
+            if (this->is_leaf)
+            {
+                return this->content.text.size();
+            }
+            else
+            {
+                // The enclosing [].
+                auto result = 2;
+
+                // count the size of each child
+                for (auto const& child : this->content.children)
+                    result += child.count_chars();
+
+                // The ", " separators.
+                if (this->content.children.size() > 1)
+                    result += (this->content.children.size() - 1) * 2;
+
+                return result;
+            }
+        }
+
+
+        // Print any class that overloads operator<<(std::ostream&, T)
+        template <
+            typename T,
+            typename std::enable_if<
+                has_insertion<T>::value
+                && !is_c_string<T>::value
+                && !is_character<T>::value
+                && !is_std_string<T>::value
+                && !std::is_array<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            auto buf = std::ostringstream {};
+            buf << value;
+            this->content.text = buf.str();
+        }
+
+        // Print C string
+        template <
+            typename T,
+            typename std::enable_if<
+                is_c_string<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            using DT = typename std::decay<
+                typename std::remove_pointer<
+                    typename std::decay<T>::type
+                >::type
+            >::type;
+
+            std::wstring_convert<
+                deletable_facet<std::codecvt<DT, char, std::mbstate_t>>, DT
+            > cv {};
+
+            auto buf = std::ostringstream {};
+
+            if (show_c_string())
+                buf << '"' << cv.to_bytes(value) << '"';
+            else
+                buf << reinterpret_cast<void const*>(value);
+
+            this->content.text = buf.str();
+        }
+
+        // Print std::string
+        template <
+            typename T,
+            typename std::enable_if<
+                is_std_string<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            std::wstring_convert<
+                deletable_facet<
+                    std::codecvt<typename T::value_type, char, std::mbstate_t>
+                >,
+                typename T::value_type
+            > cv {};
+
+            auto buf = std::ostringstream {};
+            buf << '"' << cv.to_bytes(value) << '"';
+            this->content.text = buf.str();
+        }
+
+        // Print character
+        template <
+            typename T,
+            typename std::enable_if<
+                is_character<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            std::wstring_convert<
+                deletable_facet<
+                    std::codecvt<typename std::decay<T>::type, char, std::mbstate_t>
+                >,
+                typename std::decay<T>::type
+            > cv {};
+
+            auto str = std::string {};
+            switch (value)
+            {
+            case T{'\0'}:
+                str = "\\0";
+                break;
+
+            default:
+                str = cv.to_bytes(value);
+                break;
+            }
+
+            auto buf = std::ostringstream {};
+            buf << '\'' << str << '\'';
+            this->content.text = buf.str();
+        }
+
+
+        // Until C++20 std::unique_ptr had not an operator<<(ostream&) overload
+        template <
+            typename T,
+            typename std::enable_if<
+                is_unique_ptr<T>::value
+                || is_instantiation<boost::scoped_ptr, T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            auto buf = std::ostringstream {};
+            buf << reinterpret_cast<void const*>(value.get());
+            this->content.text = buf.str();
+        }
+
+        // Print weak pointer classes
+        template <
+            typename T,
+            typename std::enable_if<
+                is_weak_ptr<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            if (value.expired())
+                this->content.text = "expired";
+            else
+                *this = Tree {value.lock()};
+        }
+
+        // Print std::optional<> classes
+        template <
+            typename T,
+            typename std::enable_if<
+                is_optional<T>::value
+                && !has_insertion<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            if (value.has_value())
+                *this = Tree {*value};
+            else
+                this->content.text = "nullopt";
+        }
+
+        // Print std::pair<> class
+        template <
+            typename T,
+            typename std::enable_if<
+                is_pair<T>::value
+                && !has_insertion<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {false}
+            , content {false}
+        {
+            this->content.children.emplace_back(value.first);
+            this->content.children.emplace_back(value.second);
+        }
+
+        // Print all items of any iterable class
+        template <
+            typename T,
+            typename std::enable_if<
+                (
+                    is_iterable<T>::value
+                    && !has_insertion<T>::value
+                    && !is_std_string<T>::value
+                )
+                || std::is_array<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {false}
+            , content {false}
+        {
+            using std::begin;
+            using std::end;
+
+            auto it = begin(value);
+            auto const e_it = end(value);
+            for (; it != e_it; ++it)
+                this->content.children.emplace_back(*it);
+        }
     };
 
-    // Returns the sum of characters of the whole tree defined by `node` as root.
-    inline auto count_chars(Node const& node) -> int
-    {
-        if (node.is_leaf)
-        {
-            return node.str.size();
-        }
-        else
-        {
-            // The enclosing [].
-            auto result = 2;
-
-            // count the size of each child
-            for (auto const& child : node.children)
-                result += count_chars(child);
-
-            // The ", " separators.
-            if (node.children.size() > 1)
-               result += (node.children.size() - 1) * 2;
-
-            return result;
-        }
-    }
-
     // --------------------------------------------------
-
     // If value is invocable, do nothing, If it is a string, returns an function that
     // returns it.
     template <
@@ -539,215 +801,18 @@ namespace icecream{ namespace detail
 
         bool include_context_ = false;
 
+
         Icecream() = default;
-
-        // Print any class that overloads operator<<(std::ostream&, T)
-        template <
-            typename T,
-            typename std::enable_if<
-                has_insertion<T>::value
-                && !is_c_string<T>::value
-                && !is_character<T>::value
-                && !is_std_string<T>::value
-                && !std::is_array<T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            auto buf = std::ostringstream {};
-            buf << value;
-            return {buf.str(), {}, true};
-        }
-
-        // Print C string
-        template <
-            typename T,
-            typename std::enable_if<
-                is_c_string<T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            using DT = typename std::decay<
-                typename std::remove_pointer<
-                    typename std::decay<T>::type
-                >::type
-            >::type;
-
-            std::wstring_convert<
-                deletable_facet<std::codecvt<DT, char, std::mbstate_t>>, DT
-            > cv {};
-
-            auto buf = std::ostringstream {};
-
-            if (this->show_c_string_)
-                buf << '"' << cv.to_bytes(value) << '"';
-            else
-                buf << reinterpret_cast<void const*>(value);
-
-            return {buf.str(), {}, true};
-        }
-
-        // Print std::string
-        template <
-            typename T,
-            typename std::enable_if<
-                is_std_string<T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            std::wstring_convert<
-                deletable_facet<
-                    std::codecvt<typename T::value_type, char, std::mbstate_t>
-                >,
-                typename T::value_type
-            > cv {};
-
-            auto buf = std::ostringstream {};
-            buf << '"' << cv.to_bytes(value) << '"';
-            return {buf.str(), {}, true};
-        }
-
-        // Print character
-        template <
-            typename T,
-            typename std::enable_if<
-                is_character<T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            std::wstring_convert<
-                deletable_facet<
-                    std::codecvt<typename std::decay<T>::type, char, std::mbstate_t>
-                >,
-                typename std::decay<T>::type
-            > cv {};
-
-            auto str = std::string {};
-            switch (value)
-            {
-            case T{'\0'}:
-                str = "\\0";
-                break;
-
-            default:
-                str = cv.to_bytes(value);
-                break;
-            }
-
-            auto buf = std::ostringstream {};
-            buf << '\'' << str << '\'';
-            return {buf.str(), {}, true};
-        }
-
-
-        // Until C++20 std::unique_ptr had not an operator<<(ostream&) overload
-        template <
-            typename T,
-            typename std::enable_if<
-                is_unique_ptr<T>::value
-                || is_instantiation<boost::scoped_ptr, T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            auto buf = std::ostringstream {};
-            buf << reinterpret_cast<void const*>(value.get());
-            return {buf.str(), {}, true};
-        }
-
-        // Print weak pointer classes
-        template <
-            typename T,
-            typename std::enable_if<
-                is_weak_ptr<T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            if (value.expired())
-                return {"expired", {}, true};
-            else
-                return this->value_to_tree(value.lock());
-        }
-
-        // Print std::optional<> classes
-        template <
-            typename T,
-            typename std::enable_if<
-                is_optional<T>::value
-                && !has_insertion<T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            if (value.has_value())
-                return this->value_to_tree(*value);
-            else
-                return {"nullopt", {}, true};
-        }
-
-        // Print std::pair<> class
-        template <
-            typename T,
-            typename std::enable_if<
-                is_pair<T>::value
-                && !has_insertion<T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            auto node = Node {"", {}, false};
-            node.children.push_back(this->value_to_tree(value.first));
-            node.children.push_back(this->value_to_tree(value.second));
-            return node;
-        }
-
-        // Print all items of any iterable class
-        template <
-            typename T,
-            typename std::enable_if<
-                (
-                    is_iterable<T>::value
-                    && !has_insertion<T>::value
-                    && !is_std_string<T>::value
-                )
-                || std::is_array<T>::value,
-            int>::type = 0
-        >
-        auto value_to_tree(T const& value) -> Node
-        {
-            using std::begin;
-            using std::end;
-
-            auto node = Node {"", {}, false};
-
-            auto it = begin(value);
-            auto const e_it = end(value);
-            if (it != e_it)
-            {
-                node.children.push_back(this->value_to_tree(*it));
-                ++it;
-                for (; it != e_it; ++it)
-                {
-                    node.children.push_back(this->value_to_tree(*it));
-                }
-            }
-
-            return node;
-        }
 
         template <typename TArg, typename... Ts>
         auto build_forest(
             std::vector<std::string>::const_iterator arg_name,
             TArg&& arg_value,
             Ts&&... args_tail
-        ) -> std::vector<std::tuple<std::string, Node>>
+        ) -> std::vector<std::tuple<std::string, Tree>>
         {
             auto tree = std::make_tuple(
-               *arg_name, this->value_to_tree(std::forward<TArg>(arg_value))
+                *arg_name, Tree {std::forward<TArg>(arg_value)}
             );
 
             auto forest = this->build_forest(
@@ -761,13 +826,13 @@ namespace icecream{ namespace detail
 
         auto build_forest(
             std::vector<std::string>::const_iterator
-        ) -> std::vector<std::tuple<std::string, Node>>
+        ) -> std::vector<std::tuple<std::string, Tree>>
         {
-            return std::vector<std::tuple<std::string, Node>> {};
+            return std::vector<std::tuple<std::string, Tree>> {};
         }
 
         auto print_tree(
-            Node const& node,
+            Tree const& node,
             size_type const indent_level,
             bool const multiline
         ) -> void
@@ -781,7 +846,7 @@ namespace icecream{ namespace detail
 
             if (node.is_leaf)
             {
-                this->stream_ << node.str;
+                this->stream_ << node.content.text;
             }
             else
             {
@@ -789,8 +854,11 @@ namespace icecream{ namespace detail
                 if (multiline)
                     break_line(indent_level+1);
 
-                for (auto it = node.children.begin(); it != node.children.end(); ++it)
-                {
+                for (
+                    auto it = node.content.children.begin();
+                    it != node.content.children.end();
+                    ++it
+                ){
                     auto const child_multiline = [&]
                     {
                         // If the whole tree is single line all childs are too.
@@ -799,14 +867,14 @@ namespace icecream{ namespace detail
 
                         auto const line_width =
                             (indent_level+1) * Icecream::INDENT_BASE
-                            + count_chars(*it);
+                            + it->count_chars();
 
                         return line_width > this->line_wrap_width_;
                     }();
 
                     this->print_tree(*it, indent_level+1, child_multiline);
 
-                    if (it+1 != node.children.end())
+                    if (it+1 != node.content.children.end())
                     {
                         this->stream_ << ",";
                         if (multiline)
@@ -825,7 +893,7 @@ namespace icecream{ namespace detail
         auto print_forest(
             std::string const& prefix,
             std::string const& context,
-            std::vector<std::tuple<std::string, Node>> const& forest
+            std::vector<std::tuple<std::string, Tree>> const& forest
         ) -> void
         {
             auto const forest_multiline = [&]
@@ -837,7 +905,7 @@ namespace icecream{ namespace detail
 
                 // The variables name, the separator ": ", and content
                 for (auto const& t : forest)
-                    r += std::get<0>(t).size() + 2 + count_chars(std::get<1>(t));
+                    r += std::get<0>(t).size() + 2 + std::get<1>(t).count_chars();
 
                 // The ", " separators between variables.
                 if (forest.size() > 1)
@@ -876,13 +944,13 @@ namespace icecream{ namespace detail
                                 prefix.size()
                                 + arg_name.size()
                                 + 2
-                                + count_chars(node);
+                                + node.count_chars();
                         else
                             return
                                 Icecream::INDENT_BASE
                                 + arg_name.size()
                                 + 2
-                                + count_chars(node);
+                                + node.count_chars();
                     }();
 
                     return line_width > this->line_wrap_width_;
@@ -901,6 +969,12 @@ namespace icecream{ namespace detail
             }
         }
     };
+
+    auto show_c_string() -> bool
+    {
+        return Icecream::instance().show_c_string();
+    }
+
 }} // namespace icecream::detail
 
 
