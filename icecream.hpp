@@ -181,9 +181,12 @@ namespace icecream{ namespace detail
     struct is_optional: is_instantiation<std::optional, T> {};
 
 
-    // -------------------------------------------------- is_pair
+    // -------------------------------------------------- is_tuple
     template <typename T>
-    struct is_pair: is_instantiation<std::pair, T> {};
+    struct is_tuple: disjunction<
+        is_instantiation<std::pair, typename std::decay<T>::type>,
+        is_instantiation<std::tuple, typename std::decay<T>::type>
+    > {};
 
 
     // -------------------------------------------------- is_character
@@ -235,6 +238,28 @@ namespace icecream{ namespace detail
     >;
 
 
+    // ----------------------- is_collection
+    template <typename T>
+    using is_collection = conjunction<
+        is_iterable<T>,
+        negation<is_std_string<T>>
+    >;
+
+
+    // ----------------------- elements_type
+    template <typename T>
+    static auto elements_type_impl(int) -> decltype(
+        *begin(std::declval<T&>())
+    );
+
+    template <typename T>
+    static auto elements_type_impl(...) -> void;
+
+    // Gets the elements type of a collection
+    template <typename T>
+    using elements_type = decltype(elements_type_impl<T>(0));
+
+
     // -------------------------------------------------- is_unique_pointer
     // Until C++20 std::unique_ptr has not an operator<<(ostream&) overload, so it
     // must have an own print method overload too.
@@ -259,7 +284,7 @@ namespace icecream{ namespace detail
     > {};
 
 
-    // -------------------------------------------------------------------------------
+    // -------------------------------------------------- Tree
     // Needed to access the Icecream::show_c_string() method before the class declaration
     auto show_c_string() -> bool;
 
@@ -516,7 +541,7 @@ namespace icecream{ namespace detail
         template <
             typename T,
             typename std::enable_if<
-                is_pair<T>::value
+                is_tuple<T>::value
                 && !has_insertion<T>::value,
             int>::type = 0
         >
@@ -553,6 +578,44 @@ namespace icecream{ namespace detail
                 this->content.children.emplace_back(*it);
         }
     };
+
+
+    // -------------------------------------------------- is_tree_argument
+    template <typename T>
+    auto is_tree_argument_impl(int) -> decltype (
+        Tree {std::declval<T&>()},
+        std::true_type {}
+    );
+
+    template <typename T>
+    auto is_tree_argument_impl(...) -> std::false_type;
+
+    // If there exist a constructor of Tree accepting a T argument.
+    template <typename T>
+    using is_tree_argument = decltype(is_tree_argument_impl<T>(0));
+
+
+    // -------------------------------------------------- is_printable
+
+    // Check if IceCream can print the type T.
+    template <typename T>
+    struct is_printable: std::conditional<
+        is_collection<T>::value,
+        conjunction<
+            is_tree_argument<T>,
+            is_printable<elements_type<T>>
+        >,
+        is_tree_argument<T>
+    >::type
+    {};
+
+    template <typename T0, typename T1>
+    struct is_printable<std::pair<T0, T1>&>: conjunction<
+        is_printable<T0>,
+        is_printable<T1>
+    >
+    {};
+
 
     // --------------------------------------------------
     // If value is invocable, do nothing, If it is a string, returns an function that
@@ -1066,7 +1129,12 @@ namespace icecream
             return *this;
         }
 
-        template <typename... Ts>
+        template <
+            typename... Ts,
+            typename std::enable_if<
+                detail::conjunction<detail::is_printable<Ts>...>::value,
+            int>::type = 0
+        >
         auto print(
             std::string const& file,
             int line,
