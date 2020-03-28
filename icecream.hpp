@@ -845,6 +845,7 @@ namespace icecream{ namespace detail
 
         auto stream() -> std::ostream&
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
             return this->stream_;
         }
 
@@ -857,45 +858,49 @@ namespace icecream{ namespace detail
             };
         }
 
-        auto show_c_string() const noexcept -> bool
+        auto show_c_string() const -> bool
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
             return this->show_c_string_;
         }
 
-        auto show_c_string(bool value) noexcept -> void
+        auto show_c_string(bool value) -> void
         {
             std::lock_guard<std::mutex> guard(this->mutex);
             this->show_c_string_ = value;
         }
 
-        auto line_wrap_width() const noexcept -> std::size_t
+        auto line_wrap_width() const -> std::size_t
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
             return this->line_wrap_width_;
         }
 
-        auto line_wrap_width(std::size_t value) noexcept -> void
+        auto line_wrap_width(std::size_t value) -> void
         {
             std::lock_guard<std::mutex> guard(this->mutex);
             this->line_wrap_width_ = value;
         }
 
-        auto include_context() const noexcept -> bool
+        auto include_context() const -> bool
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
             return this->include_context_;
         }
 
-        auto include_context(bool value) noexcept -> void
+        auto include_context(bool value) -> void
         {
             std::lock_guard<std::mutex> guard(this->mutex);
             this->include_context_ = value;
         }
 
-        auto context_delimiter() const noexcept -> std::string
+        auto context_delimiter() const -> std::string
         {
+            std::lock_guard<std::mutex> guard(this->mutex);
             return this->context_delimiter_;
         }
 
-        auto context_delimiter(std::string value) noexcept -> void
+        auto context_delimiter(std::string value) -> void
         {
             std::lock_guard<std::mutex> guard(this->mutex);
             this->context_delimiter_ = value;
@@ -931,7 +936,7 @@ namespace icecream{ namespace detail
             }
             else
             {
-                auto const forest = this->build_forest(
+                auto const forest = Icecream::build_forest(
                     std::begin(arg_names), std::forward<Ts>(args)...
                 );
                 this->print_forest(prefix, context, forest);
@@ -944,7 +949,7 @@ namespace icecream{ namespace detail
 
         constexpr static size_type INDENT_BASE = 4;
 
-        std::mutex mutex;
+        mutable std::mutex mutex;
 
         bool enabled_ = true;
 
@@ -962,33 +967,6 @@ namespace icecream{ namespace detail
 
 
         Icecream() = default;
-
-        template <typename TArg, typename... Ts>
-        auto build_forest(
-            std::vector<std::string>::const_iterator arg_name,
-            TArg&& arg_value,
-            Ts&&... args_tail
-        ) -> std::vector<std::tuple<std::string, Tree>>
-        {
-            auto tree = std::make_tuple(
-                *arg_name, Tree {std::forward<TArg>(arg_value)}
-            );
-
-            auto forest = this->build_forest(
-                ++arg_name,
-                std::forward<Ts>(args_tail)...
-            );
-
-            forest.push_back(std::move(tree));
-            return forest;
-        }
-
-        auto build_forest(
-            std::vector<std::string>::const_iterator
-        ) -> std::vector<std::tuple<std::string, Tree>>
-        {
-            return std::vector<std::tuple<std::string, Tree>> {};
-        }
 
         auto print_tree(
             Tree const& node,
@@ -1127,6 +1105,33 @@ namespace icecream{ namespace detail
                 }
             }
         }
+
+        static auto build_forest(
+            std::vector<std::string>::const_iterator
+        ) -> std::vector<std::tuple<std::string, Tree>>
+        {
+            return std::vector<std::tuple<std::string, Tree>> {};
+        }
+
+        template <typename T, typename... Ts>
+        auto build_forest(
+            std::vector<std::string>::const_iterator arg_name,
+            T&& arg_value,
+            Ts&&... args_tail
+        ) -> std::vector<std::tuple<std::string, Tree>>
+        {
+            auto tree = std::make_tuple(
+                *arg_name, Tree {std::forward<T>(arg_value)}
+            );
+
+            auto forest = Icecream::build_forest(
+                ++arg_name,
+                std::forward<Ts>(args_tail)...
+            );
+
+            forest.push_back(std::move(tree));
+            return forest;
+        }
     };
 
     auto show_c_string() -> bool
@@ -1181,45 +1186,45 @@ namespace icecream
             return *this;
         }
 
-        auto show_c_string() const noexcept -> bool
+        auto show_c_string() const -> bool
         {
             return detail::Icecream::instance().show_c_string();
         }
 
-        auto show_c_string(bool value) noexcept -> IcecreamAPI&
+        auto show_c_string(bool value) -> IcecreamAPI&
         {
             detail::Icecream::instance().show_c_string(value);
             return *this;
         }
 
-        auto line_wrap_width() const noexcept -> std::size_t
+        auto line_wrap_width() const -> std::size_t
         {
             return detail::Icecream::instance().line_wrap_width();
         }
 
-        auto line_wrap_width(std::size_t value) noexcept -> IcecreamAPI&
+        auto line_wrap_width(std::size_t value) -> IcecreamAPI&
         {
             detail::Icecream::instance().line_wrap_width(value);
             return *this;
         }
 
-        auto include_context() const noexcept -> bool
+        auto include_context() const -> bool
         {
             return detail::Icecream::instance().include_context();
         }
 
-        auto include_context(bool value) noexcept -> IcecreamAPI&
+        auto include_context(bool value) -> IcecreamAPI&
         {
             detail::Icecream::instance().include_context(value);
             return *this;
         }
 
-        auto context_delimiter() const noexcept -> std::string
+        auto context_delimiter() const -> std::string
         {
             return detail::Icecream::instance().context_delimiter();
         }
 
-        auto context_delimiter(std::string value) noexcept -> IcecreamAPI&
+        auto context_delimiter(std::string const& value) -> IcecreamAPI&
         {
             detail::Icecream::instance().context_delimiter(value);
             return *this;
