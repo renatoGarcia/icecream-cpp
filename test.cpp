@@ -205,7 +205,7 @@ TEST_CASE("std_optional")
 #endif
 
 
-// -------------------------------------------------- Test pair
+// -------------------------------------------------- Test tuples
 
 #include <utility>
 auto operator<<(std::ostream& os, std::pair<std::string, char> const& value) -> std::ostream&
@@ -214,26 +214,38 @@ auto operator<<(std::ostream& os, std::pair<std::string, char> const& value) -> 
     return os;
 }
 
-TEST_CASE("pair")
+TEST_CASE("tuples")
 {
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
-    auto s0 = std::pair<int, char> {5, 'a'};
-    auto s1 = std::make_pair("oi", 'b');
-    auto s2 = std::pair<int, double> {10, 3.14};
+    {
+        auto s0 = std::pair<int, char> {5, 'a'};
+        IC(s0);
+        REQUIRE(sstr.str() == "ic| s0: [5, 'a']\n");
+        sstr.str("");
+    }
 
-    IC(s0);
-    REQUIRE(sstr.str() == "ic| s0: [5, 'a']\n");
-    sstr.str("");
+    {
+        auto s0 = std::make_pair("oi", 'b');
+        IC(s0);
+        REQUIRE(sstr.str() == "ic| s0: {oi, b}\n"); // will use the function above
+        sstr.str("");
+    }
 
-    IC(s1);
-    REQUIRE(sstr.str() == "ic| s1: {oi, b}\n"); // will use the function above
-    sstr.str("");
+    {
+        auto s0 = std::pair<int, double> {10, 3.14};
+        IC(s0);
+        REQUIRE(sstr.str() == "ic| s0: [10, 3.14]\n");
+        sstr.str("");
+    }
 
-    IC(s2);
-    REQUIRE(sstr.str() == "ic| s2: [10, 3.14]\n");
-    sstr.str("");
+    {
+        auto s0 = std::make_tuple(1, 2.2, 'b', "bla");
+        IC(s0);
+        REQUIRE(sstr.str() == "ic| s0: [1, 2.2, 'b', \"bla\"]\n");
+        sstr.str("");
+    }
 }
 
 

@@ -537,7 +537,15 @@ namespace icecream{ namespace detail
                 this->content.text = "nullopt";
         }
 
-        // Print std::pair<> class
+        template<typename T, std::size_t N = std::tuple_size<T>::value-1>
+        auto tuple_traverser(T const& t) -> void
+        {
+            if (N > 0)
+                tuple_traverser<T, (N > 0) ? N-1 : 0>(t);
+            this->content.children.emplace_back(std::get<N>(t));
+        }
+
+        // Print tuple like classes
         template <
             typename T,
             typename std::enable_if<
@@ -549,8 +557,7 @@ namespace icecream{ namespace detail
             : is_leaf {false}
             , content {false}
         {
-            this->content.children.emplace_back(value.first);
-            this->content.children.emplace_back(value.second);
+            this->tuple_traverser(value);
         }
 
         // Print all items of any iterable class
