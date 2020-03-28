@@ -476,6 +476,10 @@ one, just define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` hea
 #include "icecream.hpp"
 ```
 
+While most compilers will work just fine, until the C++20 the standard requires at least
+one argument when calling a variadic macro. To handle this the nullary macros `IC0()` and
+`ICECREAM0()` are defined alongside `IC(...)` and `ICECREAM(...)`.
+
 ## Similar projects
 
 The [CleanType](https://github.com/pthom/cleantype) library has a focus on printing
