@@ -161,6 +161,21 @@ namespace icecream{ namespace detail
     using is_invocable = decltype(is_invocable_impl<T>(0));
 
 
+    // -------------------------------------------------- returned_type
+
+    // Returns the result type of nullary function
+    template <typename T>
+    static auto returned_type_impl(int) -> decltype(
+        std::declval<T&>()()
+    );
+
+    template <typename T>
+    static auto returned_type_impl(...) -> void;
+
+    template <typename T>
+    using returned_type = decltype(returned_type_impl<T>(0));
+
+
     // -------------------------------------------------- is_iterable
 
     // To allow ADL with custom begin/end
@@ -328,7 +343,10 @@ namespace icecream{ namespace detail
     using is_valid_prefix = disjunction<
         is_std_string<T>,
         is_c_string<typename std::decay<T>::type>,
-        is_invocable<T>
+        conjunction<
+            is_invocable<T>,
+            has_insertion<returned_type<T>>
+        >
     >;
 
 
