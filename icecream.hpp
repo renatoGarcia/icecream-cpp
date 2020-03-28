@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 The IceCream-Cpp Developers. See the AUTHORS file at the
+ * Copyright (c) 2019-2020 The IceCream-Cpp Developers. See the AUTHORS file at the
  * top-level directory of this distribution and at
  * https://github.com/renatoGarcia/icecream-cpp
  *
@@ -39,9 +39,9 @@
 
 
 #define ICECREAM_MAJOR_VERSION 0
-#define ICECREAM_MINOR_VERSION 1
+#define ICECREAM_MINOR_VERSION 2
 #define ICECREAM_PATCH_VERSION 0
-#define ICECREAM_LIB_VERSION "0.1.0"
+#define ICECREAM_LIB_VERSION "0.2.0"
 
 
 #if defined(__GNUC__)
