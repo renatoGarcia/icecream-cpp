@@ -703,6 +703,11 @@ namespace icecream{ namespace detail
         is_printable<T1>
     > {};
 
+    template <typename... Ts>
+    struct is_printable<std::tuple<Ts...>&>: conjunction<
+        is_printable<Ts>...
+    > {};
+
 
     // -------------------------------------------------- to_invocable
 
