@@ -5,6 +5,7 @@ IceCream-Cpp is a little library to help with the print debugging on C++11 and f
 **Contents**
 * [Install](#install)
 * [Usage](#usage)
+  * [Return value](#return-value)
   * [Configuration](#configuration)
      * [enable/disable](#enabledisable)
      * [stream](#stream)
@@ -17,7 +18,7 @@ IceCream-Cpp is a little library to help with the print debugging on C++11 and f
      * [C strings](#c-strings)
      * [Pointer like types](#pointer-like-types)
      * [Optional types](#optional-types)
-     * [Pair types](#pair-types)
+     * [Tuple like types](#tuple-like-types)
      * [Iterable types](#iterable-types)
 * [Pitfalls](#pitfalls)
 * [Similar projects](#similar-projects)
@@ -83,7 +84,7 @@ find it.
 
 ## Usage
 
-After including the `icecream.hpp` header on a source file, assuming `test.cpp` for this
+After including the `icecream.hpp` header on a source file, assumed `test.cpp` for this
 example:
 
 ```C++
@@ -107,7 +108,7 @@ will print:
 
     ic| test.cpp:34 in "void my_function(int, double)"
 
-If called with arguments, it will print the prefix, those arguments names, and its values.
+If called with arguments it will print the prefix, those arguments names, and its values.
 The code:
 
 ```C++
@@ -121,6 +122,8 @@ will print:
     ic| v0: [1, 2, 3], s0: "bla", 3.14: 3.14
 
 
+### Return value
+
 If called with no arguments the `IC(...)` macro will return `void`, if called with one argument it will return the argument itself, and if called with multiple arguments it will return a tuple with all of them:
 
 
@@ -131,17 +134,17 @@ auto c = float {3.14};
 
 IC();
 int& d = IC(a);
-tuple<std::string&, float&> e = IC(b, c);
+std::tuple<std::string&, float&> e = IC(b, c);
 ```
 
 ### Configuration
 
 The `Icecream` class is internally implemented as a singleton. All the configuration
-changes will be done on to unique object, and shared across all the program and threads.
+changes will be done to an unique object, and shared across all the program and threads.
 
 All configurations are done/viewed through accessor methods, using the `icecream::ic`
-object, and to enable the method chaining idiom all the set methods return a reference of
-the `ic` object:
+object. To allow the method chaining idiom all the set methods return a reference of the
+`ic` object:
 
 ```C++
 icecream::ic
@@ -150,12 +153,20 @@ icecream::ic
     .line_wrap_width(70);
 ```
 
-To simplify the code, on examples below a `using icecream::ic;` statement will be
+To simplify the code, on examples below an `using icecream::ic;` statement will be
 presumed.
 
 #### enable/disable
 
-Enable or disable the output of `IC(...)` macro, *enabled* default. The code:
+Enable or disable the output of `IC(...)` macro, *enabled* default.
+
+- set:
+    ```C++
+    auto enable() -> IcecreamAPI&;
+    auto disable() -> IcecreamAPI&;
+    ```
+
+The code:
 
 ```C++
 IC(1);
@@ -174,11 +185,14 @@ ic| 3: 3
 
 #### stream
 
+Warning: this method will return a reference to the internal `std::ostream`. The
+operations done on that reference will not be thread safe.
+
 The `std::ostream` where the output will be streamed.
 
 - get:
     ```C++
-    ic.stream()
+    auto stream() -> std::ostream&;
     ```
 
 The default stream buffer associated is the same as `std::cerr`, but that can be changed.
@@ -194,28 +208,30 @@ ic.stream().rdbuf(sstr.rdbuf());
 The prefix is the text that is printed before each output. It can be set to a string, a
 nullary callable that returns an object that has an overload of `operator<<(ostream&, T)`,
 or any number of instances of those two. The printed prefix will be a concatenation of all
-elements.
+those elements.
 
 - set:
     ```C++
-    ic.prefix("icecream| ");
-    ic.prefix([]{return 42;}, ": ");
-    ic.prefix("thread ", std::this_thread::get_id, " | ");
+    template <typename... Ts>
+    auto prefix(Ts&& ...values) -> IcecreamAPI&;
     ```
 
-With those prefixes the code:
+The code:
 ```C++
-IC();
+ic.prefix("icecream| ");
+IC(1);
+ic.prefix([]{return 42;}, "- ");
+IC(2);
+ic.prefix("thread ", std::this_thread::get_id, " | ");
+IC(3);
 ```
 
-will print respectively:
+will print:
 
 ```
-icecream| test.cpp:34 in "void my_function(int, double)"
-
-42: test.cpp:34 in "void my_function(int, double)"
-
-thread 1 | test.cpp:34 in "void my_function(int, double)"
+icecream| 1: 1
+42- 2: 2
+thread 1 | 3: 3
 ```
 
 #### show_c_string
@@ -225,14 +241,14 @@ Controls if a `char*` variable should be interpreted as a null-terminated C stri
 
 - get:
     ```C++
-    ic.show_c_string();
+    auto show_c_string() const -> bool;
     ```
 - set:
     ```C++
-    ic.show_c_string(false);
+    auto show_c_string(bool value) -> IcecreamAPI&;
     ```
 
-the code:
+The code:
 
 ```C++
 char const* flavor = "mango";
@@ -258,11 +274,11 @@ value of `70`.
 
 - get:
     ```C++
-    ic.line_wrap_width();
+    auto line_wrap_width() const -> std::size_t;
     ```
 - set:
     ```C++
-    ic.line_wrap_width(35);
+    auto line_wrap_width(std::size_t value) -> IcecreamAPI&;
     ```
 
 #### include_context
@@ -272,11 +288,11 @@ printing variables. Default value is `false`.
 
 - get:
     ```C++
-    ic.include_context();
+    auto include_context() const -> bool;
     ```
 - set:
     ```C++
-    ic.include_context(true);
+    auto include_context(bool value) -> IcecreamAPI&;
     ```
 
 #### context_delimiter
@@ -285,22 +301,23 @@ The string separating the context text from the variables values. Default value 
 
 - get:
     ```C++
-    ic.context_delimiter();
+    auto context_delimiter() const -> std::string;
     ```
 - set:
     ```C++
-    ic.context_delimiter(" # ");
+    auto context_delimiter(std::string const& value) -> IcecreamAPI&;
     ```
 
 ### Printing logic
 
-The guiding principle to print a type `T` is to use the function `operator<<(ostream&, T)`
-always when an overload is available. The exceptions to that rule are strings (C and
-`std::string`), `char` and bounded arrays. Strings are enclosed by `"`, `char` are
-enclosed by `'`, and arrays are considered iterables rather than decay to raw pointers.
+The preference to print a type `T` is to use the overloaded function `operator<<(ostream&,
+T)` always when it is available. The exceptions to that rule are strings (C and
+`std::string`), `char` and bounded arrays. Strings will be enclosed by `"`, `char` will be
+enclosed by `'`, and arrays are considered iterables rather than let decay to raw
+pointers.
 
-In general if an overload of `operator<<(ostream&, T)` is not available to a type `T` a
-call to `IC(t)` will result on a compilation error. Exceptions to that rule, when
+In general, if an overload of `operator<<(ostream&, T)` is not available to a type `T`, a
+call to `IC(t)` will result on a compiling error. All exceptions to that rule, when
 IceCream-Cpp will print a type `T` even without a `operator<<` overload are discussed
 below. Note however that if a user implements a custom `operator<<(ostream&, T)` that will
 take precedence and used instead.
@@ -386,22 +403,27 @@ IC(v0, v1);
 
 will print:
 
-    ic| v0: 10, v1: nullopt
+```
+ic| v0: 10, v1: nullopt
+```
 
-#### Pair types
+#### Tuple like types
 
-A `std::pair<T1, T2>` typed variable will print both its values.
+A `std::pair<T1, T2>` and `std::tuple<Ts..>` typed variables will print all of its values.
 
 The code:
 
 ```C++
 auto v0 = std::make_pair(10, 3.14);
-IC(v0);
+auto v1 = std::make_tuple(7, 6.28, "bla");
+IC(v0, v1);
 ```
 
 will print:
 
-    ic| v0: (10, 3.14)
+```
+ic| v0: (10, 3.14), v1: (7, 6.28, "bla")
+```
 
 #### Iterable types
 
@@ -414,8 +436,7 @@ it != end(a);
 *it;
 ```
 
-the type `A` is defined *iterable* and if no suitable overload resolution to
-`operator<<(ostream&, A)` is found, all of its items will be printed instead. The code:
+the type `A` is defined *iterable* and all of its items will be printed. The code:
 
 ```C++
 auto v0 = std::list<int> {10, 20, 30};
