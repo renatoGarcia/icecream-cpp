@@ -149,9 +149,9 @@ namespace icecream{ namespace detail
     // -------------------------------------------------- is_iterable
     template <typename T>
     auto is_iterable_impl(int) -> decltype (
-        begin(std::declval<T&>()) != end(std::declval<T&>()),   // begin end operator!=
-        ++std::declval<decltype(begin(std::declval<T&>()))&>(), // operator++
-        *begin(std::declval<T&>()),                             // operator*
+        begin(std::declval<T const&>()) != end(std::declval<T const&>()), // begin, end, operator!=
+        ++std::declval<decltype(begin(std::declval<T const&>()))&>(),     // operator++
+        *begin(std::declval<T const&>()),                                 // operator*
         std::true_type {}
     );
 
@@ -165,7 +165,7 @@ namespace icecream{ namespace detail
     // -------------------------------------------------- has_insertion
     template <typename T>
     auto has_insertion_impl(int) -> decltype (
-        std::declval<std::ostream&>() << std::declval<T&>(),
+        std::declval<std::ostream&>() << std::declval<T const&>(),
         std::true_type {}
     );
 
@@ -608,9 +608,12 @@ namespace icecream{ namespace detail
     template <typename T>
     struct is_printable: std::conditional<
         is_collection<T>::value,
-        conjunction<
-            is_tree_argument<T>,
-            is_printable<elements_type<T>>
+        disjunction<
+            conjunction<
+                is_tree_argument<T>,
+                is_printable<elements_type<T>>
+            >,
+            has_insertion<T>
         >,
         is_tree_argument<T>
     >::type

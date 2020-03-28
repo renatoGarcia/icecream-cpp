@@ -15,6 +15,27 @@ auto test_empty_ic() -> void
 }
 
 
+struct NonPrintable
+{};
+
+
+template <typename T>
+struct MyIterable
+{
+    std::vector<T> v;
+
+    auto begin() const -> decltype(v.begin())
+    {
+        return v.begin();
+    }
+
+    auto end() const -> decltype(v.end())
+    {
+        return v.end();
+    }
+};
+
+
 class MyClass
 {
 public:
@@ -279,26 +300,45 @@ TEST_CASE("arrays")
 
 
 // -------------------------------------------------- Test iterable
+
+auto operator<<(std::ostream& os, MyIterable<NonPrintable> const&) -> std::ostream&
+{
+     os << "B<A>";
+     return os;
+}
+
 TEST_CASE("iterable")
 {
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
-    auto v0 = std::list<int> {10, 20, 30};
-    auto v1 = std::vector<float> {1.1, 1.2};
-    int v2[] = {1, 2, 3};
+    {
+        auto v0 = std::list<int> {10, 20, 30};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: [10, 20, 30]\n");
+        sstr.str("");
+    }
 
-    IC(v0);
-    REQUIRE(sstr.str() == "ic| v0: [10, 20, 30]\n");
-    sstr.str("");
+    {
+        auto v0 = std::vector<float> {1.1, 1.2};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: [1.1, 1.2]\n");
+        sstr.str("");
+    }
 
-    IC(v1);
-    REQUIRE(sstr.str() == "ic| v1: [1.1, 1.2]\n");
-    sstr.str("");
+    {
+        int v0[] = {1, 2, 3};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: [1, 2, 3]\n");
+        sstr.str("");
+    }
 
-    IC(v2);
-    REQUIRE(sstr.str() == "ic| v2: [1, 2, 3]\n");
-    sstr.str("");
+    {
+        auto v0 = MyIterable<NonPrintable> {};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: B<A>\n");
+        sstr.str("");
+    }
 }
 
 
