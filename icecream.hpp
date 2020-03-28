@@ -294,15 +294,20 @@ namespace icecream{ namespace detail
 
         union U
         {
-            std::string text;
-            std::vector<Tree> children;
+            std::string leaf;
+            struct Stem
+            {
+                char open;
+                std::vector<Tree> children;
+                char close;
+            } stem;
 
             U(bool is_leaf)
             {
                 if (is_leaf)
-                    new (&text) std::string;
+                    new (&leaf) std::string;
                 else
-                    new (&children) std::vector<Tree>;
+                    new (&stem) Stem;
             }
 
             ~U()
@@ -318,9 +323,9 @@ namespace icecream{ namespace detail
             , content {other.is_leaf}
         {
             if (this->is_leaf)
-                this->content.text = std::move(other.content.text);
+                this->content.leaf = std::move(other.content.leaf);
             else
-                this->content.children = std::move(other.content.children);
+                this->content.stem = std::move(other.content.stem);
         }
 
         Tree& operator=(Tree const&) = delete;
@@ -335,9 +340,9 @@ namespace icecream{ namespace detail
             }
 
             if (this->is_leaf)
-                this->content.text = std::move(other.content.text);
+                this->content.leaf = std::move(other.content.leaf);
             else
-                this->content.children = std::move(other.content.children);
+                this->content.stem = std::move(other.content.stem);
 
             return *this;
         }
@@ -345,9 +350,9 @@ namespace icecream{ namespace detail
         ~Tree()
         {
             if (this->is_leaf)
-                this->content.text.~basic_string();
+                this->content.leaf.~basic_string();
             else
-                this->content.children.~vector();
+                this->content.stem.~Stem();
         }
 
         // Returns the sum of characters of the whole tree defined by `node` as root.
@@ -355,20 +360,20 @@ namespace icecream{ namespace detail
         {
             if (this->is_leaf)
             {
-                return this->content.text.size();
+                return this->content.leaf.size();
             }
             else
             {
-                // The enclosing [].
+                // The enclosing chars.
                 auto result = 2;
 
                 // count the size of each child
-                for (auto const& child : this->content.children)
+                for (auto const& child : this->content.stem.children)
                     result += child.count_chars();
 
                 // The ", " separators.
-                if (this->content.children.size() > 1)
-                    result += (this->content.children.size() - 1) * 2;
+                if (this->content.stem.children.size() > 1)
+                    result += (this->content.stem.children.size() - 1) * 2;
 
                 return result;
             }
@@ -392,7 +397,7 @@ namespace icecream{ namespace detail
         {
             auto buf = std::ostringstream {};
             buf << value;
-            this->content.text = buf.str();
+            this->content.leaf = buf.str();
         }
 
         // Print C string
@@ -423,7 +428,7 @@ namespace icecream{ namespace detail
             else
                 buf << reinterpret_cast<void const*>(value);
 
-            this->content.text = buf.str();
+            this->content.leaf = buf.str();
         }
 
         // Print std::string
@@ -446,7 +451,7 @@ namespace icecream{ namespace detail
 
             auto buf = std::ostringstream {};
             buf << '"' << cv.to_bytes(value) << '"';
-            this->content.text = buf.str();
+            this->content.leaf = buf.str();
         }
 
         // Print character
@@ -481,7 +486,7 @@ namespace icecream{ namespace detail
 
             auto buf = std::ostringstream {};
             buf << '\'' << str << '\'';
-            this->content.text = buf.str();
+            this->content.leaf = buf.str();
         }
 
 
@@ -499,7 +504,7 @@ namespace icecream{ namespace detail
         {
             auto buf = std::ostringstream {};
             buf << reinterpret_cast<void const*>(value.get());
-            this->content.text = buf.str();
+            this->content.leaf = buf.str();
         }
 
         // Print weak pointer classes
@@ -514,7 +519,7 @@ namespace icecream{ namespace detail
             , content {true}
         {
             if (value.expired())
-                this->content.text = "expired";
+                this->content.leaf = "expired";
             else
                 *this = Tree {value.lock()};
         }
@@ -534,7 +539,7 @@ namespace icecream{ namespace detail
             if (value.has_value())
                 *this = Tree {*value};
             else
-                this->content.text = "nullopt";
+                this->content.leaf = "nullopt";
         }
 
         template<typename T, std::size_t N = std::tuple_size<T>::value-1>
@@ -542,7 +547,7 @@ namespace icecream{ namespace detail
         {
             if (N > 0)
                 tuple_traverser<T, (N > 0) ? N-1 : 0>(t);
-            this->content.children.emplace_back(std::get<N>(t));
+            this->content.stem.children.emplace_back(std::get<N>(t));
         }
 
         // Print tuple like classes
@@ -557,6 +562,8 @@ namespace icecream{ namespace detail
             : is_leaf {false}
             , content {false}
         {
+            this->content.stem.open = '(';
+            this->content.stem.close = ')';
             this->tuple_traverser(value);
         }
 
@@ -579,10 +586,13 @@ namespace icecream{ namespace detail
             using std::begin;
             using std::end;
 
+            this->content.stem.open = '[';
+            this->content.stem.close = ']';
+
             auto it = begin(value);
             auto const e_it = end(value);
             for (; it != e_it; ++it)
-                this->content.children.emplace_back(*it);
+                this->content.stem.children.emplace_back(*it);
         }
     };
 
@@ -919,17 +929,17 @@ namespace icecream{ namespace detail
 
             if (node.is_leaf)
             {
-                this->stream_ << node.content.text;
+                this->stream_ << node.content.leaf;
             }
             else
             {
-                this->stream_ << "[";
+                this->stream_ << node.content.stem.open;
                 if (multiline)
                     break_line(indent_level+1);
 
                 for (
-                    auto it = node.content.children.begin();
-                    it != node.content.children.end();
+                    auto it = node.content.stem.children.begin();
+                    it != node.content.stem.children.end();
                     ++it
                 ){
                     auto const child_multiline = [&]
@@ -947,7 +957,7 @@ namespace icecream{ namespace detail
 
                     this->print_tree(*it, indent_level+1, child_multiline);
 
-                    if (it+1 != node.content.children.end())
+                    if (it+1 != node.content.stem.children.end())
                     {
                         this->stream_ << ",";
                         if (multiline)
@@ -959,7 +969,7 @@ namespace icecream{ namespace detail
                         break_line(indent_level);
                 }
 
-                this->stream_ << "]";
+                this->stream_ << node.content.stem.close;
             }
         }
 

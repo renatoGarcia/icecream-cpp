@@ -243,7 +243,7 @@ TEST_CASE("tuples")
     {
         auto s0 = std::pair<int, char> {5, 'a'};
         IC(s0);
-        REQUIRE(sstr.str() == "ic| s0: [5, 'a']\n");
+        REQUIRE(sstr.str() == "ic| s0: (5, 'a')\n");
         sstr.str("");
     }
 
@@ -257,14 +257,14 @@ TEST_CASE("tuples")
     {
         auto s0 = std::pair<int, double> {10, 3.14};
         IC(s0);
-        REQUIRE(sstr.str() == "ic| s0: [10, 3.14]\n");
+        REQUIRE(sstr.str() == "ic| s0: (10, 3.14)\n");
         sstr.str("");
     }
 
     {
         auto s0 = std::make_tuple(1, 2.2, 'b', "bla");
         IC(s0);
-        REQUIRE(sstr.str() == "ic| s0: [1, 2.2, 'b', \"bla\"]\n");
+        REQUIRE(sstr.str() == "ic| s0: (1, 2.2, 'b', \"bla\")\n");
         sstr.str("");
     }
 }
