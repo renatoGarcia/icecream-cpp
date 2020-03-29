@@ -578,6 +578,42 @@ TEST_CASE("std_string")
     }
 }
 
+// -------------------------------------------------- Test std::string_view
+#if defined (CPP_17)
+TEST_CASE("std_string_view")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
+
+    {
+        auto v0 = std::string_view {"str 1"};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"str 1\"\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = std::wstring_view {L"wstr 1"};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"wstr 1\"\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = std::u16string_view {u"u16str 1"};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"u16str 1\"\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = std::u32string_view {U"u32str 1"};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: \"u32str 1\"\n");
+        sstr.str("");
+    }
+}
+#endif
 
 // -------------------------------------------------- Test C string
 TEST_CASE("c_string")

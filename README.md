@@ -312,10 +312,10 @@ The string separating the context text from the variables values. Default value 
 ### Printing logic
 
 The preference to print a type `T` is to use the overloaded function `operator<<(ostream&,
-T)` always when it is available. The exceptions to that rule are strings (C and
-`std::string`), `char` and bounded arrays. Strings will be enclosed by `"`, `char` will be
-enclosed by `'`, and arrays are considered iterables rather than let decay to raw
-pointers.
+T)` always when it is available. The exceptions to that rule are strings (C strings,
+`std::string`, and `std::string_view`), `char` and bounded arrays. Strings will be
+enclosed by `"`, `char` will be enclosed by `'`, and arrays are considered iterables
+rather than let decay to raw pointers.
 
 In general, if an overload of `operator<<(ostream&, T)` is not available to a type `T`, a
 call to `IC(t)` will result on a compiling error. All exceptions to that rule, when

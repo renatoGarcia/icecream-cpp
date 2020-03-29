@@ -70,6 +70,8 @@ namespace std
 
     template <typename R, typename Visitor, typename... Variants>
     constexpr auto visit(Visitor&& vis, Variants&&... vars) -> R;
+
+    template<typename CharT, typename Traits> class basic_string_view;
 }
 
 namespace boost
@@ -305,11 +307,12 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- is_std_string
 
-    // Checks if T is a std::basic_string<typename U> instantiation.
+    // Checks if T is a std::basic_string<typename U> or
+    // std::basic_string_view<typename U> instantiation.
     template <typename T>
-    using is_std_string = is_instantiation<
-        std::basic_string,
-        typename std::decay<T>::type
+    using is_std_string = disjunction<
+        is_instantiation<std::basic_string, T>,
+        is_instantiation<std::basic_string_view, T>
     >;
 
 
@@ -541,7 +544,7 @@ namespace icecream{ namespace detail
             > cv {};
 
             auto buf = std::ostringstream {};
-            buf << '"' << cv.to_bytes(value) << '"';
+            buf << '"' << cv.to_bytes(value.data()) << '"';
             this->content.leaf = buf.str();
         }
 
