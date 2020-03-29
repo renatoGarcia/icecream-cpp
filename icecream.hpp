@@ -65,12 +65,25 @@
 namespace std
 {
     template <typename T> class optional;
+
+    template <typename... Ts> class variant;
+
+    template <typename R, typename Visitor, typename... Variants>
+    constexpr auto visit(Visitor&& vis, Variants&&... vars) -> R;
 }
 
 namespace boost
 {
     template <typename T> class scoped_ptr;
     template <typename T> class weak_ptr;
+
+    namespace variant2
+    {
+        template<typename... T> class variant;
+
+        template <typename R, typename Visitor, typename... Variants>
+        constexpr auto visit(Visitor&& vis, Variants&&... vars) -> R;
+    }
 }
 
 
@@ -223,6 +236,16 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_optional = is_instantiation<std::optional, T>;
 
+
+    // -------------------------------------------------- is_variant
+
+    // Checks if T is a std::variant<typename... Us> or
+    // boost::variant2::variant<typename... Us> instantiation.
+    template <typename T>
+    using is_variant = disjunction<
+        is_instantiation<std::variant, T>,
+        is_instantiation<boost::variant2::variant, T>
+    >;
 
     // -------------------------------------------------- is_tuple
 
@@ -609,6 +632,33 @@ namespace icecream{ namespace detail
                 *this = Tree {*value};
             else
                 this->content.leaf = "nullopt";
+        }
+
+        struct Visitor
+        {
+            template <typename T>
+            auto operator()(T const& arg) -> Tree
+            {
+             return Tree {arg};
+            }
+        };
+
+        // Print variant<> classes
+        template <
+            typename T,
+            typename std::enable_if<
+                is_variant<T>::value
+                && !has_insertion<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            using std::visit;
+            using boost::variant2::visit;
+
+            *this = visit(Tree::Visitor{}, value);
         }
 
         // Fill this->content.stem.children with all the tuple elements

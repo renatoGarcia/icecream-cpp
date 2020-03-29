@@ -17,9 +17,10 @@ IceCream-Cpp is a little library to help with the print debugging on C++11 and f
   * [Printing logic](#printing-logic)
      * [C strings](#c-strings)
      * [Pointer like types](#pointer-like-types)
-     * [Optional types](#optional-types)
-     * [Tuple like types](#tuple-like-types)
      * [Iterable types](#iterable-types)
+     * [Tuple like types](#tuple-like-types)
+     * [Optional types](#optional-types)
+     * [Variant types](#variant-types)
 * [Pitfalls](#pitfalls)
 * [Similar projects](#similar-projects)
 
@@ -388,43 +389,6 @@ ic| v1: 0x55bcbd840ec0
 ic| v1: expired
 ```
 
-#### Optional types
-
-A `std::optional<T>` typed variable will print its value, if it has one, or *nullopt*
-otherwise.
-
-The code:
-
-```C++
-auto v0 = std::optional<int> {10};
-auto v1 = std::optional<int> {};
-IC(v0, v1);
-```
-
-will print:
-
-```
-ic| v0: 10, v1: nullopt
-```
-
-#### Tuple like types
-
-A `std::pair<T1, T2>` and `std::tuple<Ts..>` typed variables will print all of its values.
-
-The code:
-
-```C++
-auto v0 = std::make_pair(10, 3.14);
-auto v1 = std::make_tuple(7, 6.28, "bla");
-IC(v0, v1);
-```
-
-will print:
-
-```
-ic| v0: (10, 3.14), v1: (7, 6.28, "bla")
-```
-
 #### Iterable types
 
 If for a type `A` with an instance `a`, all operations below are valid:
@@ -446,6 +410,64 @@ IC(v0);
 will print:
 
     ic| v0: [10, 20, 30]
+
+
+#### Tuple like types
+
+A `std::pair<T1, T2>` and `std::tuple<Ts...>` typed variables will print all of its values.
+
+The code:
+
+```C++
+auto v0 = std::make_pair(10, 3.14);
+auto v1 = std::make_tuple(7, 6.28, "bla");
+IC(v0, v1);
+```
+
+will print:
+
+```
+ic| v0: (10, 3.14), v1: (7, 6.28, "bla")
+```
+
+#### Optional types
+
+A `std::optional<T>` typed variable will print its value, if it has one, or *nullopt*
+otherwise.
+
+The code:
+
+```C++
+auto v0 = std::optional<int> {10};
+auto v1 = std::optional<int> {};
+IC(v0, v1);
+```
+
+will print:
+
+```
+ic| v0: 10, v1: nullopt
+```
+
+
+#### Variant types
+
+A `std::variant<Ts...>` or `boost::variant2::variant<Ts...>` typed variable will print its
+value.
+
+The code:
+
+```C++
+auto v0 = std::variant<int, double, char> {4.2};
+IC(v0);
+```
+
+will print:
+
+```
+ic| v0: 4.2
+```
+
 
 ## Pitfalls
 

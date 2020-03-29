@@ -1,8 +1,13 @@
 #include <vector>
 #include <list>
 #include <map>
-#include <optional>
 #include <sstream>
+
+#if defined (CPP_17)
+#include <optional>
+#include <variant>
+#endif
+
 
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
@@ -87,7 +92,7 @@ TEST_CASE("base")
 
     {
         test_empty_ic();
-        REQUIRE(sstr.str() == "ic| test.cpp:14 in \"void test_empty_ic()\"\n");
+        REQUIRE(sstr.str() == "ic| test.cpp:19 in \"void test_empty_ic()\"\n");
         sstr.str("");
     }
 
@@ -187,7 +192,7 @@ TEST_CASE("boost_optional")
 }
 
 
-#if defined(__cpp_lib_optional)
+#if defined(CPP_17)
 auto operator<<(std::ostream& os, std::optional<MyClass> const& value) -> std::ostream&
 {
     os << "||opt MyClass|| ";
@@ -222,6 +227,40 @@ TEST_CASE("std_optional")
     IC(s2);
     REQUIRE(sstr.str() == "ic| s2: ||opt MyClass|| <MyClass 1>\n");
     sstr.str("");
+}
+#endif
+
+// -------------------------------------------------- Test variant
+
+#include <boost/variant2/variant.hpp>
+
+TEST_CASE("boost_variant2")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
+
+    {
+        auto v0 = boost::variant2::variant<int, double, char> {6.28};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 6.28\n");
+        sstr.str("");
+    }
+
+}
+
+
+#if defined(CPP_17)
+TEST_CASE("std_variant")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
+
+    {
+        auto v0 = std::variant<int, double, char> {3.14};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: 3.14\n");
+        sstr.str("");
+    }
 }
 #endif
 
