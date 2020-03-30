@@ -540,6 +540,12 @@ TEST_CASE("character")
         sstr.str("");
     }
 
+    {
+        auto v0 = char32_t {u'\t'};
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: '\\t'\n");
+        sstr.str("");
+    }
 }
 
 

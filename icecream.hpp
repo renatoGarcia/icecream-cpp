@@ -573,7 +573,33 @@ namespace icecream{ namespace detail
                 str = "\\0";
                 break;
 
-            // TODO: translate more characters
+            case T{'\a'}:
+                str = "\\a";
+                break;
+
+            case T{'\b'}:
+                str = "\\b";
+                break;
+
+            case T{'\f'}:
+                str = "\\f";
+                break;
+
+            case T{'\n'}:
+                str = "\\n";
+                break;
+
+            case T{'\r'}:
+                str = "\\r";
+                break;
+
+            case T{'\t'}:
+                str = "\\t";
+                break;
+
+            case T{'\v'}:
+                str = "\\v";
+                break;
 
             default:
                 str = cv.to_bytes(value);
