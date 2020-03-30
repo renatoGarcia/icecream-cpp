@@ -770,3 +770,56 @@ TEST_CASE("line_wrap")
 
     icecream::ic.line_wrap_width(70);
 }
+
+// -------------------------------------------------- Test exception
+
+#include <boost/exception/all.hpp>
+
+class exception
+    : public virtual std::exception
+    , public virtual boost::exception
+{
+public:
+    exception()
+        : std::exception()
+        , boost::exception()
+    {}
+
+    virtual char const* what() const noexcept
+    {
+        return "what info";
+    }
+};
+
+using StringInfo = boost::error_info<struct StringTag, std::string>;
+using IntInfo = boost::error_info<struct IntTag, int>;
+
+TEST_CASE("exception")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
+
+    {
+        auto v0 = std::runtime_error("ble");
+        IC(v0);
+        REQUIRE(sstr.str() == "ic| v0: ble\n");
+        sstr.str("");
+    }
+
+    {
+        try
+        {
+            BOOST_THROW_EXCEPTION(exception {} << IntInfo {10});
+        }
+        catch (exception& e)
+        {
+            e << StringInfo {"bla_string"};
+            IC(e);
+            REQUIRE_THAT(sstr.str(),
+                Catch::Contains("[IntTag*] = 10")
+                && Catch::Contains("[StringTag*] = bla_string")
+                && Catch::Contains("ic| e: what info")
+            );
+        }
+    }
+}

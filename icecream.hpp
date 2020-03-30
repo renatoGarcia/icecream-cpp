@@ -64,6 +64,8 @@
 
 namespace std
 {
+    class exception;
+
     template <typename T> class optional;
 
     template <typename... Ts> class variant;
@@ -76,6 +78,23 @@ namespace std
 
 namespace boost
 {
+    class exception;
+
+    // Forward declare this internal function because boost::diagnostic_information has a
+    // default argument, and if this icecream.hpp header is included before the boost
+    // exception headers it will trigger a compile error: redeclaration of ‘template<class
+    // T> std::string boost::diagnostic_information(const T&, bool)’ may not have default
+    // arguments
+    namespace exception_detail
+    {
+        std::string diagnostic_information_impl(
+            boost::exception const*,
+            std::exception const*,
+            bool with_what,
+            bool verbose
+        );
+    }
+
     template <typename T> class scoped_ptr;
     template <typename T> class weak_ptr;
 
@@ -742,6 +761,43 @@ namespace icecream{ namespace detail
             auto const e_it = end(value);
             for (; it != e_it; ++it)
                 this->content.stem.children.emplace_back(*it);
+        }
+
+        // Print classes deriving from only std::exception and not from boost::exception
+        template <
+            typename T,
+            typename std::enable_if<
+                std::is_base_of<std::exception, T>::value
+                && !std::is_base_of<boost::exception, T>::value
+                && !has_insertion<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            this->content.leaf = value.what();
+        }
+
+        // Print classes deriving from both std::exception and boost::exception
+        template <
+            typename T,
+            typename std::enable_if<
+                std::is_base_of<std::exception, T>::value
+                && std::is_base_of<boost::exception, T>::value
+                && !has_insertion<T>::value,
+            int>::type = 0
+        >
+        Tree(T const& value)
+            : is_leaf {true}
+            , content {true}
+        {
+            this->content.leaf =
+                value.what()
+                + std::string {"\n"}
+                + boost::exception_detail::diagnostic_information_impl(
+                      &value, &value, true, true
+                );
         }
     };
 

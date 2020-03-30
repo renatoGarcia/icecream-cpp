@@ -21,6 +21,7 @@ IceCream-Cpp is a little library to help with the print debugging on C++11 and f
      * [Tuple like types](#tuple-like-types)
      * [Optional types](#optional-types)
      * [Variant types](#variant-types)
+     * [Exception types](#exception-types)
 * [Pitfalls](#pitfalls)
 * [Similar projects](#similar-projects)
 
@@ -468,6 +469,25 @@ will print:
 ic| v0: 4.2
 ```
 
+
+#### Exception types
+
+Types inheriting from `std::exception` will print the response of `std::exception::what()`
+method. If besides that it inherits from `boost::exception` the response of
+`boost::diagnostic_information()` will be print too.
+
+The code:
+
+```C++
+auto v0 = std::runtime_error("error description");
+IC(v0);
+```
+
+will print:
+
+```
+ic| v0: error description
+```
 
 ## Pitfalls
 
