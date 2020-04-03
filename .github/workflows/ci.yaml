@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '*.md'
+      - 'LICENSE.txt'
+      - 'AUTHORS'
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - '*.md'
+      - 'LICENSE.txt'
+      - 'AUTHORS'
+
+jobs:
+
+  gcc:
+    name: ${{ matrix.version }} C++${{ matrix.cpp }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [gcc6, gcc7, gcc8, gcc9]
+        cpp: [11, 14, 17]
+        exclude:
+          - version: gcc6
+            cpp: 17
+    env:
+      CPP_STANDARD: ${{ matrix.cpp }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: run
+        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "CPP_STANDARD=${CPP_STANDARD} cmake /home/src && make && ./test_exec"
+
+  msvc:
+    name: ${{ matrix.name }} C++${{ matrix.cpp }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2019, windows-2016]
+        cpp: [11, 14, 17]
+        include:
+          - os: windows-2019
+            name: vs2019
+          - os: windows-2016
+            name: vs2017
+    env:
+      CPP_STANDARD: ${{ matrix.cpp }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: build
+        run: cmake -DBOOST_ROOT=C:\\hostedtoolcache\\windows\\Boost\\1.72.0 . && cmake --build . --config Release
+      - name: run
+        run: ctest -V -C Release --output-on-failure
