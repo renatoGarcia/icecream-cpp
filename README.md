@@ -1,6 +1,6 @@
 # IceCream-Cpp
 
-![CI](https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg)
+[![CI.badge]][CI.page]
 
 IceCream-Cpp is a little library to help with the print debugging on C++11 and forward.
 
@@ -531,3 +531,6 @@ readable types names, but there is support to print variables names and values a
 its types. An optional integration of CleanType with IceCream-Cpp, if the first is present
 on system, is being planed. With that would be possible to show the types of values within
 `IC(...)` macro.
+
+[CI.badge]: https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg
+[CI.page]: https://github.com/renatoGarcia/icecream-cpp/actions?query=workflow%3ACI
