@@ -54,11 +54,11 @@
 
 
 #if defined(ICECREAM_LONG_NAME)
-    #define ICECREAM(...) (::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}).ret(__VA_ARGS__)
-    #define ICECREAM0() (::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}).ret()
+    #define ICECREAM(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
+    #define ICECREAM0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
 #else
-    #define IC(...) (::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}).ret(__VA_ARGS__)
-    #define IC0() (::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}).ret()
+    #define IC(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
+    #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
 #endif
 
 
