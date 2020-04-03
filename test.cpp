@@ -1,3 +1,5 @@
+#include "icecream.hpp"
+
 #include <vector>
 #include <list>
 #include <map>
@@ -8,11 +10,9 @@
 #include <variant>
 #endif
 
-
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
-#include "icecream.hpp"
 
 auto test_empty_ic() -> void
 {
@@ -92,7 +92,8 @@ TEST_CASE("base")
 
     {
         test_empty_ic();
-        REQUIRE(sstr.str() == "ic| test.cpp:19 in \"void test_empty_ic()\"\n");
+        REQUIRE_THAT(sstr.str(), Catch::StartsWith("ic| test.cpp:19 in"));
+        REQUIRE_THAT(sstr.str(), Catch::Contains("test_empty_ic("));
         sstr.str("");
     }
 
@@ -392,35 +393,35 @@ TEST_CASE("pointer_like")
     {
         auto v0 = std::unique_ptr<int> {new int {10}};
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
         sstr.str("");
     }
 
     {
         auto v0 = std::make_shared<int>(7);
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
         sstr.str("");
     }
 
     {
         auto v0 = boost::make_shared<int>(33);
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
         sstr.str("");
     }
 
     {
         boost::scoped_ptr<int> v0 {new int {33}};
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
         sstr.str("");
     }
 
     {
         int* v0 = new int {40};
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
         sstr.str("");
         delete v0;
     }
@@ -428,14 +429,14 @@ TEST_CASE("pointer_like")
     {
         float* v0 = nullptr;
         IC(v0);
-        REQUIRE(sstr.str() == "ic| v0: 0\n");
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0+\n"));
         sstr.str("");
     }
 
     {
         auto v0 = std::unique_ptr<double> {};
         IC(v0);
-        REQUIRE(sstr.str() == "ic| v0: 0\n");
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0+\n"));
         sstr.str("");
     }
 
@@ -443,7 +444,7 @@ TEST_CASE("pointer_like")
         auto v0 = std::make_shared<int>(7);
         auto v1 = std::weak_ptr<int> {v0};
         IC(v1);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v1: 0x[0-9a-f]+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v1: (0x)*[0-9a-fA-F]+\n"));
         sstr.str("");
 
         v0.reset();
@@ -663,7 +664,7 @@ TEST_CASE("c_string")
         char const* const v0 = "string 5";
         icecream::ic.show_c_string(false);
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
         sstr.str("");
         icecream::ic.show_c_string(true);
     }
@@ -686,7 +687,7 @@ TEST_CASE("c_string")
         char16_t const* v0 = u"char16_t test";
         icecream::ic.show_c_string(false);
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0x[0-9a-f]+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
         sstr.str("");
         icecream::ic.show_c_string(true);
     }
@@ -816,8 +817,10 @@ TEST_CASE("exception")
             e << StringInfo {"bla_string"};
             IC(e);
             REQUIRE_THAT(sstr.str(),
-                Catch::Contains("[IntTag*] = 10")
-                && Catch::Contains("[StringTag*] = bla_string")
+                Catch::Contains("IntTag")
+                && Catch::Contains("] = 10")
+                && Catch::Contains("StringTag")
+                && Catch::Contains("] = bla_string")
                 && Catch::Contains("ic| e: what info")
             );
         }
