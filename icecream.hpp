@@ -102,8 +102,8 @@ namespace boost
     {
         template<typename... T> class variant;
 
-        template <typename R, typename Visitor, typename... Variants>
-        constexpr auto visit(Visitor&& vis, Variants&&... vars) -> R;
+        template <typename R, typename Visitor, typename Variant>
+        constexpr auto visit(Visitor&& vis, Variant&& var) -> R;
     }
 }
 
@@ -257,16 +257,6 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_optional = is_instantiation<std::optional, T>;
 
-
-    // -------------------------------------------------- is_variant
-
-    // Checks if T is a std::variant<typename... Us> or
-    // boost::variant2::variant<typename... Us> instantiation.
-    template <typename T>
-    using is_variant = disjunction<
-        is_instantiation<std::variant, T>,
-        is_instantiation<boost::variant2::variant, T>
-    >;
 
     // -------------------------------------------------- is_tuple
 
@@ -691,21 +681,33 @@ namespace icecream{ namespace detail
             }
         };
 
-        // Print variant<> classes
-        template <
-            typename T,
+        // Print std::variant<> classes
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
-                is_variant<T>::value
-                && !has_insertion<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                is_instantiation<std::variant, T>::value
+                && !has_insertion<T>::value
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
             using std::visit;
-            using boost::variant2::visit;
+            *this = visit(Tree::Visitor{}, value);
+        }
 
+        // Print boost::variant2::variant<> classes
+        template <typename T>
+        Tree(T const& value,
+            typename std::enable_if<
+                is_instantiation<boost::variant2::variant, T>::value
+                && !has_insertion<T>::value
+            >::type* = 0
+        )
+            : is_leaf {true}
+            , content {true}
+        {
+            using boost::variant2::visit;
             *this = visit(Tree::Visitor{}, value);
         }
 
