@@ -1403,16 +1403,20 @@ namespace icecream{ namespace detail
     //
     // IC(...) print(__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__, __VA_ARGS__)
     //
-    // when used with no arguments would expand to:
+    // when used with no arguments would expand to one of:
     //
     // print("foo.cpp", 42, "void bar()", "",)
+    //
+    // print("foo.cpp", 42, "void bar()", ,)
     struct Dispatcher
     {
-        std::string const& file;
+        std::string const file;
         int line;
-        std::string const& function;
-        std::string const& arg_names;
+        std::string const function;
+        std::string const arg_names;
 
+        // Used by compilers that expand an empyt __VA_ARGS__ in
+        // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, ""}
         Dispatcher(
             std::string const& file,
             int line,
@@ -1423,6 +1427,19 @@ namespace icecream{ namespace detail
             , line {line}
             , function {function}
             , arg_names {arg_names}
+        {}
+
+        // Used by compilers that expand an empyt __VA_ARGS__ in
+        // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, }
+        Dispatcher(
+            std::string const& file,
+            int line,
+            std::string const& function
+        )
+            : file {file}
+            , line {line}
+            , function {function}
+            , arg_names {""}
         {}
 
         template <typename... Ts>
@@ -1476,7 +1493,7 @@ namespace icecream{ namespace detail
         auto ret(Ts&&... args) -> std::tuple<Ts...>
         {
             this->print(args...);
-            return {std::forward<Ts>(args)...};
+            return std::tuple<Ts...>{std::forward<Ts>(args)...};
         }
 
         template <typename T>
