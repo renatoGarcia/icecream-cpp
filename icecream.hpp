@@ -1434,39 +1434,40 @@ namespace icecream{ namespace detail
             auto par_count = int {0};
 
             // Split the the arg_names
-            while (true)
-            {
-                if (it == std::end(arg_names) || (*it == ',' && par_count == 0))
+            if (!this->arg_names.empty())
+                while (true)
                 {
-                    // Remove the trailing spaces
-                    auto e_it = std::prev(it);
-                    while (*e_it == ' ') --e_it;
-                    ++e_it;
+                    if (it == std::end(arg_names) || (*it == ',' && par_count == 0))
+                    {
+                        // Remove the trailing spaces
+                        auto e_it = it - 1;
+                        while (*e_it == ' ') --e_it;
+                        ++e_it;
 
-                    // Remove the leading spaces
-                    while (*b_it == ' ') ++b_it;
+                        // Remove the leading spaces
+                        while (*b_it == ' ') ++b_it;
 
-                    split_names.emplace_back(b_it, e_it);
-                    b_it = std::next(it);
-                }
-                else if (*it == '(')
-                {
-                    ++par_count;
-                }
-                else if (*it == ')')
-                {
-                    --par_count;
-                }
+                        split_names.emplace_back(b_it, e_it);
+                        if (it != std::end(arg_names)) b_it = it + 1;
+                    }
+                    else if (*it == '(')
+                    {
+                        ++par_count;
+                    }
+                    else if (*it == ')')
+                    {
+                        --par_count;
+                    }
 
-                if (it == std::end(arg_names))
-                {
-                    break;
+                    if (it == std::end(arg_names))
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        ++it;
+                    }
                 }
-                else
-                {
-                    ++it;
-                }
-            }
 
             ::icecream::ic.print(file, line, function, split_names, std::forward<Ts>(args)...);
         }
