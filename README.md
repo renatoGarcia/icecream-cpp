@@ -1,5 +1,7 @@
 # IceCream-Cpp
 
+![CI](https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg)
+
 IceCream-Cpp is a little library to help with the print debugging on C++11 and forward.
 
 **Contents**
