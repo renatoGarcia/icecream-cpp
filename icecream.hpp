@@ -110,7 +110,21 @@ namespace boost
 
 namespace icecream{ namespace detail
 {
-    // utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
+#if defined(_MSC_VER) && _MSC_VER <= 1916
+    // Bug fix to VisualStudio not implementing char instantiations to std::codecvt<>,
+    // but int instead.
+    template<typename T> struct FIX;
+    template<> struct FIX<char> {using type = uint8_t;};
+    template<> struct FIX<signed char> {using type = int8_t;};
+    template<> struct FIX<unsigned char> {using type = uint8_t;};
+    template<> struct FIX<wchar_t> {using type = uint16_t;};
+    template<> struct FIX<char16_t> {using type = uint16_t;};
+    template<> struct FIX<char32_t> {using type = uint32_t;};
+#else
+    template<typename T> struct FIX {using type = T;};
+#endif
+
+    // Utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
     template<class Facet>
     struct deletable_facet: Facet
     {
@@ -484,17 +498,16 @@ namespace icecream{ namespace detail
         }
 
         // Print any class that overloads operator<<(std::ostream&, T)
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
                 has_insertion<T>::value
                 && !is_c_string<T>::value
                 && !is_character<T>::value
                 && !is_std_string<T>::value
-                && !std::is_array<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                && !std::is_array<T>::value
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
@@ -504,13 +517,12 @@ namespace icecream{ namespace detail
         }
 
         // Print C string
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
-                is_c_string<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                is_c_string<T>::value
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
@@ -520,14 +532,26 @@ namespace icecream{ namespace detail
                 >::type
             >::type;
 
+            using FF = typename FIX<DT>::type;
             std::wstring_convert<
-                deletable_facet<std::codecvt<DT, char, std::mbstate_t>>, DT
+                deletable_facet<std::codecvt<FF, char, std::mbstate_t>>,
+                FF
             > cv {};
 
             auto buf = std::ostringstream {};
 
             if (show_c_string())
+        #if defined(_MSC_VER) && _MSC_VER <= 1916
+            {
+                FF const* e = (FF const*)value;
+                while (*e != 0) ++e;
+                buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
+            }
+        #else
+            {
                 buf << '"' << cv.to_bytes(value) << '"';
+            }
+        #endif
             else
                 buf << reinterpret_cast<void const*>(value);
 
@@ -535,44 +559,49 @@ namespace icecream{ namespace detail
         }
 
         // Print std::string
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
-                is_std_string<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                is_std_string<T>::value
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
+            using FF = typename FIX<typename T::value_type>::type;
             std::wstring_convert<
-                deletable_facet<
-                    std::codecvt<typename T::value_type, char, std::mbstate_t>
-                >,
-                typename T::value_type
+                deletable_facet<std::codecvt<FF, char, std::mbstate_t>>,
+                FF
             > cv {};
 
             auto buf = std::ostringstream {};
+        #if defined(_MSC_VER) && _MSC_VER <= 1916
+            FF const* b = (FF const*)value.data();
+            FF const* e = (FF const*)value.data();
+            while (*e != 0) ++e;
+            buf << '"' << cv.to_bytes(b, e) << '"';
+        #else
             buf << '"' << cv.to_bytes(value.data()) << '"';
+        #endif
             this->content.leaf = buf.str();
         }
 
         // Print character
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
-                is_character<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                is_character<T>::value
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
+            using FF = typename FIX<typename std::decay<T>::type>::type;
             std::wstring_convert<
                 deletable_facet<
-                    std::codecvt<typename std::decay<T>::type, char, std::mbstate_t>
+                    std::codecvt<FF, char, std::mbstate_t>
                 >,
-                typename std::decay<T>::type
+                FF
             > cv {};
 
             auto str = std::string {};
@@ -621,14 +650,13 @@ namespace icecream{ namespace detail
         }
 
         // Print smart pointers without an operator<<(ostream&) overload.
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
                 is_not_streamable_ptr<T>::value
-                && !has_insertion<T>::value, // On C++20 unique_ptr will have a << overload.
-            int>::type = 0
-        >
-        Tree(T const& value)
+                && !has_insertion<T>::value // On C++20 unique_ptr will have a << overload.
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
@@ -638,13 +666,12 @@ namespace icecream{ namespace detail
         }
 
         // Print weak pointer classes
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
-                is_weak_ptr<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                is_weak_ptr<T>::value
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
@@ -655,14 +682,13 @@ namespace icecream{ namespace detail
         }
 
         // Print std::optional<> classes
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
                 is_optional<T>::value
-                && !has_insertion<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                && !has_insertion<T>::value
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
@@ -721,14 +747,13 @@ namespace icecream{ namespace detail
         }
 
         // Print tuple like classes
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
                 is_tuple<T>::value
-                && !has_insertion<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                && !has_insertion<T>::value
+            >::type* = 0
+        )
             : is_leaf {false}
             , content {false}
         {
@@ -738,18 +763,17 @@ namespace icecream{ namespace detail
         }
 
         // Print all items of any iterable class
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
                 (
                     is_iterable<T>::value
                     && !has_insertion<T>::value
                     && !is_std_string<T>::value
                 )
-                || std::is_array<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                || std::is_array<T>::value
+            >::type* = 0
+        )
             : is_leaf {false}
             , content {false}
         {
@@ -766,15 +790,14 @@ namespace icecream{ namespace detail
         }
 
         // Print classes deriving from only std::exception and not from boost::exception
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
                 std::is_base_of<std::exception, T>::value
                 && !std::is_base_of<boost::exception, T>::value
-                && !has_insertion<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                && !has_insertion<T>::value
+             >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
@@ -782,15 +805,14 @@ namespace icecream{ namespace detail
         }
 
         // Print classes deriving from both std::exception and boost::exception
-        template <
-            typename T,
+        template <typename T>
+        Tree(T const& value,
             typename std::enable_if<
                 std::is_base_of<std::exception, T>::value
                 && std::is_base_of<boost::exception, T>::value
-                && !has_insertion<T>::value,
-            int>::type = 0
-        >
-        Tree(T const& value)
+                && !has_insertion<T>::value
+            >::type* = 0
+        )
             : is_leaf {true}
             , content {true}
         {
@@ -851,27 +873,27 @@ namespace icecream{ namespace detail
     // -------------------------------------------------- to_invocable
 
     // If value is a string returns an function that returns it.
-    template <
-        typename T,
+    template <typename T>
+    auto to_invocable(
+        T&& value,
         typename std::enable_if <
             is_std_string<T>::value
-            || is_c_string<typename std::decay<T>::type>::value,
-        int>::type = 0
-    >
-    auto to_invocable(T&& value) -> std::function<std::string()>
+            || is_c_string<typename std::decay<T>::type>::value
+        >::type* = 0
+    ) -> std::function<std::string()>
     {
         auto str = std::string {value};
         return [str](){return str;};
     }
 
     // If value is invocable do nothing.
-    template <
-        typename T,
+    template <typename T>
+    auto to_invocable(
+        T&& value,
         typename std::enable_if<
-            is_invocable<T>::value,
-        int>::type = 0
-    >
-    auto to_invocable(T&& value) -> T&&
+            is_invocable<T>::value
+        >::type* = 0
+    ) -> T&&
     {
         return std::forward<T>(value);
     }
@@ -1318,13 +1340,11 @@ namespace icecream
             return detail::Icecream::instance().stream();
         }
 
-        template <
-            typename... Ts,
+        template <typename... Ts>
+        auto prefix(Ts&& ...value) ->
             typename std::enable_if<
                 detail::conjunction<detail::is_valid_prefix<Ts>...>::value,
-            int>::type = 0
-        >
-        auto prefix(Ts&& ...value) -> IcecreamAPI&
+            IcecreamAPI&>::type
         {
             detail::Icecream::instance().prefix(std::forward<Ts>(value)...);
             return *this;
@@ -1374,19 +1394,16 @@ namespace icecream
             return *this;
         }
 
-        template <
-            typename... Ts,
-            typename std::enable_if<
-                detail::conjunction<detail::is_printable<Ts>...>::value,
-            int>::type = 0
-        >
+        template <typename... Ts>
         auto print(
             std::string const& file,
             int line,
             std::string const& function,
             std::vector<std::string> const& arg_names,
             Ts&&... args
-        ) -> void
+        ) -> typename std::enable_if<
+                detail::conjunction<detail::is_printable<Ts>...>::value
+            >::type
         {
             detail::Icecream::instance().print(
                 file, line, function, arg_names, std::forward<Ts>(args)...
