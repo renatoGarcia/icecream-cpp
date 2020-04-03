@@ -1065,7 +1065,11 @@ namespace icecream{ namespace detail
             // If used an empty IC macro, i.e.: IC().
             if (sizeof...(Ts) == 0 || this->include_context_)
             {
+             #if defined(_MSC_VER)
+                auto const n = file.rfind('\\');
+             #else
                 auto const n = file.rfind('/');
+             #endif
                 context = file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
             }
 
