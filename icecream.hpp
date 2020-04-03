@@ -1085,6 +1085,7 @@ namespace icecream{ namespace detail
         }
 
     private:
+        friend auto show_c_string() -> bool;
 
         constexpr static size_type INDENT_BASE = 4;
 
@@ -1275,7 +1276,7 @@ namespace icecream{ namespace detail
 
     auto show_c_string() -> bool
     {
-        return Icecream::instance().show_c_string();
+        return Icecream::instance().show_c_string_;
     }
 
 }} // namespace icecream::detail
