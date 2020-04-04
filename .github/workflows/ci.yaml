@@ -34,7 +34,22 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: run
-        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "CPP_STANDARD=${CPP_STANDARD} cmake /home/src && make && ./test_exec"
+        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "CPP_STANDARD=${CPP_STANDARD} cmake /home/src && cmake --build . && ctest -V"
+
+  clang:
+    name: ${{ matrix.version }} C++${{ matrix.cpp }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [clang5, clang10]
+        cpp: [11, 14, 17]
+    env:
+      CPP_STANDARD: ${{ matrix.cpp }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: run
+        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "CPP_STANDARD=${CPP_STANDARD} cmake /home/src && cmake --build . && ctest -V"
 
   msvc:
     name: ${{ matrix.name }} C++${{ matrix.cpp }}
@@ -56,7 +71,7 @@ jobs:
       - name: build
         run: cmake -DBOOST_ROOT=C:\\hostedtoolcache\\windows\\Boost\\1.72.0 . && cmake --build . --config Debug
       - name: run
-        run: ctest -V -C Debug --output-on-failure
+        run: ctest -V -C Debug
 
   xcode:
     name: Xcode C++${{ matrix.cpp }}
@@ -74,4 +89,4 @@ jobs:
       - name: build
         run: cmake . && cmake --build .
       - name: run
-        run: ctest -V --output-on-failure
+        run: ctest -V
