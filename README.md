@@ -2,7 +2,7 @@
 
 [![CI.badge]][CI.page]
 
-IceCream-Cpp is a little library to help with the print debugging on C++11 and forward.
+IceCream-Cpp is a little (single header) library to help with the print debugging on C++11 and forward.
 
 **Contents**
 * [Install](#install)
