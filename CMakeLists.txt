@@ -23,7 +23,7 @@ else()
     message(FATAL_ERROR "invalid C++ standard")
 endif()
 
-set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 

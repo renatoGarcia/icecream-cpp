@@ -54,6 +54,24 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: build
-        run: cmake -DBOOST_ROOT=C:\\hostedtoolcache\\windows\\Boost\\1.72.0 . && cmake --build . --config Release
+        run: cmake -DBOOST_ROOT=C:\\hostedtoolcache\\windows\\Boost\\1.72.0 . && cmake --build . --config Debug
       - name: run
-        run: ctest -V -C Release --output-on-failure
+        run: ctest -V -C Debug --output-on-failure
+
+  xcode:
+    name: Xcode C++${{ matrix.cpp }}
+    runs-on: macos-10.15
+    strategy:
+      fail-fast: false
+      matrix:
+        cpp: [11, 14, 17]
+    env:
+      CPP_STANDARD: ${{ matrix.cpp }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: prepare
+        run: brew install boost
+      - name: build
+        run: cmake . && cmake --build .
+      - name: run
+        run: ctest -V --output-on-failure

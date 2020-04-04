@@ -25,6 +25,7 @@
 #define ICECREAM_HPP_INCLUDED
 
 #include <codecvt>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <iterator>
@@ -37,6 +38,20 @@
 #include <utility>
 #include <vector>
 
+#if defined(__cpp_lib_optional) || (__cplusplus >= 201703L)
+    #define ICECREAM_OPTIONAL_HEADER
+    #include <optional>
+#endif
+
+#if defined(__cpp_lib_variant) || (__cplusplus >= 201703L)
+    #define ICECREAM_VARIANT_HEADER
+    #include <variant>
+#endif
+
+#if defined(__cpp_lib_string_view) || (__cplusplus >= 201703L)
+    #define ICECREAM_STRING_VIEW_HEADER
+    #include <string_view>
+#endif
 
 #define ICECREAM_MAJOR_VERSION 0
 #define ICECREAM_MINOR_VERSION 2
@@ -61,20 +76,6 @@
     #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
 #endif
 
-
-namespace std
-{
-    class exception;
-
-    template <typename T> class optional;
-
-    template <typename... Ts> class variant;
-
-    template <typename R, typename Visitor, typename... Variants>
-    constexpr auto visit(Visitor&& vis, Variants&&... vars) -> R;
-
-    template<typename CharT, typename Traits> class basic_string_view;
-}
 
 namespace boost
 {
@@ -265,13 +266,6 @@ namespace icecream{ namespace detail
     using has_insertion = decltype(has_insertion_impl<T>(0));
 
 
-    // -------------------------------------------------- is_optional
-
-    // Checks if T is a std::optional<typename U> instantiation.
-    template <typename T>
-    using is_optional = is_instantiation<std::optional, T>;
-
-
     // -------------------------------------------------- is_tuple
 
     // Checks if T is a tuple like type, i.e.: an instantiation of one of
@@ -334,8 +328,10 @@ namespace icecream{ namespace detail
     // std::basic_string_view<typename U> instantiation.
     template <typename T>
     using is_std_string = disjunction<
-        is_instantiation<std::basic_string, T>,
-        is_instantiation<std::basic_string_view, T>
+        is_instantiation<std::basic_string, T>
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        ,is_instantiation<std::basic_string_view, T>
+    #endif
     >;
 
 
@@ -541,17 +537,17 @@ namespace icecream{ namespace detail
             auto buf = std::ostringstream {};
 
             if (show_c_string())
-        #if defined(_MSC_VER) && _MSC_VER <= 1916
             {
+        #if defined(_MSC_VER) && _MSC_VER <= 1916
                 FF const* e = (FF const*)value;
                 while (*e != 0) ++e;
                 buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
-            }
+        #elif defined(__APPLE__)
+                buf << '"' << value << '"';
         #else
-            {
                 buf << '"' << cv.to_bytes(value) << '"';
-            }
         #endif
+            }
             else
                 buf << reinterpret_cast<void const*>(value);
 
@@ -580,6 +576,8 @@ namespace icecream{ namespace detail
             FF const* e = (FF const*)value.data();
             while (*e != 0) ++e;
             buf << '"' << cv.to_bytes(b, e) << '"';
+        #elif defined(__APPLE__)
+            buf << '"' << value << '"';
         #else
             buf << '"' << cv.to_bytes(value.data()) << '"';
         #endif
@@ -640,7 +638,11 @@ namespace icecream{ namespace detail
                 break;
 
             default:
+            #if defined(__APPLE__)
+                str = value;
+            #else
                 str = cv.to_bytes(value);
+            #endif
                 break;
             }
 
@@ -681,11 +683,12 @@ namespace icecream{ namespace detail
                 *this = Tree {value.lock()};
         }
 
+    #if defined(ICECREAM_OPTIONAL_HEADER)
         // Print std::optional<> classes
         template <typename T>
         Tree(T const& value,
             typename std::enable_if<
-                is_optional<T>::value
+                is_instantiation<std::optional, T>::value
                 && !has_insertion<T>::value
             >::type* = 0
         )
@@ -697,6 +700,7 @@ namespace icecream{ namespace detail
             else
                 this->content.leaf = "nullopt";
         }
+    #endif
 
         struct Visitor
         {
@@ -707,33 +711,23 @@ namespace icecream{ namespace detail
             }
         };
 
-        // Print std::variant<> classes
-        template <typename T>
-        Tree(T const& value,
-            typename std::enable_if<
-                is_instantiation<std::variant, T>::value
-                && !has_insertion<T>::value
-            >::type* = 0
-        )
-            : is_leaf {true}
-            , content {true}
-        {
-            using std::visit;
-            *this = visit(Tree::Visitor{}, value);
-        }
 
         // Print boost::variant2::variant<> classes
         template <typename T>
         Tree(T const& value,
             typename std::enable_if<
+             (
                 is_instantiation<boost::variant2::variant, T>::value
+             #if defined(ICECREAM_VARIANT_HEADER)
+                || is_instantiation<std::variant, T>::value
+             #endif
+             )
                 && !has_insertion<T>::value
             >::type* = 0
         )
             : is_leaf {true}
             , content {true}
         {
-            using boost::variant2::visit;
             *this = visit(Tree::Visitor{}, value);
         }
 

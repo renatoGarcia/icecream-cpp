@@ -269,10 +269,13 @@ TEST_CASE("std_variant")
 // -------------------------------------------------- Test tuples
 
 #include <utility>
+namespace std
+{
 auto operator<<(std::ostream& os, std::pair<std::string, char> const& value) -> std::ostream&
 {
     os << "{" << value.first << ", " << value.second << "}";
     return os;
+}
 }
 
 TEST_CASE("tuples")
@@ -288,7 +291,7 @@ TEST_CASE("tuples")
     }
 
     {
-        auto s0 = std::make_pair("oi", 'b');
+        auto s0 = std::make_pair(std::string{"oi"}, 'b');
         IC(s0);
         REQUIRE(sstr.str() == "ic| s0: {oi, b}\n"); // will use the function above
         sstr.str("");
@@ -429,14 +432,14 @@ TEST_CASE("pointer_like")
     {
         float* v0 = nullptr;
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*0+\n"));
         sstr.str("");
     }
 
     {
         auto v0 = std::unique_ptr<double> {};
         IC(v0);
-        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: 0+\n"));
+        REQUIRE_THAT(sstr.str(), Catch::Matches("ic\\| v0: (0x)*0+\n"));
         sstr.str("");
     }
 
@@ -503,7 +506,7 @@ TEST_CASE("character")
         REQUIRE(sstr.str() == "ic| v0: 'a'\n");
         sstr.str("");
     }
-
+#if !defined(__APPLE__)
     {
         auto v0 = wchar_t {L'a'};
         IC(v0);
@@ -547,6 +550,7 @@ TEST_CASE("character")
         REQUIRE(sstr.str() == "ic| v0: '\\t'\n");
         sstr.str("");
     }
+#endif
 }
 
 
@@ -562,7 +566,7 @@ TEST_CASE("std_string")
         REQUIRE(sstr.str() == "ic| v0: \"str 1\"\n");
         sstr.str("");
     }
-
+#if !defined(__APPLE__)
     {
         auto v0 = std::wstring {L"wstr 1"};
         IC(v0);
@@ -583,6 +587,7 @@ TEST_CASE("std_string")
         REQUIRE(sstr.str() == "ic| v0: \"u32str 1\"\n");
         sstr.str("");
     }
+#endif
 }
 
 // -------------------------------------------------- Test std::string_view
@@ -598,7 +603,7 @@ TEST_CASE("std_string_view")
         REQUIRE(sstr.str() == "ic| v0: \"str 1\"\n");
         sstr.str("");
     }
-
+#if !defined(__APPLE__)
     {
         auto v0 = std::wstring_view {L"wstr 1"};
         IC(v0);
@@ -619,6 +624,7 @@ TEST_CASE("std_string_view")
         REQUIRE(sstr.str() == "ic| v0: \"u32str 1\"\n");
         sstr.str("");
     }
+#endif
 }
 #endif
 
@@ -668,7 +674,7 @@ TEST_CASE("c_string")
         sstr.str("");
         icecream::ic.show_c_string(true);
     }
-
+#if !defined(__APPLE__)
     {
         wchar_t const* v0 = L"wchar_t test";
         IC(v0);
@@ -698,7 +704,7 @@ TEST_CASE("c_string")
         REQUIRE(sstr.str() == "ic| v0: \"char32_t test\"\n");
         sstr.str("");
     }
-
+#endif
 }
 
 // -------------------------------------------------- Test line wrap
