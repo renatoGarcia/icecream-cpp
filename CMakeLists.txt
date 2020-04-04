@@ -29,5 +29,5 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include_directories(${Boost_INCLUDE_DIRS})
 
-add_executable(test_exec test.cpp)
+add_executable(test_exec test.cpp test_2.cpp)
 add_test(NAME test COMMAND test_exec)

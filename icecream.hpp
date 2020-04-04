@@ -55,8 +55,8 @@
 
 #define ICECREAM_MAJOR_VERSION 0
 #define ICECREAM_MINOR_VERSION 3
-#define ICECREAM_PATCH_VERSION 0
-#define ICECREAM_LIB_VERSION "0.3.0"
+#define ICECREAM_PATCH_VERSION 1
+#define ICECREAM_LIB_VERSION "0.3.1"
 
 
 #if defined(__GNUC__)
@@ -1294,7 +1294,7 @@ namespace icecream{ namespace detail
         }
     };
 
-    auto show_c_string() -> bool
+    inline auto show_c_string() -> bool
     {
         return Icecream::instance().show_c_string_;
     }
