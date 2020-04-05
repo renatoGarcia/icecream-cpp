@@ -1,8 +1,13 @@
 # IceCream-Cpp
 
-[![CI.badge]][CI.page]
+<p align="center">
+    <a href="https://github.com/renatoGarcia/icecream-cpp/actions?query=workflow%3ACI"><img src="https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg"></a>
+    <a href="https://raw.githubusercontent.com/renatoGarcia/icecream-cpp/master/LICENSE.txt"><img src="https://img.shields.io/badge/licence-MIT-blue"></a>
+ </p>
 
 IceCream-Cpp is a little (single header) library to help with the print debugging on C++11 and forward.
+
+[Try it at godbolt!](https://godbolt.org/z/6WYZh3)
 
 **Contents**
 * [Install](#install)
@@ -73,7 +78,7 @@ can be simplified to:
 IC(a, b, (sum(a, b)));
 ```
 
-that will print:
+and will print:
 
     ic| a: 7, b: 2, (sum(a, b)): 9
 
@@ -528,9 +533,4 @@ one argument when calling a variadic macro. To handle this the nullary macros `I
 
 The [CleanType](https://github.com/pthom/cleantype) library has a focus on printing
 readable types names, but there is support to print variables names and values alongside
-its types. An optional integration of CleanType with IceCream-Cpp, if the first is present
-on system, is being planed. With that would be possible to show the types of values within
-`IC(...)` macro.
-
-[CI.badge]: https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg
-[CI.page]: https://github.com/renatoGarcia/icecream-cpp/actions?query=workflow%3ACI
+its types.
