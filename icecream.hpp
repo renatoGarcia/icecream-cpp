@@ -863,6 +863,18 @@ namespace icecream{ namespace detail
         is_printable<Ts>...
     > {};
 
+#if defined(ICECREAM_VARIANT_HEADER)
+    template <typename... Ts>
+    struct is_printable<std::variant<Ts...>&>: conjunction<
+        is_printable<Ts>...
+    > {};
+#endif
+
+    template <typename... Ts>
+    struct is_printable<boost::variant2::variant<Ts...>&>: conjunction<
+        is_printable<Ts>...
+    > {};
+
 
     // -------------------------------------------------- to_invocable
 
