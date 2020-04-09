@@ -89,10 +89,7 @@ namespace boost
     namespace exception_detail
     {
         std::string diagnostic_information_impl(
-            boost::exception const*,
-            std::exception const*,
-            bool with_what,
-            bool verbose
+            boost::exception const*, std::exception const*, bool, bool
         );
     }
 
@@ -155,8 +152,8 @@ namespace icecream{ namespace detail
     template <typename T, typename... Ts>
     struct conjunction<T, Ts...>: std::conditional<
         T::value,
-        conjunction<Ts...>,
-        std::false_type
+            conjunction<Ts...>,
+            std::false_type
     >::type {};
 
 
@@ -169,8 +166,8 @@ namespace icecream{ namespace detail
     template <typename T, typename... Ts>
     struct disjunction<T, Ts...>: std::conditional<
         T::value,
-        std::true_type,
-        disjunction<Ts...>
+            std::true_type,
+            disjunction<Ts...>
     >::type {};
 
 
@@ -178,7 +175,9 @@ namespace icecream{ namespace detail
 
     // Logical NOT
     template <typename T>
-    struct negation: std::conditional<T::value, std::false_type, std::true_type>::type {};
+    using negation = typename std::conditional<
+        T::value, std::false_type, std::true_type
+    >::type;
 
 
     // -------------------------------------------------- is_bounded_array
@@ -216,12 +215,12 @@ namespace icecream{ namespace detail
 
     // Returns the result type of nullary function
     template <typename T>
-    static auto returned_type_impl(int) -> decltype(
+    auto returned_type_impl(int) -> decltype(
         std::declval<T&>()()
     );
 
     template <typename T>
-    static auto returned_type_impl(...) -> void;
+    auto returned_type_impl(...) -> void;
 
     template <typename T>
     using returned_type = decltype(returned_type_impl<T>(0));
@@ -272,8 +271,7 @@ namespace icecream{ namespace detail
     // std::pair<typename U0, typename U1> or std::tuple<typename... Us>.
     template <typename T>
     using is_tuple = disjunction<
-        is_instantiation<std::pair, T>,
-        is_instantiation<std::tuple, T>
+        is_instantiation<std::pair, T>, is_instantiation<std::tuple, T>
     >;
 
 
@@ -340,21 +338,20 @@ namespace icecream{ namespace detail
     // Checks if T is a collection, i.e.: an iterable type that is not a std::string.
     template <typename T>
     using is_collection = conjunction<
-        is_iterable<T>,
-        negation<is_std_string<T>>
+        is_iterable<T>, negation<is_std_string<T>>
     >;
 
 
     // -------------------------------------------------- elements_type
 
-    // Returns the type of a collection elements.
+    // Returns the elements type of a collection.
     template <typename T>
-    static auto elements_type_impl(int) -> decltype(
+    auto elements_type_impl(int) -> decltype(
         *begin(std::declval<T&>())
     );
 
     template <typename T>
-    static auto elements_type_impl(...) -> void;
+    auto elements_type_impl(...) -> void;
 
     template <typename T>
     using elements_type = decltype(elements_type_impl<T>(0));
@@ -366,8 +363,7 @@ namespace icecream{ namespace detail
     // boost::scoped_ptr<typename U>. Both are without an operator<<(ostream&) overload.
     template <typename T>
     using is_not_streamable_ptr = disjunction<
-        is_instantiation<std::unique_ptr, T>,
-        is_instantiation<boost::scoped_ptr, T>
+        is_instantiation<std::unique_ptr, T>, is_instantiation<boost::scoped_ptr, T>
     >;
 
 
@@ -377,8 +373,7 @@ namespace icecream{ namespace detail
     // boost::weak_ptr<typename U>.
     template <typename T>
     using is_weak_ptr = disjunction<
-        is_instantiation<std::weak_ptr, T>,
-        is_instantiation<boost::weak_ptr, T>
+        is_instantiation<std::weak_ptr, T>, is_instantiation<boost::weak_ptr, T>
     >;
 
 
@@ -413,8 +408,8 @@ namespace icecream{ namespace detail
             struct Stem
             {
                 char open;
-                std::vector<Tree> children;
                 char close;
+                std::vector<Tree> children;
             } stem;
 
             U(bool is_leaf)
@@ -707,21 +702,21 @@ namespace icecream{ namespace detail
             template <typename T>
             auto operator()(T const& arg) -> Tree
             {
-             return Tree {arg};
+                return Tree {arg};
             }
         };
 
 
-        // Print boost::variant2::variant<> classes
+        // Print *::variant<Ts...> classes
         template <typename T>
         Tree(T const& value,
             typename std::enable_if<
-             (
-                is_instantiation<boost::variant2::variant, T>::value
-             #if defined(ICECREAM_VARIANT_HEADER)
-                || is_instantiation<std::variant, T>::value
-             #endif
-             )
+                (
+                    is_instantiation<boost::variant2::variant, T>::value
+                #if defined(ICECREAM_VARIANT_HEADER)
+                    || is_instantiation<std::variant, T>::value
+                #endif
+                )
                 && !has_insertion<T>::value
             >::type* = 0
         )
@@ -842,20 +837,19 @@ namespace icecream{ namespace detail
     template <typename T>
     struct is_printable: std::conditional<
         is_collection<T>::value,
-        disjunction<
-            conjunction<
-                is_tree_argument<T>,
-                is_printable<elements_type<T>>
+            disjunction<
+                conjunction<
+                    is_tree_argument<T>,
+                    is_printable<elements_type<T>>
+                >,
+                has_insertion<T>
             >,
-            has_insertion<T>
-        >,
-        is_tree_argument<T>
+            is_tree_argument<T>
     >::type {};
 
     template <typename T0, typename T1>
     struct is_printable<std::pair<T0, T1>&>: conjunction<
-        is_printable<T0>,
-        is_printable<T1>
+        is_printable<T0>, is_printable<T1>
     > {};
 
     template <typename... Ts>
@@ -880,22 +874,20 @@ namespace icecream{ namespace detail
 
     // If value is a string returns an function that returns it.
     template <typename T>
-    auto to_invocable(
-        T&& value,
+    auto to_invocable(T&& value,
         typename std::enable_if <
             is_std_string<T>::value
             || is_c_string<typename std::decay<T>::type>::value
         >::type* = 0
     ) -> std::function<std::string()>
     {
-        auto str = std::string {value};
-        return [str](){return str;};
+        auto const str = std::string {value};
+        return [str]{return str;};
     }
 
-    // If value is invocable do nothing.
+    // If value is already invocable do nothing.
     template <typename T>
-    auto to_invocable(
-        T&& value,
+    auto to_invocable(T&& value,
         typename std::enable_if<
             is_invocable<T>::value
         >::type* = 0
@@ -971,9 +963,7 @@ namespace icecream{ namespace detail
         {
             auto result = std::string {};
             for (auto const& func : this->functions)
-            {
                 result.append((*func)());
-            }
 
             return result;
         }
@@ -1020,9 +1010,7 @@ namespace icecream{ namespace detail
         auto prefix(Ts&& ...value) -> void
         {
             std::lock_guard<std::mutex> guard(this->mutex);
-            this->prefix_ = Prefix {
-                to_invocable(std::forward<Ts>(value))...
-            };
+            this->prefix_ = Prefix {to_invocable(std::forward<Ts>(value))...};
         }
 
         auto show_c_string() const -> bool
@@ -1141,9 +1129,7 @@ namespace icecream{ namespace detail
         Icecream() = default;
 
         auto print_tree(
-            Tree const& node,
-            size_type const indent_level,
-            bool const multiline
+            Tree const& node, size_type const indent_level, bool const is_tree_multiline
         ) -> void
         {
             auto const break_line = [&](int indent)
@@ -1160,39 +1146,48 @@ namespace icecream{ namespace detail
             else
             {
                 this->stream_ << node.content.stem.open;
-                if (multiline)
+
+                if (is_tree_multiline)
                     break_line(indent_level+1);
 
                 for (
-                    auto it = node.content.stem.children.begin();
-                    it != node.content.stem.children.end();
+                    auto it = node.content.stem.children.cbegin();
+                    it != node.content.stem.children.cend();
                     ++it
                 ){
-                    auto const child_multiline = [&]
+                    auto const is_child_multiline = bool {[&]
                     {
-                        // If the whole tree is single line all childs are too.
-                        if (!multiline)
+                        // If the whole tree is a single line all children are too.
+                        if (!is_tree_multiline)
+                        {
                             return false;
+                        }
+                        // Else check this particular child.
+                        else
+                        {
+                            auto const child_line_width =
+                                (indent_level+1)*Icecream::INDENT_BASE + it->count_chars();
+                            return child_line_width > this->line_wrap_width_;
+                        }
+                    }()};
 
-                        auto const line_width =
-                            (indent_level+1) * Icecream::INDENT_BASE
-                            + it->count_chars();
+                    // Print the child.
+                    this->print_tree(*it, indent_level+1, is_child_multiline);
 
-                        return line_width > this->line_wrap_width_;
-                    }();
-
-                    this->print_tree(*it, indent_level+1, child_multiline);
-
-                    if (it+1 != node.content.stem.children.end())
+                    // Print the separators between children.
+                    if (it+1 != node.content.stem.children.cend())
                     {
                         this->stream_ << ",";
-                        if (multiline)
+                        if (is_tree_multiline)
                             break_line(indent_level+1);
                         else
                             this->stream_ << " ";
                     }
-                    else if (multiline)
-                        break_line(indent_level);
+                    else
+                    {
+                        if (is_tree_multiline)
+                            break_line(indent_level);
+                    }
                 }
 
                 this->stream_ << node.content.stem.close;
@@ -1205,7 +1200,7 @@ namespace icecream{ namespace detail
             std::vector<std::tuple<std::string, Tree>> const& forest
         ) -> void
         {
-            auto const forest_multiline = [&]
+            auto const is_forest_multiline = bool {[&]
             {
                 auto r = prefix.size();
 
@@ -1221,64 +1216,68 @@ namespace icecream{ namespace detail
                     r += (forest.size() - 1) * 2;
 
                 return r > this->line_wrap_width_;
-            }();
+            }()};
 
             // Print prefix and context
             this->stream_ << prefix;
             if (!context.empty())
             {
                 this->stream_ << context;
-                if (forest_multiline)
+                if (is_forest_multiline)
                     this->stream_ << '\n' << std::string(Icecream::INDENT_BASE, ' ');
                 else
                     this->stream_ << this->context_delimiter_;
             }
 
             // The forest is built with trees in reverse order.
-            for (auto it = forest.rbegin(); it != forest.rend(); ++it)
+            for (auto it = forest.crbegin(); it != forest.crend(); ++it)
             {
                 auto const& arg_name = std::get<0>(*it);
-                auto const& node = std::get<1>(*it);
+                auto const& tree = std::get<1>(*it);
 
-                auto const tree_multiline = [&]
+                auto const is_tree_multiline = bool {[&]
                 {
-                    // If the whole forest is single line all trees are too.
-                    if (!forest_multiline)
-                        return false;
-
-                    auto const line_width = [&]
+                    // If the whole forest is a single line all trees will be too.
+                    if (!is_forest_multiline)
                     {
-                        if (it == forest.rbegin() && context.empty())
-                            return
-                                prefix.size()
-                                + arg_name.size()
-                                + 2
-                                + node.count_chars();
-                        else
-                            return
-                                Icecream::INDENT_BASE
-                                + arg_name.size()
-                                + 2
-                                + node.count_chars();
-                    }();
+                        return false;
+                    }
+                    else
+                    {
+                        auto const tree_line_width = [&]
+                        {
+                            if (it == forest.rbegin() && context.empty())
+                                return
+                                    prefix.size()
+                                    + arg_name.size()
+                                    + 2
+                                    + tree.count_chars();
+                            else
+                                return
+                                    Icecream::INDENT_BASE
+                                    + arg_name.size()
+                                    + 2
+                                    + tree.count_chars();
+                        }();
 
-                    return line_width > this->line_wrap_width_;
-                }();
+                        return tree_line_width > this->line_wrap_width_;
+                    }
+                }()};
 
                 this->stream_ << arg_name << ": ";
-                this->print_tree(node, 1, tree_multiline);
+                this->print_tree(tree, 1, is_tree_multiline);
 
-                if (it+1 != forest.rend())
+                if (it+1 != forest.crend())
                 {
-                    if (forest_multiline)
-                        this->stream_ <<  "\n" << std::string(Icecream::INDENT_BASE, ' ');
+                    if (is_forest_multiline)
+                        this->stream_ << "\n" << std::string(Icecream::INDENT_BASE, ' ');
                     else
-                        this->stream_ <<  ", ";
+                        this->stream_ << ", ";
                 }
             }
         }
 
-        static auto build_forest(
+        auto build_forest(
             std::vector<std::string>::const_iterator
         ) -> std::vector<std::tuple<std::string, Tree>>
         {
@@ -1521,7 +1520,7 @@ namespace icecream{ namespace detail
         auto ret(Ts&&... args) -> std::tuple<Ts...>
         {
             this->print(args...);
-            return std::tuple<Ts...>{std::forward<Ts>(args)...};
+            return std::tuple<Ts...> {std::forward<Ts>(args)...};
         }
 
         template <typename T>
