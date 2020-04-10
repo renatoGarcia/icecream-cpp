@@ -25,12 +25,14 @@
 #define ICECREAM_HPP_INCLUDED
 
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <codecvt>
 #include <exception>
 #include <functional>
+#include <iomanip>
 #include <iostream>
 #include <iterator>
-#include <list>
 #include <locale>
 #include <memory>
 #include <mutex>
@@ -38,6 +40,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <valarray>
 #include <vector>
 
 #if defined(__cpp_lib_optional) || (__cplusplus >= 201703L)
@@ -54,6 +57,14 @@
     #define ICECREAM_STRING_VIEW_HEADER
     #include <string_view>
 #endif
+
+#if defined(__has_builtin) && defined(__clang__)
+    #if __has_builtin(__builtin_dump_struct)
+        #define ICECREAM_DUMP_STRUCT_CLANG
+        #include <climits>
+    #endif
+#endif
+
 
 #define ICECREAM_MAJOR_VERSION 0
 #define ICECREAM_MINOR_VERSION 3
@@ -77,6 +88,9 @@
     #define IC(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
 #endif
+
+// Use (void) to silent unused warnings.
+#define ICECREAM_ASSERT(exp, msg) assert(((void)msg, exp))
 
 
 #define ICECREAM_ASSERT(exp, msg) assert(((void)msg, exp))
@@ -185,6 +199,14 @@ namespace icecream{ namespace detail
     >::type;
 
 
+    // -------------------------------------------------- is_one_of
+
+    template <typename T, typename... Us>
+    using is_one_of = typename disjunction<
+        std::is_same<T, Us>...
+    >::type;
+
+
     // -------------------------------------------------- is_bounded_array
 
     // Checks if T is an array with a known size.
@@ -276,7 +298,8 @@ namespace icecream{ namespace detail
     // std::pair<typename U0, typename U1> or std::tuple<typename... Us>.
     template <typename T>
     using is_tuple = disjunction<
-        is_instantiation<std::pair, T>, is_instantiation<std::tuple, T>
+        is_instantiation<std::pair, typename std::decay<T>::type>,
+        is_instantiation<std::tuple, typename std::decay<T>::type>
     >;
 
 
@@ -286,14 +309,21 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_character = disjunction<
         std::is_same<typename std::decay<T>::type, char>,
-        std::is_same<typename std::decay<T>::type, signed char>,
-        std::is_same<typename std::decay<T>::type, unsigned char>,
         std::is_same<typename std::decay<T>::type, wchar_t>,
     #if defined(__cpp_char8_t)
         std::is_same<typename std::decay<T>::type, char8_t>,
     #endif
         std::is_same<typename std::decay<T>::type, char16_t>,
         std::is_same<typename std::decay<T>::type, char32_t>
+    >;
+
+
+    // -------------------------------------------------- is_xsig_char
+
+    template <typename T>
+    using is_xsig_char = disjunction<
+        std::is_same<typename std::decay<T>::type, signed char>,
+        std::is_same<typename std::decay<T>::type, unsigned char>
     >;
 
 
@@ -347,6 +377,29 @@ namespace icecream{ namespace detail
     >;
 
 
+    // -------------------------------------------------- is_variant
+
+    // Checks if T is a variant type.
+    template <typename T>
+    using is_variant = disjunction<
+        is_instantiation<boost::variant2::variant, T>
+    #if defined(ICECREAM_VARIANT_HEADER)
+        , is_instantiation<std::variant, T>
+    #endif
+    >;
+
+
+    // -------------------------------------------------- is_optional
+
+    // Checks if T is an optional type.
+    template <typename T>
+    using is_optional = disjunction<
+    #if defined(ICECREAM_OPTIONAL_HEADER)
+        is_instantiation<std::optional, T>
+    #endif
+    >;
+
+
     // -------------------------------------------------- elements_type
 
     // Returns the elements type of a collection.
@@ -367,7 +420,7 @@ namespace icecream{ namespace detail
     // Checks if T is either std::unique_ptr<typename U> instantiation (Until C++20), or a
     // boost::scoped_ptr<typename U>. Both are without an operator<<(ostream&) overload.
     template <typename T>
-    using is_not_streamable_ptr = disjunction<
+    using is_unstreamable_ptr = disjunction<
         is_instantiation<std::unique_ptr, T>, is_instantiation<boost::scoped_ptr, T>
     >;
 
@@ -403,6 +456,15 @@ namespace icecream{ namespace detail
     // declaration.
     auto show_c_string() -> bool;
 
+#if defined(ICECREAM_DUMP_STRUCT_CLANG)
+    class Tree;
+    static auto parse_struct_dump(char const* format, ...) -> int;
+    namespace
+    {
+        Tree* ds_this = nullptr;
+    }
+#endif
+
     class Tree
     {
     private:
@@ -418,7 +480,20 @@ namespace icecream{ namespace detail
                 std::string open;
                 std::string separator;
                 std::string close;
-                std::list<Tree> children;
+                std::vector<Tree> children;
+
+                Stem(
+                    std::string&& open,
+                    std::string&& separator,
+                    std::string&& close,
+                    std::vector<Tree>&& children
+                )
+                    : open {std::move(open)}
+                    , separator {std::move(separator)}
+                    , close {std::move(close)}
+                    , children {std::move(children)}
+                {}
+
             } stem;
 
             U(U&& other, bool is_leaf)
@@ -472,6 +547,34 @@ namespace icecream{ namespace detail
             return this->content_.stem;
         }
 
+        // Returns the sum of characters of the whole tree.
+        auto count_chars() const -> int
+        {
+            if (this->is_leaf_)
+            {
+                return this->content_.leaf.size();
+            }
+            else
+            {
+                // The enclosing chars.
+                auto result =
+                    this->content_.stem.open.size() + this->content_.stem.close.size();
+
+                // count the size of each child
+                for (auto const& child : this->content_.stem.children)
+                    result += child.count_chars();
+
+                // The separators.
+                if (this->content_.stem.children.size() > 1)
+                    result +=
+                        (this->content_.stem.children.size() - 1)
+                        * this->content_.stem.separator.size();
+
+                return result;
+            }
+        }
+
+
         Tree() = delete;
         Tree(Tree const&) = delete;
         Tree& operator=(Tree const&) = delete;
@@ -500,40 +603,36 @@ namespace icecream{ namespace detail
                 this->content_.stem.~Stem();
         }
 
-        // Returns the sum of characters of the whole tree.
-        auto count_chars() const -> int
+        static auto literal(std::string text) -> Tree
         {
-            if (this->is_leaf_)
-            {
-                return this->content_.leaf.size();
-            }
-            else
-            {
-                // The enclosing chars.
-                auto result =
-                    this->content_.stem.open.size() + this->content_.stem.close.size();
-
-                // count the size of each child
-                for (auto const& child : this->content_.stem.children)
-                    result += child.count_chars();
-
-                // The separators.
-                if (this->content_.stem.children.size() > 1)
-                    result +=
-                        (this->content_.stem.children.size() - 1)
-                        * this->content_.stem.separator.size();
-
-                return result;
-            }
+            return Tree{InnerTag{}, std::move(text)};
         }
+
+        Tree(
+            std::string open,
+            std::string separator,
+            std::string close,
+            std::vector<Tree>&& children
+        )
+            : Tree {
+                InnerTag{},
+                U::Stem{
+                    std::move(open),
+                    std::move(separator),
+                    std::move(close),
+                    std::move(children)
+                }
+            }
+        {}
 
         // Print any class that overloads operator<<(std::ostream&, T)
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
                 has_insertion<T>::value
                 && !is_c_string<T>::value
                 && !is_character<T>::value
+                && !is_xsig_char<T>::value
                 && !is_std_string<T>::value
                 && !std::is_array<T>::value
             >::type* = 0
@@ -548,7 +647,7 @@ namespace icecream{ namespace detail
 
         // Print C string
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
                 is_c_string<T>::value
             >::type* = 0
@@ -590,7 +689,7 @@ namespace icecream{ namespace detail
 
         // Print std::string
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
                 is_std_string<T>::value
             >::type* = 0
@@ -621,7 +720,7 @@ namespace icecream{ namespace detail
 
         // Print character
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
                 is_character<T>::value
             >::type* = 0
@@ -687,11 +786,29 @@ namespace icecream{ namespace detail
             }()}
         {}
 
+        // Print signed and unsigned char
+        template <typename T>
+        explicit Tree(T const& value,
+            typename std::enable_if<
+                is_xsig_char<T>::value
+            >::type* = 0
+        )
+            : Tree {InnerTag{}, [&]
+            {
+                using T0 = typename std::conditional<
+                    std::is_signed<T>::value, int, unsigned int
+                >::type;
+                auto buf = std::ostringstream {};
+                buf << (T0)value;
+                return buf.str();
+            }()}
+        {}
+
         // Print smart pointers without an operator<<(ostream&) overload.
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
-                is_not_streamable_ptr<T>::value
+                is_unstreamable_ptr<T>::value
                 && !has_insertion<T>::value // On C++20 unique_ptr will have a << overload.
             >::type* = 0
         )
@@ -705,7 +822,7 @@ namespace icecream{ namespace detail
 
         // Print weak pointer classes
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
                 is_weak_ptr<T>::value
             >::type* = 0
@@ -716,9 +833,9 @@ namespace icecream{ namespace detail
     #if defined(ICECREAM_OPTIONAL_HEADER)
         // Print std::optional<> classes
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
-                is_instantiation<std::optional, T>::value
+                is_optional<T>::value
                 && !has_insertion<T>::value
             >::type* = 0
         )
@@ -735,17 +852,11 @@ namespace icecream{ namespace detail
             }
         };
 
-
         // Print *::variant<Ts...> classes
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
-                (
-                    is_instantiation<boost::variant2::variant, T>::value
-                #if defined(ICECREAM_VARIANT_HEADER)
-                    || is_instantiation<std::variant, T>::value
-                #endif
-                )
+                is_variant<T>::value
                 && !has_insertion<T>::value
             >::type* = 0
         )
@@ -754,10 +865,10 @@ namespace icecream{ namespace detail
 
         // Fill this->content.stem.children with all the tuple elements
         template<typename T, std::size_t N = std::tuple_size<T>::value-1>
-        static auto tuple_traverser(T const& t) -> std::list<Tree>
+        static auto tuple_traverser(T const& t) -> std::vector<Tree>
         {
             auto result = N > 0 ?
-                tuple_traverser<T, (N > 0) ? N-1 : 0>(t) : std::list<Tree> {};
+                tuple_traverser<T, (N > 0) ? N-1 : 0>(t) : std::vector<Tree> {};
 
             result.emplace_back(std::get<N>(t));
             return result;
@@ -765,7 +876,7 @@ namespace icecream{ namespace detail
 
         // Print tuple like classes
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T&& value,
             typename std::enable_if<
                 is_tuple<T>::value
                 && !has_insertion<T>::value
@@ -776,7 +887,7 @@ namespace icecream{ namespace detail
 
         // Print all items of any iterable class
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
                 (
                     is_iterable<T>::value
@@ -793,7 +904,7 @@ namespace icecream{ namespace detail
                     using std::begin;
                     using std::end;
 
-                    auto result = std::list<Tree> {};
+                    auto result = std::vector<Tree> {};
                     for (auto const& i : value)
                         result.emplace_back(i);
                     return result;
@@ -802,7 +913,7 @@ namespace icecream{ namespace detail
 
         // Print classes deriving from only std::exception and not from boost::exception
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
                 std::is_base_of<std::exception, T>::value
                 && !std::is_base_of<boost::exception, T>::value
@@ -814,7 +925,7 @@ namespace icecream{ namespace detail
 
         // Print classes deriving from both std::exception and boost::exception
         template <typename T>
-        Tree(T const& value,
+        explicit Tree(T const& value,
             typename std::enable_if<
                 std::is_base_of<std::exception, T>::value
                 && std::is_base_of<boost::exception, T>::value
@@ -832,7 +943,555 @@ namespace icecream{ namespace detail
                 )
             }
         {}
+
+    #if defined(ICECREAM_DUMP_STRUCT_CLANG)
+        template <typename T>
+        explicit Tree(T const& value,
+            typename std::enable_if<
+                std::is_standard_layout<T>::value
+                && !is_collection<T>::value
+                && !is_tuple<T>::value
+                && !is_unstreamable_ptr<T>::value
+                && !is_weak_ptr<T>::value
+                && !is_std_string<T>::value
+                && !is_variant<T>::value
+                && !is_optional<T>::value
+                && !has_insertion<T>::value
+            >::type* = 0
+        )
+            : Tree {InnerTag{}, ""}
+        {
+            ds_this = this;
+            __builtin_dump_struct(&value, &parse_struct_dump);
+            ds_this = nullptr;
+        }
+    #endif
     };
+
+    // -------------------------------------------------- clang dump struct parsing
+
+#if defined(ICECREAM_DUMP_STRUCT_CLANG)
+
+    struct Tokens
+    {
+        struct TkArray
+        {
+            std::size_t Size = 0;
+
+            TkArray() = default;
+            TkArray(TkArray const&) = default;
+            TkArray(TkArray&&) = default;
+            TkArray& operator=(TkArray const&) = default;
+            TkArray& operator=(TkArray&&) = default;
+
+            TkArray(std::size_t size)
+                : Size {size}
+                , exist {true}
+            {}
+
+            explicit operator bool() const
+            {
+                return this->exist;
+            }
+
+        private:
+            bool exist = false;
+        };
+
+        bool Bool = false;
+        bool Int = false;
+
+        bool Int8 = false;
+        bool Int16 = false;
+        bool Int32 = false;
+        bool Int64 = false;
+        bool Int_fast8 = false;
+        bool Int_fast16 = false;
+        bool Int_fast32 = false;
+        bool Int_fast64 = false;
+        bool Int_least8 = false;
+        bool Int_least16 = false;
+        bool Int_least32 = false;
+        bool Int_least64 = false;
+        bool Intmax = false;
+        bool Intptr = false;
+
+        bool Uint8 = false;
+        bool Uint16 = false;
+        bool Uint32 = false;
+        bool Uint64 = false;
+        bool Uint_fast8 = false;
+        bool Uint_fast16 = false;
+        bool Uint_fast32 = false;
+        bool Uint_fast64 = false;
+        bool Uint_least8 = false;
+        bool Uint_least16 = false;
+        bool Uint_least32 = false;
+        bool Uint_least64 = false;
+        bool Uintmax = false;
+        bool Uintptr = false;
+
+        bool Size_t = false;
+        bool Ptrdiff = false;
+
+        bool Double = false;
+        bool Float = false;
+        bool Char = false;
+        bool Wchar = false;
+        bool Char16 = false;
+        bool Char32 = false;
+        bool Signed = false;
+        bool Unsigned = false;
+        bool Short = false;
+        int Long = 0;
+        int Star = 0;
+        bool Struct = false;
+        bool Enum = false;
+        TkArray Array {};
+        int Unknown = 0;
+        std::string Name = "";
+
+        Tokens() = default;
+        Tokens(Tokens const&) = default;
+        Tokens(Tokens&&) = default;
+        Tokens& operator=(Tokens const&) = default;
+        Tokens& operator=(Tokens&&) = default;
+
+        Tokens(std::string const& line)
+        {
+            static auto const& npos = std::string::npos;
+            auto const line_size = line.size();
+            auto left = std::string::size_type {0};
+            auto right = std::string::size_type {0};
+
+            auto lexemes = std::vector<std::string> {};
+            while (true)
+            {
+                left = line.find_first_not_of(' ', left);
+                if (left == npos) break;
+
+                if (line.at(left) == '*')
+                    right = left + 1;
+                else
+                    right = line.find_first_of(" *", left);
+                right = right < line_size ? right : line_size;
+
+                lexemes.push_back(line.substr(left, right-left));
+                left = right;
+            }
+
+            this->Name = lexemes.back();
+            lexemes.pop_back();
+            for (auto const& t : lexemes)
+            {
+                if (t == "_Bool") this->Bool = true;
+                else if (t == "int") this->Int = true;
+
+                else if ((t == "std::int8_t") || (t == "int8_t")) this->Int8 = true;
+                else if ((t == "std::int8_t") || (t == "int8_t")) this->Int8 = true;
+                else if ((t == "std::int16_t") || (t == "int16_t")) this->Int16 = true;
+                else if ((t == "std::int16_t") || (t == "int16_t")) this->Int16 = true;
+                else if ((t == "std::int32_t") || (t == "int32_t")) this->Int32 = true;
+                else if ((t == "std::int32_t") || (t == "int32_t")) this->Int32 = true;
+                else if ((t == "std::int64_t") || (t == "int64_t")) this->Int64 = true;
+                else if ((t == "std::int64_t") || (t == "int64_t")) this->Int64 = true;
+                else if ((t == "std::int_fast8_t") || (t == "int_fast8_t")) this->Int_fast8 = true;
+                else if ((t == "std::int_fast8_t") || (t == "int_fast8_t")) this->Int_fast8 = true;
+                else if ((t == "std::int_fast16_t") || (t == "int_fast16_t")) this->Int_fast16 = true;
+                else if ((t == "std::int_fast16_t") || (t == "int_fast16_t")) this->Int_fast16 = true;
+                else if ((t == "std::int_fast32_t") || (t == "int_fast32_t")) this->Int_fast32 = true;
+                else if ((t == "std::int_fast32_t") || (t == "int_fast32_t")) this->Int_fast32 = true;
+                else if ((t == "std::int_fast64_t") || (t == "int_fast64_t")) this->Int_fast64 = true;
+                else if ((t == "std::int_fast64_t") || (t == "int_fast64_t")) this->Int_fast64 = true;
+                else if ((t == "std::int_least8_t") || (t == "int_least8_t")) this->Int_least8 = true;
+                else if ((t == "std::int_least8_t") || (t == "int_least8_t")) this->Int_least8 = true;
+                else if ((t == "std::int_least16_t") || (t == "int_least16_t")) this->Int_least16 = true;
+                else if ((t == "std::int_least16_t") || (t == "int_least16_t")) this->Int_least16 = true;
+                else if ((t == "std::int_least32_t") || (t == "int_least32_t")) this->Int_least32 = true;
+                else if ((t == "std::int_least32_t") || (t == "int_least32_t")) this->Int_least32 = true;
+                else if ((t == "std::int_least64_t") || (t == "int_least64_t")) this->Int_least64 = true;
+                else if ((t == "std::int_least64_t") || (t == "int_least64_t")) this->Int_least64 = true;
+                else if ((t == "std::intmax_t") || (t == "intmax_t")) this->Intmax = true;
+                else if ((t == "std::intptr_t") || (t == "intptr_t")) this->Intptr = true;
+
+                else if ((t == "std::uint8_t") || (t == "uint8_t")) this->Uint8 = true;
+                else if ((t == "std::uint8_t") || (t == "uint8_t")) this->Uint8 = true;
+                else if ((t == "std::uint16_t") || (t == "uint16_t")) this->Uint16 = true;
+                else if ((t == "std::uint16_t") || (t == "uint16_t")) this->Uint16 = true;
+                else if ((t == "std::uint32_t") || (t == "uint32_t")) this->Uint32 = true;
+                else if ((t == "std::uint32_t") || (t == "uint32_t")) this->Uint32 = true;
+                else if ((t == "std::uint64_t") || (t == "uint64_t")) this->Uint64 = true;
+                else if ((t == "std::uint64_t") || (t == "uint64_t")) this->Uint64 = true;
+                else if ((t == "std::uint_fast8_t") || (t == "uint_fast8_t")) this->Uint_fast8 = true;
+                else if ((t == "std::uint_fast8_t") || (t == "uint_fast8_t")) this->Uint_fast8 = true;
+                else if ((t == "std::uint_fast16_t") || (t == "uint_fast16_t")) this->Uint_fast16 = true;
+                else if ((t == "std::uint_fast16_t") || (t == "uint_fast16_t")) this->Uint_fast16 = true;
+                else if ((t == "std::uint_fast32_t") || (t == "uint_fast32_t")) this->Uint_fast32 = true;
+                else if ((t == "std::uint_fast32_t") || (t == "uint_fast32_t")) this->Uint_fast32 = true;
+                else if ((t == "std::uint_fast64_t") || (t == "uint_fast64_t")) this->Uint_fast64 = true;
+                else if ((t == "std::uint_fast64_t") || (t == "uint_fast64_t")) this->Uint_fast64 = true;
+                else if ((t == "std::uint_least8_t") || (t == "uint_least8_t")) this->Uint_least8 = true;
+                else if ((t == "std::uint_least8_t") || (t == "uint_least8_t")) this->Uint_least8 = true;
+                else if ((t == "std::uint_least16_t") || (t == "uint_least16_t")) this->Uint_least16 = true;
+                else if ((t == "std::uint_least16_t") || (t == "uint_least16_t")) this->Uint_least16 = true;
+                else if ((t == "std::uint_least32_t") || (t == "uint_least32_t")) this->Uint_least32 = true;
+                else if ((t == "std::uint_least32_t") || (t == "uint_least32_t")) this->Uint_least32 = true;
+                else if ((t == "std::uint_least64_t") || (t == "uint_least64_t")) this->Uint_least64 = true;
+                else if ((t == "std::uint_least64_t") || (t == "uint_least64_t")) this->Uint_least64 = true;
+                else if ((t == "std::uintmax_t") || (t == "uintmax_t")) this->Uintmax = true;
+                else if ((t == "std::uintptr_t") || (t == "uintptr_t")) this->Uintptr = true;
+
+                else if ((t == "std::size_t") || (t == "size_t")) this->Size_t = true;
+                else if ((t == "std::ptrdiff_t") || (t == "ptrdiff_t")) this->Ptrdiff = true;
+
+                else if (t == "double") this->Double = true;
+                else if (t == "float") this->Float = true;
+                else if (t == "char") this->Char = true;
+                else if (t == "wchar_t") this->Wchar = true;
+                else if (t == "char16_t") this->Char16 = true;
+                else if (t == "char32_t") this->Char32 = true;
+                else if (t == "signed") this->Signed = true;
+                else if (t == "unsigned") this->Unsigned = true;
+                else if (t == "long") this->Long++;
+                else if (t == "short") this->Short = true;
+                else if (t == "struct") this->Struct = true;
+                else if (t == "enum") this->Enum = true;
+                else if (t == "*") this->Star++;
+                else if (t.front() == '[') this->Array = std::stoul(t.substr(1));
+                else this->Unknown++;
+            }
+        }
+    };
+
+    // 1 - If T is a pointer result will be T.
+    // 2.0 - If T is a [signed|unsigned] integral narrower then [signed|unsigned] int,
+    //       then result will be [signed|unsigned] int. Otherwise result will be T.
+    // 2.1 - if T is either double or long double, result will be T.
+    template <typename T>
+    using promoted_type = typename std::common_type<
+        T,
+        typename std::conditional<
+            std::is_pointer<T>::value,
+            T,
+            typename std::conditional<
+                std::is_signed<T>::value, int, unsigned int
+            >::type
+        >::type
+    >::type;
+
+    template <typename T>
+    using transition_type = typename std::conditional<
+        is_one_of<T, wchar_t, char16_t, char32_t>::value,
+        std::ptrdiff_t,
+        T
+    >::type;
+
+    template <typename T>
+    static auto va_list_to_tree(va_list& args, std::size_t size) -> Tree
+    {
+        using T0 = promoted_type<T>;
+
+        auto result = std::vector<T> {};
+        for (std::size_t i = 0; i < size; ++i)
+        {
+            result.push_back(va_arg(args, T0));
+        }
+
+        return Tree{result};
+    }
+
+    template <>
+    auto va_list_to_tree<bool>(va_list& args, std::size_t size) -> Tree
+    {
+        auto result = std::vector<bool> {};
+        for (std::size_t i = 0; i < size; ++i)
+        {
+            auto v = va_arg(args, int) & 0x01;
+            result.push_back((bool)v);
+        }
+        return Tree{result};
+    }
+
+    template <>
+    auto va_list_to_tree<float>(va_list& args, std::size_t size) -> Tree
+    {
+        auto result = std::vector<float> {};
+        for (std::size_t i = 0; i < size;)
+        {
+            // See https://bugs.llvm.org/show_bug.cgi?id=45143
+            // Hackish empirical workaround, found by inspecting the bit patterns in
+            // memory. It works on the tested machines, but can or can not work on other
+            // architectures or future Clang releases. Please report any problem.
+            double d = va_arg(args, double);
+            result.push_back(*(float*)&d);
+            ++i;
+
+            if ((sizeof(void*)*CHAR_BIT == 32) && i < size)
+            {
+                result.push_back(*((float*)&d + 1));
+                ++i;
+            }
+        }
+        return Tree{result};
+    }
+
+    template <typename T>
+    static auto va_list_to_tree(va_list& args) -> Tree
+    {
+        using T0 = typename std::conditional<
+            is_one_of<T, wchar_t, char16_t, char32_t>::value,
+            void*,
+            promoted_type<T>
+        >::type;
+        using T1 = transition_type<T>;
+        return Tree{(T)(T1)va_arg(args, T0)};
+    }
+
+    template <>
+    auto va_list_to_tree<bool>(va_list& args) -> Tree
+    {
+        auto i = va_arg(args, int) & 0x01;
+        return Tree{(bool)i};
+    }
+
+    template <>
+    auto va_list_to_tree<float>(va_list& args) -> Tree
+    {
+        // See https://bugs.llvm.org/show_bug.cgi?id=45143
+        // Hackish empirical workaround, found by inspecting the bit patterns in
+        // memory. It works on the tested machines, but can or can not work on other
+        // architectures or future Clang releases. Please report any problem.
+        auto d = va_arg(args, double);
+        return Tree{*((float*)&d)};
+    }
+
+    static auto parse_array_dump(va_list& args, Tokens const& tokens) -> Tree
+    {
+    #define ICECREAM_CND(condition, type) \
+        (condition) return va_list_to_tree<type>(args, tokens.Array.Size)
+
+        auto const& t = tokens;
+
+        if ICECREAM_CND(t.Star, void*);
+        else if ICECREAM_CND(t.Bool, bool);
+
+        else if ICECREAM_CND(t.Short && !t.Unsigned, short int);
+        else if ICECREAM_CND(t.Short && t.Unsigned, unsigned short int);
+        else if ICECREAM_CND(t.Int && !t.Unsigned && !t.Long, int);
+        else if ICECREAM_CND(t.Signed && !t.Char && !t.Long, int);
+        else if ICECREAM_CND(t.Unsigned && !t.Char && !t.Long, unsigned int);
+        else if ICECREAM_CND((t.Long==1) && !t.Unsigned && !t.Double && !t.Float, long int);
+        else if ICECREAM_CND((t.Long==1) && t.Unsigned, unsigned long int);
+        else if ICECREAM_CND((t.Long==2) && !t.Unsigned, long long int);
+        else if ICECREAM_CND((t.Long==2) && t.Unsigned, unsigned long long int);
+        else if ICECREAM_CND(t.Char && !t.Unsigned && !t.Signed, char);
+        else if ICECREAM_CND(t.Char && t.Signed, signed char);
+        else if ICECREAM_CND(t.Char && t.Unsigned, unsigned char);
+
+        else if ICECREAM_CND(t.Wchar, wchar_t);
+        else if ICECREAM_CND(t.Char16, char16_t);
+        else if ICECREAM_CND(t.Char32, char32_t);
+
+        else if ICECREAM_CND(t.Float, float);
+        else if ICECREAM_CND(t.Double && !t.Long, double);
+        else if ICECREAM_CND(t.Double && t.Long, long double);
+
+    #if defined(INT8_MAX)
+        else if ICECREAM_CND(t.Int8, std::int8_t);
+    #endif
+    #if defined(INT16_MAX)
+        else if ICECREAM_CND(t.Int16, std::int16_t);
+    #endif
+    #if defined(INT32_MAX)
+        else if ICECREAM_CND(t.Int32, std::int32_t);
+    #endif
+    #if defined(INT64_MAX)
+        else if ICECREAM_CND(t.Int64, std::int64_t);
+    #endif
+        else if ICECREAM_CND(t.Int_fast8, std::int_fast8_t);
+        else if ICECREAM_CND(t.Int_fast16, std::int_fast16_t);
+        else if ICECREAM_CND(t.Int_fast32, std::int_fast32_t);
+        else if ICECREAM_CND(t.Int_fast64, std::int_fast64_t);
+        else if ICECREAM_CND(t.Int_least8, std::int_least8_t);
+        else if ICECREAM_CND(t.Int_least16, std::int_least16_t);
+        else if ICECREAM_CND(t.Int_least32, std::int_least32_t);
+        else if ICECREAM_CND(t.Int_least64, std::int_least64_t);
+        else if ICECREAM_CND(t.Intmax, std::intmax_t);
+    #if defined(INTPTR_MAX)
+        else if ICECREAM_CND(t.Intptr, std::intptr_t);
+    #endif
+
+    #if defined(UINT8_MAX)
+        else if ICECREAM_CND(t.Uint8, std::uint8_t);
+    #endif
+    #if defined(UINT16_MAX)
+        else if ICECREAM_CND(t.Uint16, std::uint16_t);
+    #endif
+    #if defined(UINT32_MAX)
+        else if ICECREAM_CND(t.Uint32, std::uint32_t);
+    #endif
+    #if defined(UINT64_MAX)
+        else if ICECREAM_CND(t.Uint64, std::uint64_t);
+    #endif
+        else if ICECREAM_CND(t.Uint_fast8, std::uint_fast8_t);
+        else if ICECREAM_CND(t.Uint_fast16, std::uint_fast16_t);
+        else if ICECREAM_CND(t.Uint_fast32, std::uint_fast32_t);
+        else if ICECREAM_CND(t.Uint_fast64, std::uint_fast64_t);
+        else if ICECREAM_CND(t.Uint_least8, std::uint_least8_t);
+        else if ICECREAM_CND(t.Uint_least16, std::uint_least16_t);
+        else if ICECREAM_CND(t.Uint_least32, std::uint_least32_t);
+        else if ICECREAM_CND(t.Uint_least64, std::uint_least64_t);
+        else if ICECREAM_CND(t.Uintmax, std::uintmax_t);
+    #if defined(UINTPTR_MAX)
+        else if ICECREAM_CND(t.Uintptr, std::uintptr_t);
+    #endif
+
+        else if ICECREAM_CND(t.Size_t, std::size_t);
+        else if ICECREAM_CND(t.Ptrdiff, std::ptrdiff_t);
+
+        else if (t.Enum) return Tree::literal("<array of enums, see issue #7>");
+        else if (t.Struct) return Tree::literal("<array of structs, see issue #7>");
+        else return Tree::literal("<type aliased array, see issue #7>");
+    #undef ICECREAM_CND
+    }
+
+    static auto parse_attribute_dump(
+        va_list& args, std::string const& spec, Tokens const& tokens
+    ) -> Tree
+    {
+    #define ICECREAM_CND(spec_str, type) \
+        (spec == spec_str) return va_list_to_tree<type>(args)
+    #define ICECREAM_MSG(spec_str, message) \
+        (spec == spec_str) return Tree::literal(message)
+
+        if ICECREAM_CND("%c", char);
+        else if ICECREAM_CND("%s", char*);
+        else if ICECREAM_CND("%hhd", signed char);
+        else if ICECREAM_CND("%hhi", signed char);
+        else if ICECREAM_CND("%hd", short int);
+        else if ICECREAM_CND("%hi", short int);
+        else if ICECREAM_CND("%d" && tokens.Bool, bool);
+        else if ICECREAM_CND("%i" && tokens.Bool, bool);
+        else if ICECREAM_CND("%d" && !tokens.Bool, int);
+        else if ICECREAM_CND("%i" && !tokens.Bool, int);
+        else if ICECREAM_CND("%ld", long int);
+        else if ICECREAM_CND("%li", long int);
+        else if ICECREAM_CND("%lld", long long int);
+        else if ICECREAM_CND("%lli", long long int);
+        else if ICECREAM_CND("%jd", std::intmax_t);
+        else if ICECREAM_CND("%ji", std::intmax_t);
+        else if ICECREAM_MSG("%zd", "<unimplemented %zd specifiers>");
+        else if ICECREAM_MSG("%zi", "<unimplemented %zi specifiers>");
+        else if ICECREAM_CND("%td", std::ptrdiff_t);
+        else if ICECREAM_CND("%ti", std::ptrdiff_t);
+        else if ICECREAM_CND("%hhu", unsigned char);
+        else if ICECREAM_CND("%hu", unsigned short int);
+        else if ICECREAM_CND("%u", unsigned int);
+        else if ICECREAM_CND("%lu", unsigned long int);
+        else if ICECREAM_CND("%llu", unsigned long long int);
+        else if ICECREAM_CND("%ju", std::uintmax_t);
+        else if ICECREAM_CND("%zu", std::size_t);
+        else if ICECREAM_MSG("%tu", "<unimplemented %tu specifiers>");
+        else if ICECREAM_CND("%f" && tokens.Float, float);
+        else if ICECREAM_CND("%f" && tokens.Double, double);
+        else if (spec == "%f" && !(tokens.Float || tokens.Double))
+        {
+            auto t = va_list_to_tree<double>(args);
+            return Tree::literal(t.leaf() + " <NOT RELIABLE, see issue #6>");
+        }
+        else if ICECREAM_CND("%lf", double);
+        else if ICECREAM_CND("%Lf", long double);
+
+        // Clang delivers arrays and wide characters with a %p specifier. This implemented
+        // heuristic solution works with canonical names only, aliased names will be
+        // interpreted as pointers yet.
+        else if (spec == "%p" && tokens.Array) return parse_array_dump(args, tokens);
+        else if ICECREAM_CND("%p" && (tokens.Wchar && !tokens.Star), wchar_t);
+        else if ICECREAM_CND("%p" && (tokens.Wchar && tokens.Star == 1), wchar_t*);
+        else if ICECREAM_CND("%p" && (tokens.Char16 && !tokens.Star), char16_t);
+        else if ICECREAM_CND("%p" && (tokens.Char16 && tokens.Star == 1), char16_t*);
+        else if ICECREAM_CND("%p" && (tokens.Char32 && !tokens.Star), char32_t);
+        else if ICECREAM_CND("%p" && (tokens.Char32 && tokens.Star == 1), char32_t*);
+        else if ICECREAM_MSG("%p" && tokens.Enum, "<enum member, see issue #7>");
+        else if ICECREAM_CND("%p", void*);
+
+        else ICECREAM_ASSERT(false, "Invalid va_arg code");
+
+    #undef ICECREAM_CND
+    #undef ICECREAM_MSG
+    }
+
+    static auto parse_struct_dump(char const* format, ...) -> int
+    {
+        auto trim = [](std::string const& str) -> std::string
+        {
+            auto left = str.find_first_not_of(" \t\n");
+            if (left == std::string::npos)
+                return "";
+
+            auto right = str.find_last_not_of(" \t\n");
+            return str.substr(left, right-left+1);
+        };
+
+        va_list args;
+        va_start(args, format);
+
+        // Stack with trees being constructed. Each level is a set with the children of
+        // trees under construction. The top level is the set of the tree currently being
+        // constructed. Once it is closed, i.e. the token '}' is read, a new Tree object
+        // will be built with all top elements as children and added to the level below.
+        // The elements at index 0 are the elements of `ds_this` tree.
+        static auto tree_stack = std::vector<std::vector<Tree>> {};
+
+        static auto name_stack = std::vector<Tree> {};
+        static auto tokens = Tokens {};
+
+        auto line = trim(format);
+
+        if(line.back() == '{') // "struct <type> {" the opening of a new struct
+        {
+            tree_stack.push_back(std::vector<Tree>{});
+        }
+
+        // "<qualifiers>* <type> <array>? <name> :" type and name of an attribute
+        else if(line.back() == ':')
+        {
+            line.pop_back(); // Remove the trailing ':'
+            tokens = Tokens{line};
+            name_stack.push_back(Tree::literal(tokens.Name));
+        }
+        else if (line.front() == '%') // an attribute value
+        {
+            auto t_pair = std::vector<Tree> {};
+            t_pair.push_back(std::move(name_stack.back()));
+            t_pair.push_back(parse_attribute_dump(args, line, tokens));
+
+            tree_stack.back().emplace_back("", ": ", "", std::move(t_pair));
+            name_stack.pop_back();
+        }
+        else if (line == "}")  // The closing of an struct
+        {
+            auto children = std::move(tree_stack.back());
+            tree_stack.pop_back();
+
+            if (tree_stack.empty())
+                *ds_this = Tree {"{", ", ", "}", std::move(children)};
+            else
+            {
+                auto t_pair = std::vector<Tree> {};
+                t_pair.push_back(std::move(name_stack.back()));
+                t_pair.emplace_back("{", ", ", "}", std::move(children));
+
+                tree_stack.back().emplace_back("", ": ", "", std::move(t_pair));
+                name_stack.pop_back();
+            }
+        }
+
+        va_end(args);
+        return 0;
+    }
+
+#endif // ICECREAM_DUMP_STRUCT_CLANG
 
 
     // -------------------------------------------------- is_tree_argument
@@ -1324,7 +1983,7 @@ namespace icecream{ namespace detail
         ) -> std::vector<std::tuple<std::string, Tree>>
         {
             auto tree = std::make_tuple(
-                *arg_name, Tree {std::forward<T>(arg_value)}
+                *arg_name, Tree{std::forward<T>(arg_value)}
             );
 
             auto forest = Icecream::build_forest(
@@ -1569,6 +2228,7 @@ namespace icecream{ namespace detail
     };
 
 }} // namespace icecream::detail
+
 
 
 #endif // ICECREAM_HPP_INCLUDED
