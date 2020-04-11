@@ -24,11 +24,13 @@
 #ifndef ICECREAM_HPP_INCLUDED
 #define ICECREAM_HPP_INCLUDED
 
+#include <cassert>
 #include <codecvt>
 #include <exception>
 #include <functional>
 #include <iostream>
 #include <iterator>
+#include <list>
 #include <locale>
 #include <memory>
 #include <mutex>
@@ -75,6 +77,9 @@
     #define IC(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
 #endif
+
+
+#define ICECREAM_ASSERT(exp, msg) assert(((void)msg, exp))
 
 
 namespace boost
@@ -398,91 +403,125 @@ namespace icecream{ namespace detail
     // declaration.
     auto show_c_string() -> bool;
 
-    struct Tree
+    class Tree
     {
-        bool is_leaf;
+    private:
+
+        bool is_leaf_;
 
         union U
         {
             std::string leaf;
+
             struct Stem
             {
-                char open;
-                char close;
-                std::vector<Tree> children;
+                std::string open;
+                std::string separator;
+                std::string close;
+                std::list<Tree> children;
             } stem;
 
-            U(bool is_leaf)
+            U(U&& other, bool is_leaf)
             {
                 if (is_leaf)
-                    new (&leaf) std::string;
+                    new (&leaf) std::string{std::move(other.leaf)};
                 else
-                    new (&stem) Stem;
+                    new (&stem) Stem{std::move(other.stem)};
             }
+
+            U(std::string&& leaf)
+                : leaf {std::move(leaf)}
+            {}
+
+            U(Stem&& stem)
+                : stem {std::move(stem)}
+            {}
 
             ~U() {}
 
-        } content;
+        } content_;
 
+        struct InnerTag {};
+
+        Tree(InnerTag, std::string leaf)
+            : is_leaf_ {true}
+            , content_ {std::move(leaf)}
+        {}
+
+        Tree(InnerTag, U::Stem&& stem)
+            : is_leaf_ {false}
+            , content_ {std::move(stem)}
+        {}
+
+    public:
+
+        auto is_leaf() const -> bool
+        {
+            return this->is_leaf_;
+        }
+
+        auto leaf() const -> std::string const&
+        {
+            ICECREAM_ASSERT(this->is_leaf_, "Expecting a leaf tree.");
+            return this->content_.leaf;
+        }
+
+        auto stem() const -> U::Stem const&
+        {
+            ICECREAM_ASSERT(!this->is_leaf_, "Expecting a stem tree.");
+            return this->content_.stem;
+        }
 
         Tree() = delete;
         Tree(Tree const&) = delete;
         Tree& operator=(Tree const&) = delete;
 
         Tree(Tree&& other)
-            : is_leaf {other.is_leaf}
-            , content {other.is_leaf}
-        {
-            if (this->is_leaf)
-                this->content.leaf = std::move(other.content.leaf);
-            else
-                this->content.stem = std::move(other.content.stem);
-        }
+            : is_leaf_ {other.is_leaf_}
+            , content_ {std::move(other.content_), other.is_leaf_}
+        {}
 
         Tree& operator=(Tree&& other)
         {
-            if (this->is_leaf != other.is_leaf)
+            if (this != &other)
             {
                 this->~Tree();
-                this->is_leaf = other.is_leaf;
-                new (&this->content) U {this->is_leaf};
+                new (this) Tree{std::move(other)};
             }
-
-            if (this->is_leaf)
-                this->content.leaf = std::move(other.content.leaf);
-            else
-                this->content.stem = std::move(other.content.stem);
 
             return *this;
         }
 
         ~Tree()
         {
-            if (this->is_leaf)
-                this->content.leaf.~basic_string();
+            if (this->is_leaf_)
+                this->content_.leaf.~basic_string();
             else
-                this->content.stem.~Stem();
+                this->content_.stem.~Stem();
         }
 
         // Returns the sum of characters of the whole tree.
         auto count_chars() const -> int
         {
-            if (this->is_leaf)
+            if (this->is_leaf_)
             {
-                return this->content.leaf.size();
+                return this->content_.leaf.size();
             }
             else
             {
                 // The enclosing chars.
-                auto result = 2;
+                auto result =
+                    this->content_.stem.open.size() + this->content_.stem.close.size();
 
                 // count the size of each child
-                for (auto const& child : this->content.stem.children)
+                for (auto const& child : this->content_.stem.children)
                     result += child.count_chars();
 
-                // The ", " separators.
-                if (this->content.stem.children.size() > 1)
-                    result += (this->content.stem.children.size() - 1) * 2;
+                // The separators.
+                if (this->content_.stem.children.size() > 1)
+                    result +=
+                        (this->content_.stem.children.size() - 1)
+                        * this->content_.stem.separator.size();
 
                 return result;
             }
@@ -499,13 +538,13 @@ namespace icecream{ namespace detail
                 && !std::is_array<T>::value
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            auto buf = std::ostringstream {};
-            buf << value;
-            this->content.leaf = buf.str();
-        }
+            : Tree {InnerTag{}, [&]
+            {
+                auto buf = std::ostringstream {};
+                buf << value;
+                return buf.str();
+            }()}
+        {}
 
         // Print C string
         template <typename T>
@@ -514,40 +553,40 @@ namespace icecream{ namespace detail
                 is_c_string<T>::value
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            using DT = typename std::decay<
-                typename std::remove_pointer<
-                    typename std::decay<T>::type
-                >::type
-            >::type;
-
-            using FF = typename FIX<DT>::type;
-            std::wstring_convert<
-                deletable_facet<std::codecvt<FF, char, std::mbstate_t>>,
-                FF
-            > cv {};
-
-            auto buf = std::ostringstream {};
-
-            if (show_c_string())
+            : Tree {InnerTag{}, [&]
             {
-        #if defined(_MSC_VER) && _MSC_VER <= 1916
-                FF const* e = (FF const*)value;
-                while (*e != 0) ++e;
-                buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
-        #elif defined(__APPLE__)
-                buf << '"' << value << '"';
-        #else
-                buf << '"' << cv.to_bytes(value) << '"';
-        #endif
-            }
-            else
-                buf << reinterpret_cast<void const*>(value);
+                using DT = typename std::decay<
+                    typename std::remove_pointer<
+                        typename std::decay<T>::type
+                    >::type
+                >::type;
 
-            this->content.leaf = buf.str();
-        }
+                using FF = typename FIX<DT>::type;
+                std::wstring_convert<
+                    deletable_facet<std::codecvt<FF, char, std::mbstate_t>>,
+                    FF
+                > cv {};
+
+                auto buf = std::ostringstream {};
+
+                if (show_c_string())
+                {
+            #if defined(_MSC_VER) && _MSC_VER <= 1916
+                    FF const* e = (FF const*)value;
+                    while (*e != 0) ++e;
+                    buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
+            #elif defined(__APPLE__)
+                    buf << '"' << value << '"';
+            #else
+                    buf << '"' << cv.to_bytes(value) << '"';
+            #endif
+                }
+                else
+                    buf << reinterpret_cast<void const*>(value);
+
+                return buf.str();
+            }()}
+        {}
 
         // Print std::string
         template <typename T>
@@ -556,28 +595,29 @@ namespace icecream{ namespace detail
                 is_std_string<T>::value
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            using FF = typename FIX<typename T::value_type>::type;
-            std::wstring_convert<
-                deletable_facet<std::codecvt<FF, char, std::mbstate_t>>,
-                FF
-            > cv {};
+            : Tree {InnerTag{}, [&]
+            {
+                using FF = typename FIX<typename T::value_type>::type;
+                std::wstring_convert<
+                    deletable_facet<std::codecvt<FF, char, std::mbstate_t>>,
+                    FF
+                > cv {};
 
-            auto buf = std::ostringstream {};
-        #if defined(_MSC_VER) && _MSC_VER <= 1916
-            FF const* b = (FF const*)value.data();
-            FF const* e = (FF const*)value.data();
-            while (*e != 0) ++e;
-            buf << '"' << cv.to_bytes(b, e) << '"';
-        #elif defined(__APPLE__)
-            buf << '"' << value << '"';
-        #else
-            buf << '"' << cv.to_bytes(value.data()) << '"';
-        #endif
-            this->content.leaf = buf.str();
-        }
+                auto buf = std::ostringstream {};
+            #if defined(_MSC_VER) && _MSC_VER <= 1916
+                FF const* b = (FF const*)value.data();
+                FF const* e = (FF const*)value.data();
+                while (*e != 0) ++e;
+                buf << '"' << cv.to_bytes(b, e) << '"';
+            #elif defined(__APPLE__)
+                buf << '"' << value << '"';
+            #else
+                buf << '"' << cv.to_bytes(value.data()) << '"';
+            #endif
+
+                return buf.str();
+            }()}
+        {}
 
         // Print character
         template <typename T>
@@ -586,65 +626,66 @@ namespace icecream{ namespace detail
                 is_character<T>::value
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            using FF = typename FIX<typename std::decay<T>::type>::type;
-            std::wstring_convert<
-                deletable_facet<
-                    std::codecvt<FF, char, std::mbstate_t>
-                >,
-                FF
-            > cv {};
-
-            auto str = std::string {};
-            switch (value)
+            : Tree {InnerTag{}, [&]
             {
-            case T{'\0'}:
-                str = "\\0";
-                break;
+                using FF = typename FIX<typename std::decay<T>::type>::type;
+                std::wstring_convert<
+                    deletable_facet<
+                        std::codecvt<FF, char, std::mbstate_t>
+                    >,
+                    FF
+                > cv {};
 
-            case T{'\a'}:
-                str = "\\a";
-                break;
+                auto str = std::string {};
+                switch (value)
+                {
+                case T{'\0'}:
+                    str = "\\0";
+                    break;
 
-            case T{'\b'}:
-                str = "\\b";
-                break;
+                case T{'\a'}:
+                    str = "\\a";
+                    break;
 
-            case T{'\f'}:
-                str = "\\f";
-                break;
+                case T{'\b'}:
+                    str = "\\b";
+                    break;
 
-            case T{'\n'}:
-                str = "\\n";
-                break;
+                case T{'\f'}:
+                    str = "\\f";
+                    break;
 
-            case T{'\r'}:
-                str = "\\r";
-                break;
+                case T{'\n'}:
+                    str = "\\n";
+                    break;
 
-            case T{'\t'}:
-                str = "\\t";
-                break;
+                case T{'\r'}:
+                    str = "\\r";
+                    break;
 
-            case T{'\v'}:
-                str = "\\v";
-                break;
+                case T{'\t'}:
+                    str = "\\t";
+                    break;
 
-            default:
-            #if defined(__APPLE__)
-                str = value;
-            #else
-                str = cv.to_bytes(value);
-            #endif
-                break;
-            }
+                case T{'\v'}:
+                    str = "\\v";
+                    break;
 
-            auto buf = std::ostringstream {};
-            buf << '\'' << str << '\'';
-            this->content.leaf = buf.str();
-        }
+                default:
+                #if defined(__APPLE__)
+                    str = value;
+                #else
+                    str = cv.to_bytes(value);
+                #endif
+                    break;
+                }
+
+                auto buf = std::ostringstream {};
+                buf << '\'' << str << '\'';
+
+                return buf.str();
+            }()}
+        {}
 
         // Print smart pointers without an operator<<(ostream&) overload.
         template <typename T>
@@ -654,13 +695,13 @@ namespace icecream{ namespace detail
                 && !has_insertion<T>::value // On C++20 unique_ptr will have a << overload.
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            auto buf = std::ostringstream {};
-            buf << reinterpret_cast<void const*>(value.get());
-            this->content.leaf = buf.str();
-        }
+            : Tree {InnerTag{}, [&]
+            {
+                auto buf = std::ostringstream {};
+                buf << reinterpret_cast<void const*>(value.get());
+                return buf.str();
+            }()}
+        {}
 
         // Print weak pointer classes
         template <typename T>
@@ -669,14 +710,8 @@ namespace icecream{ namespace detail
                 is_weak_ptr<T>::value
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            if (value.expired())
-                this->content.leaf = "expired";
-            else
-                *this = Tree {value.lock()};
-        }
+            : Tree {value.expired() ? Tree{InnerTag{}, "expired"} : Tree {value.lock()}}
+        {}
 
     #if defined(ICECREAM_OPTIONAL_HEADER)
         // Print std::optional<> classes
@@ -687,14 +722,8 @@ namespace icecream{ namespace detail
                 && !has_insertion<T>::value
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            if (value.has_value())
-                *this = Tree {*value};
-            else
-                this->content.leaf = "nullopt";
-        }
+            : Tree {value.has_value() ? Tree{*value} : Tree{InnerTag{}, "nullopt"}}
+        {}
     #endif
 
         struct Visitor
@@ -720,19 +749,18 @@ namespace icecream{ namespace detail
                 && !has_insertion<T>::value
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            *this = visit(Tree::Visitor{}, value);
-        }
+            : Tree {visit(Tree::Visitor{}, value)}
+        {}
 
         // Fill this->content.stem.children with all the tuple elements
         template<typename T, std::size_t N = std::tuple_size<T>::value-1>
-        auto tuple_traverser(T const& t) -> void
+        static auto tuple_traverser(T const& t) -> std::list<Tree>
         {
-            if (N > 0)
-                tuple_traverser<T, (N > 0) ? N-1 : 0>(t);
-            this->content.stem.children.emplace_back(std::get<N>(t));
+            auto result = N > 0 ?
+                tuple_traverser<T, (N > 0) ? N-1 : 0>(t) : std::list<Tree> {};
+
+            result.emplace_back(std::get<N>(t));
+            return result;
         }
 
         // Print tuple like classes
@@ -743,13 +771,8 @@ namespace icecream{ namespace detail
                 && !has_insertion<T>::value
             >::type* = 0
         )
-            : is_leaf {false}
-            , content {false}
-        {
-            this->content.stem.open = '(';
-            this->content.stem.close = ')';
-            this->tuple_traverser(value);
-        }
+            : Tree {InnerTag{}, U::Stem{"(", ", ", ")", Tree::tuple_traverser(value)}}
+        {}
 
         // Print all items of any iterable class
         template <typename T>
@@ -763,20 +786,19 @@ namespace icecream{ namespace detail
                 || std::is_array<T>::value
             >::type* = 0
         )
-            : is_leaf {false}
-            , content {false}
-        {
-            using std::begin;
-            using std::end;
+            : Tree {
+                InnerTag{},
+                U::Stem{"[", ", ", "]", [&]
+                {
+                    using std::begin;
+                    using std::end;
 
-            this->content.stem.open = '[';
-            this->content.stem.close = ']';
-
-            auto it = begin(value);
-            auto const e_it = end(value);
-            for (; it != e_it; ++it)
-                this->content.stem.children.emplace_back(*it);
-        }
+                    auto result = std::list<Tree> {};
+                    for (auto const& i : value)
+                        result.emplace_back(i);
+                    return result;
+                }()}}
+        {}
 
         // Print classes deriving from only std::exception and not from boost::exception
         template <typename T>
@@ -787,11 +809,8 @@ namespace icecream{ namespace detail
                 && !has_insertion<T>::value
              >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            this->content.leaf = value.what();
-        }
+            : Tree {InnerTag{}, value.what()}
+        {}
 
         // Print classes deriving from both std::exception and boost::exception
         template <typename T>
@@ -802,16 +821,17 @@ namespace icecream{ namespace detail
                 && !has_insertion<T>::value
             >::type* = 0
         )
-            : is_leaf {true}
-            , content {true}
-        {
-            this->content.leaf =
-                value.what()
-                + std::string {"\n"}
-                + boost::exception_detail::diagnostic_information_impl(
-                      &value, &value, true, true
-                );
-        }
+            : Tree {
+                InnerTag{},
+                (
+                    value.what()
+                    + std::string {"\n"}
+                    + boost::exception_detail::diagnostic_information_impl(
+                          &value, &value, true, true
+                    )
+                )
+            }
+        {}
     };
 
 
@@ -1139,21 +1159,20 @@ namespace icecream{ namespace detail
                     << std::string(indent * Icecream::INDENT_BASE, ' ');
             };
 
-            if (node.is_leaf)
+            if (node.is_leaf())
             {
-                this->stream_ << node.content.leaf;
+                this->stream_ << node.leaf();
             }
             else
             {
-                this->stream_ << node.content.stem.open;
+                this->stream_ << node.stem().open;
 
                 if (is_tree_multiline)
                     break_line(indent_level+1);
 
                 for (
-                    auto it = node.content.stem.children.cbegin();
-                    it != node.content.stem.children.cend();
-                    ++it
+                    auto it = node.stem().children.cbegin();
+                    it != node.stem().children.cend();
                 ){
                     auto const is_child_multiline = bool {[&]
                     {
@@ -1174,14 +1193,27 @@ namespace icecream{ namespace detail
                     // Print the child.
                     this->print_tree(*it, indent_level+1, is_child_multiline);
 
+                    ++it;
+
                     // Print the separators between children.
-                    if (it+1 != node.content.stem.children.cend())
+                    if (it != node.stem().children.cend())
                     {
-                        this->stream_ << ",";
                         if (is_tree_multiline)
+                        {
+                            // Trim any right white space.
+                            auto idx = node.stem().separator.find_last_not_of(" \t");
+                            if (idx != std::string::npos)
+                                idx += 1;
+                            else
+                                idx = node.stem().separator.size();
+
+                            this->stream_ << node.stem().separator.substr(0, idx);
                             break_line(indent_level+1);
+                        }
                         else
-                            this->stream_ << " ";
+                        {
+                            this->stream_ << node.stem().separator;
+                        }
                     }
                     else
                     {
@@ -1190,7 +1222,7 @@ namespace icecream{ namespace detail
                     }
                 }
 
-                this->stream_ << node.content.stem.close;
+                this->stream_ << node.stem().close;
             }
         }
 
