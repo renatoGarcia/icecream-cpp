@@ -1,13 +1,11 @@
 # IceCream-Cpp
 
-<p align="center">
-    <a href="https://github.com/renatoGarcia/icecream-cpp/actions?query=workflow%3ACI"><img src="https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg"></a>
-    <a href="https://raw.githubusercontent.com/renatoGarcia/icecream-cpp/master/LICENSE.txt"><img src="https://img.shields.io/badge/licence-MIT-blue"></a>
- </p>
+[![CI.badge]][CI.link]
+[![LICENSE.badge]][LICENSE.link]
 
 IceCream-Cpp is a little (single header) library to help with the print debugging on C++11 and forward.
 
-[Try it at godbolt!](https://godbolt.org/z/6WYZh3)
+[Try it at godbolt!](https://godbolt.org/z/SG-YzN)
 
 **Contents**
 * [Install](#install)
@@ -29,6 +27,7 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
      * [Optional types](#optional-types)
      * [Variant types](#variant-types)
      * [Exception types](#exception-types)
+     * [Standard layout types](#standard-layout-types-clang-only)
 * [Pitfalls](#pitfalls)
 * [Similar projects](#similar-projects)
 
@@ -93,8 +92,7 @@ find it.
 
 ## Usage
 
-After including the `icecream.hpp` header on a source file, assumed `test.cpp` for this
-example:
+After including the `icecream.hpp` header on a source file, presumed `test.cpp`:
 
 ```C++
 #include "icecream.hpp"
@@ -162,8 +160,8 @@ icecream::ic
     .line_wrap_width(70);
 ```
 
-To simplify the code, on examples below an `using icecream::ic;` statement will be
-presumed.
+For simplification purposes, on the following examples an `using icecream::ic` statement
+will be presumed.
 
 #### enable/disable
 
@@ -214,10 +212,10 @@ ic.stream().rdbuf(sstr.rdbuf());
 
 #### prefix
 
-The prefix is the text that is printed before each output. It can be set to a string, a
-nullary callable that returns an object that has an overload of `operator<<(ostream&, T)`,
-or any number of instances of those two. The printed prefix will be a concatenation of all
-those elements.
+The text that will be printed before each output. It can be set to a string, a nullary
+callable that returns an object having an overload of `operator<<(ostream&, T)`, or any
+number of instances of those two. The printed prefix will be a concatenation of all those
+elements.
 
 - set:
     ```C++
@@ -246,7 +244,7 @@ thread 1 | 3: 3
 #### show_c_string
 
 Controls if a `char*` variable should be interpreted as a null-terminated C string
-(`true`) or a pointer to `char` (`false`). The default value is `true`.
+(`true`) or a pointer to a `char` (`false`). The default value is `true`.
 
 - get:
     ```C++
@@ -319,24 +317,24 @@ The string separating the context text from the variables values. Default value 
 
 ### Printing logic
 
-The preference to print a type `T` is to use the overloaded function `operator<<(ostream&,
-T)` always when it is available. The exceptions to that rule are strings (C strings,
-`std::string`, and `std::string_view`), `char` and bounded arrays. Strings will be
-enclosed by `"`, `char` will be enclosed by `'`, and arrays are considered iterables
-rather than let decay to raw pointers.
+When printing a type `T`, the precedence is use an overloaded function
+`operator<<(ostream&, T)` always when it is available. The exceptions to that rule are
+strings (C strings, `std::string`, and `std::string_view`), `char` and bounded arrays.
+Strings will be enclosed by `"`, `char` will be enclosed by `'`, and arrays are considered
+iterables rather than let decay to raw pointers.
 
 In general, if an overload of `operator<<(ostream&, T)` is not available to a type `T`, a
 call to `IC(t)` will result on a compiling error. All exceptions to that rule, when
 IceCream-Cpp will print a type `T` even without a `operator<<` overload are discussed
-below. Note however that if a user implements a custom `operator<<(ostream&, T)` that will
-take precedence and used instead.
+below. Note however that even to those, if a user implements a custom
+`operator<<(ostream&, T)` that will take precedence and used instead.
 
 #### C strings
 
 C strings are ambiguous. Should a `char* foo` variable be interpreted as a pointer to a
 single `char` or as a null-terminated string? Likewise, is the `char bar[]` variable an
 array of single characters or a null-terminated string? Is `char baz[3]` an array with
-three single characters or a string of size three?
+three single characters or is it a string of size two plus a `'\0'`?
 
 Each one of those interpretations of `foo`, `bar`, and `baz` would be printed in a
 distinct way. To the code:
@@ -346,8 +344,8 @@ char flavor[] = "pistachio";
 IC(flavor);
 ```
 
-all three outputs below are correct, each one having a distinct interpretation of what is
-the `flavor` variable.
+all three outputs below are correct, each one having a distinct interpretation of what
+should be the `flavor` variable.
 
 ```
 ic| flavor: 0x55587b6f5410
@@ -355,8 +353,8 @@ ic| flavor: ['p', 'i', 's', 't', 'a', 'c', 'h', 'i', 'o', '\0']
 ic| flavor: "pistachio"
 ```
 
-The IceCream-Cpp adopted policy is to handle any bounded `char` array (i.e.: array with a
-known size) as an array of single characters. So the code:
+The IceCream-Cpp policy is handle any bounded `char` array (i.e.: array with a known size)
+as an array of single characters. So the code:
 
 ```C++
 char flavor[] = "chocolate";
@@ -399,7 +397,7 @@ ic| v1: expired
 
 #### Iterable types
 
-If for a type `A` with an instance `a`, all operations below are valid:
+If for a type `A` with an instance `a`, all following operations are valid:
 
 ```C++
 auto it = begin(a);
@@ -408,7 +406,8 @@ it != end(a);
 *it;
 ```
 
-the type `A` is defined *iterable* and all of its items will be printed. The code:
+the type `A` is defined *iterable*, and if `A` has no overload of `operator<<(ostream&,
+A)`, all of its items will be printed instead. The code:
 
 ```C++
 auto v0 = std::list<int> {10, 20, 30};
@@ -422,7 +421,8 @@ will print:
 
 #### Tuple like types
 
-A `std::pair<T1, T2>` and `std::tuple<Ts...>` typed variables will print all of its values.
+A `std::pair<T1, T2>` or `std::tuple<Ts...>` typed variables will print all of its
+elements.
 
 The code:
 
@@ -479,9 +479,9 @@ ic| v0: 4.2
 
 #### Exception types
 
-Types inheriting from `std::exception` will print the response of `std::exception::what()`
-method. If besides that it inherits from `boost::exception` the response of
-`boost::diagnostic_information()` will be print too.
+Types inheriting from `std::exception` will print the return of `std::exception::what()`
+method. If beyond that it inherits from `boost::exception` too, the response of
+`boost::diagnostic_information()` will be also printed.
 
 The code:
 
@@ -494,6 +494,31 @@ will print:
 
 ```
 ic| v0: error description
+```
+
+#### Standard layout types (Clang only)
+
+With some exceptions (see issue
+[#7](https://github.com/renatoGarcia/icecream-cpp/issues/7)), if using Clang >= 7, any
+[standard layout type](https://en.cppreference.com/w/cpp/named_req/StandardLayoutType) (C
+compatible structs roughly speaking) is printable even without an `operator<<(ostream&,
+T)` overload.
+
+The code:
+```C++
+class S
+{
+public:
+    float f;
+    int ii[3];
+};
+
+S s = {3.14, {1,2,3}};
+IC(s);
+```
+will print:
+```
+ic| s: {f: 3.14, ii: [1, 2, 3]}
 ```
 
 ## Pitfalls
@@ -534,3 +559,10 @@ one argument when calling a variadic macro. To handle this the nullary macros `I
 The [CleanType](https://github.com/pthom/cleantype) library has a focus on printing
 readable types names, but there is support to print variables names and values alongside
 its types.
+
+
+[CI.badge]: https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg
+[CI.link]: https://github.com/renatoGarcia/icecream-cpp/actions?query=workflow%3ACI
+
+[LICENSE.badge]: https://img.shields.io/badge/licence-MIT-blue
+[LICENSE.link]: https://raw.githubusercontent.com/renatoGarcia/icecream-cpp/master/LICENSE.txt
