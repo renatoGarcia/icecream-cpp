@@ -131,12 +131,12 @@ namespace icecream{ namespace detail
     // Bug fix to VisualStudio not implementing char instantiations to std::codecvt<>,
     // but int instead.
     template<typename T> struct FIX;
-    template<> struct FIX<char> {using type = uint8_t;};
+    template<> struct FIX<char> {using type = int8_t;};
     template<> struct FIX<signed char> {using type = int8_t;};
     template<> struct FIX<unsigned char> {using type = uint8_t;};
-    template<> struct FIX<wchar_t> {using type = uint16_t;};
-    template<> struct FIX<char16_t> {using type = uint16_t;};
-    template<> struct FIX<char32_t> {using type = uint32_t;};
+    template<> struct FIX<wchar_t> {using type = int16_t;};
+    template<> struct FIX<char16_t> {using type = int16_t;};
+    template<> struct FIX<char32_t> {using type = int32_t;};
 #else
     template<typename T> struct FIX {using type = T;};
 #endif
