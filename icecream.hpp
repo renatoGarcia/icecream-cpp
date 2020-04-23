@@ -89,9 +89,6 @@
     #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
 #endif
 
-// Use (void) to silent unused warnings.
-#define ICECREAM_ASSERT(exp, msg) assert(((void)msg, exp))
-
 
 #define ICECREAM_ASSERT(exp, msg) assert(((void)msg, exp))
 
@@ -609,9 +606,9 @@ namespace icecream{ namespace detail
         }
 
         Tree(
-            std::string open,
-            std::string separator,
-            std::string close,
+            std::string&& open,
+            std::string&& separator,
+            std::string&& close,
             std::vector<Tree>&& children
         )
             : Tree {
@@ -901,9 +898,6 @@ namespace icecream{ namespace detail
                 InnerTag{},
                 U::Stem{"[", ", ", "]", [&]
                 {
-                    using std::begin;
-                    using std::end;
-
                     auto result = std::vector<Tree> {};
                     for (auto const& i : value)
                         result.emplace_back(i);
@@ -1164,7 +1158,7 @@ namespace icecream{ namespace detail
     };
 
     // 1 - If T is a pointer result will be T.
-    // 2.0 - If T is a [signed|unsigned] integral narrower then [signed|unsigned] int,
+    // 2.0 - If T is a [signed|unsigned] integral narrower than [signed|unsigned] int,
     //       then result will be [signed|unsigned] int. Otherwise result will be T.
     // 2.1 - if T is either double or long double, result will be T.
     template <typename T>
