@@ -8,6 +8,7 @@ on:
       - '*.md'
       - 'LICENSE.txt'
       - 'AUTHORS'
+      - '*.nix'
   pull_request:
     branches:
       - master
@@ -15,6 +16,7 @@ on:
       - '*.md'
       - 'LICENSE.txt'
       - 'AUTHORS'
+      - '*.nix'
 
 jobs:
 
