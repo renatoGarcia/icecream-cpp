@@ -5,7 +5,7 @@
 
 IceCream-Cpp is a little (single header) library to help with the print debugging on C++11 and forward.
 
-[Try it at godbolt!](https://godbolt.org/z/SG-YzN)
+[Try it at godbolt!](https://godbolt.org/z/zgvv79)
 
 **Contents**
 * [Install](#install)
@@ -87,8 +87,19 @@ original [Python IceCream](https://github.com/gruns/icecream) library.
 ## Install
 
 The IceCream-Cpp is a one file, header only library, having the STL as its only
-dependency. To install it just copy the `icecream.hpp` header anywhere the compiler can
-find it.
+dependency. The most direct way to install it is just copy the `icecream.hpp` header
+anywhere the compiler can find it.
+
+If using [Nix](https://nixos.org), any committed version can be installed by `nix-env`
+through its archive. For instance, to install the HEAD commit on *master*:
+```Shell
+nix-env -if https://github.com/renatoGarcia/icecream-cpp/archive/master.tar.gz
+```
+
+The released versions are available on [Conan](https://conan.io) too:
+```Shell
+conan install icecream-cpp/0.3.1@
+```
 
 ## Usage
 
@@ -147,7 +158,7 @@ std::tuple<std::string&, float&> e = IC(b, c);
 ### Configuration
 
 The `Icecream` class is internally implemented as a singleton. All the configuration
-changes will be done to an unique object, and shared across all the program and threads.
+changes will be done to a unique object, and shared across all the program and threads.
 
 All configurations are done/viewed through accessor methods, using the `icecream::ic`
 object. To allow the method chaining idiom all the set methods return a reference of the
@@ -160,7 +171,7 @@ icecream::ic
     .line_wrap_width(70);
 ```
 
-For simplification purposes, on the following examples an `using icecream::ic` statement
+For simplification purposes, on the following examples a `using icecream::ic` statement
 will be presumed.
 
 #### enable/disable
