@@ -65,11 +65,7 @@
     #endif
 #endif
 
-#define ICECREAM_MAJOR_VERSION 0
-#define ICECREAM_MINOR_VERSION 3
-#define ICECREAM_PATCH_VERSION 1
 #define ICECREAM_DEV_HASH "$Format:%H$"
-
 
 #if defined(__GNUC__)
     #define ICECREAM_FUNCTION __PRETTY_FUNCTION__

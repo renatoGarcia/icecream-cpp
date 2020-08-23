@@ -31,12 +31,10 @@ jobs:
         exclude:
           - version: gcc6
             cpp: 17
-    env:
-      CPP_STANDARD: ${{ matrix.cpp }}
     steps:
       - uses: actions/checkout@v2
       - name: run
-        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "CPP_STANDARD=${CPP_STANDARD} cmake /home/src && cmake --build . && ctest -V"
+        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "cmake /home/src -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} && cmake --build . && ctest -V"
 
   clang:
     name: ${{ matrix.version }} C++${{ matrix.cpp }}
@@ -46,12 +44,10 @@ jobs:
       matrix:
         version: [clang5, clang10]
         cpp: [11, 14, 17]
-    env:
-      CPP_STANDARD: ${{ matrix.cpp }}
     steps:
       - uses: actions/checkout@v2
       - name: run
-        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "CPP_STANDARD=${CPP_STANDARD} cmake /home/src && cmake --build . && ctest -V"
+        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "cmake /home/src -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} && cmake --build . && ctest -V"
 
   msvc:
     name: ${{ matrix.name }} C++${{ matrix.cpp }}
@@ -66,12 +62,10 @@ jobs:
             name: vs2019
           - os: windows-2016
             name: vs2017
-    env:
-      CPP_STANDARD: ${{ matrix.cpp }}
     steps:
       - uses: actions/checkout@v2
       - name: build
-        run: cmake -DBOOST_ROOT=C:\\hostedtoolcache\\windows\\Boost\\1.72.0 . && cmake --build . --config Debug
+        run: cmake . -DBOOST_ROOT="${env:BOOST_ROOT_1_72_0}" -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} && cmake --build . --config Debug
       - name: run
         run: ctest -V -C Debug
 
@@ -89,6 +83,6 @@ jobs:
       - name: prepare
         run: brew install boost
       - name: build
-        run: cmake . && cmake --build .
+        run: cmake . -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} && cmake --build .
       - name: run
         run: ctest -V

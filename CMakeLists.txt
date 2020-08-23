@@ -1,33 +1,49 @@
+# DEV_HASH: $Format:%H$
+
 cmake_minimum_required(VERSION 3.16)
+cmake_policy(SET CMP0048 NEW)
 
-project(Icecream-test)
+project(IcecreamCpp VERSION 0.3.1 LANGUAGES CXX)
 
-find_package(Boost 1.71.0 REQUIRED)
+include(CMakePackageConfigHelpers)
+include(CTest)
 
-enable_testing()
-
-if (NOT DEFINED ENV{CPP_STANDARD})
-    message(FATAL_ERROR "A CPP_STANDARD environment variable must be defined to one of: 11, 14, 17.")
-endif()
-
-if ($ENV{CPP_STANDARD} EQUAL 11)
-    set(CMAKE_CXX_STANDARD 11)
-    add_compile_definitions(CPP_11)
-elseif ($ENV{CPP_STANDARD} EQUAL 14)
-    set(CMAKE_CXX_STANDARD 14)
-    add_compile_definitions(CPP_14)
-elseif ($ENV{CPP_STANDARD} EQUAL 17)
-    set(CMAKE_CXX_STANDARD 17)
-    add_compile_definitions(CPP_17)
+if(UNIX)
+  include(GNUInstallDirs)
+  set(DEF_INSTALL_CMAKE_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/IcecreamCpp")
+  set(DEF_INSTALL_INCLUDE_DIR "${CMAKE_INSTALL_INCLUDEDIR}")
+elseif(WIN32 AND NOT CYGWIN)
+  set(DEF_INSTALL_CMAKE_DIR "CMake")
+  set(DEF_INSTALL_INCLUDE_DIR "include")
 else()
-    message(FATAL_ERROR "invalid C++ standard")
+  set(INSTALL_DIR "" CACHE PATH)
+  set(DEF_INSTALL_CMAKE_DIR "${INSTALL_DIR}/cmake/IcecreamCpp")
+  set(DEF_INSTALL_INCLUDE_DIR "${INSTALL_DIR}/include")
 endif()
 
-set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+configure_package_config_file(IcecreamCppConfig.cmake.in
+  "${PROJECT_BINARY_DIR}/IcecreamCppConfig.cmake"
+  INSTALL_DESTINATION ${DEF_INSTALL_CMAKE_DIR}
+  PATH_VARS DEF_INSTALL_INCLUDE_DIR
+)
+write_basic_package_version_file(
+  "${PROJECT_BINARY_DIR}/IcecreamCppConfigVersion.cmake"
+  COMPATIBILITY SameMajorVersion
+  ARCH_INDEPENDENT
+)
 
-include_directories(${Boost_INCLUDE_DIRS})
+install(
+  FILES
+    "${PROJECT_BINARY_DIR}/IcecreamCppConfig.cmake"
+    "${PROJECT_BINARY_DIR}/IcecreamCppConfigVersion.cmake"
+  DESTINATION ${DEF_INSTALL_CMAKE_DIR}
+)
 
-add_executable(test_exec test.cpp test_2.cpp)
-add_test(NAME test COMMAND test_exec)
+install(
+  FILES "icecream.hpp"
+  DESTINATION ${DEF_INSTALL_INCLUDE_DIR}
+)
+
+if(BUILD_TESTING)
+  add_subdirectory(test)
+endif()
