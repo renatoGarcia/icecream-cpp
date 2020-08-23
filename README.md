@@ -9,6 +9,8 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
 
 **Contents**
 * [Install](#install)
+  * [Nix](#nix)
+  * [Conan](#conan)
 * [Usage](#usage)
   * [Return value](#return-value)
   * [Configuration](#configuration)
@@ -88,13 +90,39 @@ original [Python IceCream](https://github.com/gruns/icecream) library.
 
 The IceCream-Cpp is a one file, header only library, having the STL as its only
 dependency. The most direct way to install it is just copy the `icecream.hpp` header
-anywhere the compiler can find it.
+to inside your project.
 
-If using [Nix](https://nixos.org), any committed version can be installed by `nix-env`
-through its archive. For instance, to install the HEAD commit on *master*:
+To properly install it system wide, together with the CMake project files, run on
+IceCream-Cpp project root directory:
+```Shell
+mkdir build
+cd build
+cmake ..
+cmake --install .
+```
+
+### Nix
+
+If using [Nix](https://nixos.org), any committed version on *master* branch can be
+installed using the archive
+`https://github.com/renatoGarcia/icecream-cpp/archive/<commmit>.tar.gz`, where
+`<commit>.tar.gz` could be any tag or commit hash of master branch.
+
+For instance, to install the master HEAD commit, environment wide:
 ```Shell
 nix-env -if https://github.com/renatoGarcia/icecream-cpp/archive/master.tar.gz
 ```
+
+To use a specific commit in a `shell.nix`:
+```Text
+icecream-cpp = pkgs.callPackage (
+  fetchTarball https://github.com/renatoGarcia/icecream-cpp/archive/<commit>.tar.gz
+) { inherit pkgs; };
+```
+where `pkgs` is the variable with the evaluated `nixpkgs`.
+
+
+### Conan
 
 The released versions are available on [Conan](https://conan.io) too:
 ```Shell
@@ -103,10 +131,17 @@ conan install icecream-cpp/0.3.1@
 
 ## Usage
 
-After including the `icecream.hpp` header on a source file, presumed `test.cpp`:
+If using CMake:
+```CMake
+find_package(IcecreamCpp)
+include_directories(${IcecreamCpp_INCLUDE_DIRS})
+```
+will add the installed directory on include paths list.
+
+After including the `icecream.hpp` header on a source file, here named `test.cpp`:
 
 ```C++
-#include "icecream.hpp"
+#include <icecream.hpp>
 ```
 
 A macro `IC(...)` will be defined. If called with no arguments it will print the prefix

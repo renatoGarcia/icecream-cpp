@@ -3,4 +3,5 @@
 .github/         export-ignore
 .ci-dockerfiles/ export-ignore
 
+CMakeLists.txt export-subst
 icecream.hpp export-subst

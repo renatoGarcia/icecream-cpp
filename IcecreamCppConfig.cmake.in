@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+set_and_check(IcecreamCpp_INCLUDE_DIRS "@PACKAGE_DEF_INSTALL_INCLUDE_DIR@")
+
+check_required_components(IcecreamCpp)
