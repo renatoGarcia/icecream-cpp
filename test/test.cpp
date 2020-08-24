@@ -1038,10 +1038,10 @@ TEST_CASE("dump_string")
         };
         auto const result =
             "ic\\| v0: \\{\n"
-            "        v_float0: [0-9e\\-+.]+ <NOT RELIABLE, see issue #6>,\n"
+            "        v_float0: [0-9e\\-+.]+ <NOT RELIABLE, see issue #6 on github>,\n"
             "        v_double0: -70\\.7,\n"
-            "        v_float1: [0-9e\\-+.]+ <NOT RELIABLE, see issue #6>,\n"
-            "        v_double1: 70\\.7 <NOT RELIABLE, see issue #6>,\n"
+            "        v_float1: [0-9e\\-+.]+ <NOT RELIABLE, see issue #6 on github>,\n"
+            "        v_double1: 70\\.7 <NOT RELIABLE, see issue #6 on github>,\n"
             "        v_double2: 3\\.14,\n"
             "        v_float2: 10\\.01,\n"
             "        v_longdouble: 200\\.002\n"
@@ -1131,7 +1131,7 @@ TEST_CASE("dump_string")
             "        v_char32: ['3', 'a', 'b', 'c'],\n"
         #endif
             "        v_float: [1.1, 1.2],\n"
-            "        mfloat: <type aliased array, see issue #7>,\n"
+            "        mfloat: <type aliased array, see issue #7 on github>,\n"
             "        v_double: [3.1, 3.2, 3.3],\n"
             "        v_ldouble: [103.1, 103.2, 103.3],\n"
             "        v_pint: [0x70, 0x71, 0x72]\n"
@@ -1210,7 +1210,7 @@ TEST_CASE("dump_string")
         auto v0 = S0 {DOIS};
         IC(v0);
         auto const result =
-            "ic| v0: {en: <enum member, see issue #7>}\n";
+            "ic| v0: {en: <enum member, see issue #7 on github>}\n";
 
         REQUIRE(sstr.str() == result);
         sstr.str("");
@@ -1240,8 +1240,8 @@ TEST_CASE("dump_string")
         IC(v0);
         auto const result =
             "ic| v0: {\n"
-            "        v_s1: <array of structs, see issue #7>,\n"
-            "        v_en: <array of enums, see issue #7>\n"
+            "        v_s1: <array of structs, see issue #7 on github>,\n"
+            "        v_en: <array of enums, see issue #7 on github>\n"
             "    }\n";
         REQUIRE(sstr.str() == result);
         sstr.str("");

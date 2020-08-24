@@ -1338,9 +1338,9 @@ namespace icecream{ namespace detail
         else if ICECREAM_CND(t.Size_t, std::size_t);
         else if ICECREAM_CND(t.Ptrdiff, std::ptrdiff_t);
 
-        else if (t.Enum) return Tree::literal("<array of enums, see issue #7>");
-        else if (t.Struct) return Tree::literal("<array of structs, see issue #7>");
-        else return Tree::literal("<type aliased array, see issue #7>");
+        else if (t.Enum) return Tree::literal("<array of enums, see issue #7 on github>");
+        else if (t.Struct) return Tree::literal("<array of structs, see issue #7 on github>");
+        else return Tree::literal("<type aliased array, see issue #7 on github>");
     #undef ICECREAM_CND
     }
 
@@ -1386,7 +1386,7 @@ namespace icecream{ namespace detail
         else if (spec == "%f" && !(tokens.Float || tokens.Double))
         {
             auto t = va_list_to_tree<double>(args);
-            return Tree::literal(t.leaf() + " <NOT RELIABLE, see issue #6>");
+            return Tree::literal(t.leaf() + " <NOT RELIABLE, see issue #6 on github>");
         }
         else if ICECREAM_CND("%lf", double);
         else if ICECREAM_CND("%Lf", long double);
@@ -1401,7 +1401,7 @@ namespace icecream{ namespace detail
         else if ICECREAM_CND("%p" && (tokens.Char16 && tokens.Star == 1), char16_t*);
         else if ICECREAM_CND("%p" && (tokens.Char32 && !tokens.Star), char32_t);
         else if ICECREAM_CND("%p" && (tokens.Char32 && tokens.Star == 1), char32_t*);
-        else if ICECREAM_MSG("%p" && tokens.Enum, "<enum member, see issue #7>");
+        else if ICECREAM_MSG("%p" && tokens.Enum, "<enum member, see issue #7 on github>");
         else if ICECREAM_CND("%p", void*);
 
         else ICECREAM_ASSERT(false, "Invalid va_arg code");
