@@ -1406,6 +1406,9 @@ namespace icecream{ namespace detail
 
         else ICECREAM_ASSERT(false, "Invalid va_arg code");
 
+        // To silence a non returning warning
+        return Tree::literal("");
+
     #undef ICECREAM_CND
     #undef ICECREAM_MSG
     }
