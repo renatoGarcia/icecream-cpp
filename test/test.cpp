@@ -119,7 +119,7 @@ TEST_CASE("base")
 
     {
         IC((sum(40, 2)), i0   , (((sum(3, 5)))));
-        REQUIRE(sstr.str() == "ic| (sum(40, 2)): 42, i0: 7, (((sum(3, 5)))): 8\n");
+        REQUIRE(sstr.str() == "ic| sum(40, 2): 42, i0: 7, sum(3, 5): 8\n");
         sstr.str("");
     }
 
@@ -143,23 +143,66 @@ TEST_CASE("return")
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
+    using icecream::_;
+
     {
-        auto v0 = IC(7);
-        REQUIRE(std::is_same<decltype(v0), int>::value);
-        REQUIRE(v0 == 7);
+        // !v0 is a dangling reference!
+        auto&& v0 = IC(7);
+        REQUIRE(std::is_same<decltype(v0), int&&>::value);
+
+        REQUIRE(IC(7) == 7);
     }
 
     {
         auto v0 = 'r';
-        auto v1 = IC(v0);
-        REQUIRE(std::is_same<decltype(v1), char>::value);
+        auto&& v1 = IC(v0);
+        REQUIRE(std::is_same<decltype(v1), char&>::value);
         REQUIRE(v1 == 'r');
+        REQUIRE(&v1 == &v0);
     }
 
     {
-        auto v0 = IC(7, 3.14);
-        REQUIRE(std::is_same<decltype(v0), std::tuple<int, double>>::value);
-        REQUIRE(v0 == std::make_tuple(7, 3.14));
+        auto v0 = double{3.14};
+        auto&& v1 = IC_("A", v0);
+        REQUIRE(std::is_same<decltype(v1), double&>::value);
+        REQUIRE(v1 == 3.14);
+        REQUIRE(&v1 == &v0);
+    }
+
+    {
+        // !v0 is a dangling reference!
+        auto&& v0 = IC_("#o", 7);
+        REQUIRE(std::is_same<decltype(v0), int&&>::value);
+        REQUIRE(IC_("#o", 7) == 7);
+    }
+
+    {
+        auto const a = int{20};
+
+        // !v0 has a dangling reference to 7 and 3.14!
+        auto&& v0 = IC(7, 3.14, a);
+        REQUIRE(std::is_same<decltype(v0), std::tuple<int&&, double&&, int const&>&&>::value);
+        REQUIRE(&std::get<2>(std::move(v0)) == &a);
+        REQUIRE((IC(7, 3.14, a) == std::make_tuple(7, 3.14, 20)));
+    }
+
+    {
+        auto a = int{30};
+
+        // !v0 has a dangling reference to 7 and 3.14!
+        auto&& v0 = IC_("#", 7, a, 3.14);
+        REQUIRE(std::is_same<decltype(v0), std::tuple<int&&, int&, double&&>&&>::value);
+        REQUIRE(&std::get<1>(std::move(v0)) == &a);
+        REQUIRE(IC_("#", 7, a, 3.14) == std::make_tuple(7, 30, 3.14));
+    }
+
+    {
+        auto a = int{10};
+        auto const b = int{20};
+
+        auto&& v0 = IC(_("0v#4x", a, b), 49);
+        REQUIRE(std::is_same<decltype(v0), std::tuple<int&, int const&, int&&>&&>::value);
+        REQUIRE(IC(_("0v#4x", a, b), 49) == std::make_tuple(10, 20, 49));
     }
 
     {
@@ -167,7 +210,6 @@ TEST_CASE("return")
     }
 
 }
-
 
 
 // -------------------------------------------------- Test optional
@@ -312,6 +354,13 @@ TEST_CASE("tuples")
         REQUIRE(sstr.str() == "ic| s0: (1, 2.2, 'b', \"bla\")\n");
         sstr.str("");
     }
+
+    {
+        auto s0 = std::make_tuple(10, 20);
+        IC_("x", s0);
+        REQUIRE(sstr.str() == "ic| s0: (a, 14)\n");
+        sstr.str("");
+    }
 }
 
 
@@ -339,6 +388,13 @@ TEST_CASE("arrays")
         char v0[] = "abc";
         IC(v0);
         REQUIRE(sstr.str() == "ic| v0: ['a', 'b', 'c', '\\0']\n");
+        sstr.str("");
+    }
+
+    {
+        int v0[] = {10, 20, 30};
+        IC_("#X", v0);
+        REQUIRE(sstr.str() == "ic| v0: [0XA, 0X14, 0X1E]\n");
         sstr.str("");
     }
 }
@@ -384,6 +440,14 @@ TEST_CASE("iterable")
         REQUIRE(sstr.str() == "ic| v0: B<A>\n");
         sstr.str("");
     }
+
+    {
+        auto v0 = std::list<int> {10, 20, 30};
+        IC_("0v#5x", v0);
+        REQUIRE(sstr.str() == "ic| v0: [0x00a, 0x014, 0x01e]\n");
+        sstr.str("");
+    }
+
 }
 
 
@@ -835,6 +899,54 @@ TEST_CASE("exception")
     }
 }
 
+// -------------------------------------------------- Test formating string
+TEST_CASE("formatting")
+{
+    auto sstr = std::stringstream {};
+    icecream::ic.stream().rdbuf(sstr.rdbuf());
+
+    using icecream::_;
+
+    {
+        auto v0 = int{42};
+        IC(_("#x", v0), 7);
+        REQUIRE(sstr.str() == "ic| v0: 0x2a, 7: 7\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = int{42};
+        IC_("#o", v0, 7);
+        REQUIRE(sstr.str() == "ic| v0: 052, 7: 07\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = int{42};
+        IC( ((_("#", (v0) )   )), 7);
+        REQUIRE(sstr.str() == "ic| v0: 42, 7: 7\n");
+        sstr.str("");
+    }
+
+    {
+        auto v0 = float{12.3456789};
+        IC((_("#A", v0)));
+        REQUIRE(
+            ((sstr.str() == "ic| v0: 0X1.8B0FCEP+3\n") ||
+             (sstr.str() == "ic| v0: 0X1.8B0FCE0000000P+3\n")) // Visualstudio 2019 output
+        );
+        sstr.str("");
+    }
+
+    {
+        auto v0 = int{42};
+        IC_("oA", v0);
+        REQUIRE(sstr.str() == "ic| v0: *Error* on formatting string\n");
+        sstr.str("");
+    }
+}
+
+// -------------------------------------------------- Test dump struct clang
 
 #if defined(ICECREAM_DUMP_STRUCT_CLANG)
 #include <cwctype>

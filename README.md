@@ -13,6 +13,8 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
   * [Conan](#conan)
 * [Usage](#usage)
   * [Return value](#return-value)
+  * [Output formatting](#output-formatting)
+     * [Format string syntax](#format-string-syntax)
   * [Configuration](#configuration)
      * [enable/disable](#enabledisable)
      * [stream](#stream)
@@ -189,6 +191,142 @@ IC();
 int& d = IC(a);
 std::tuple<std::string&, float&> e = IC(b, c);
 ```
+
+
+### Output formatting
+
+It is possible to configure how the value must be formatted while printing. The following code:
+
+```C++
+auto a = int{42};
+auto b = int{20};
+IC_("#X", a, b);
+
+```
+
+will print:
+
+    ic| a: 0X2A, b: 0X14
+
+
+The output formatting configuration is done wrapping a format string and the values with
+the function `icecream::_()`, like in:
+
+```C++
+using icecream::_;
+auto a = int{42};
+
+IC(_("X", a));
+IC(_("0v#6x", 20, 30), 40, _("*>6", a));
+```
+
+that will print:
+
+    ic| a: 2A
+    ic| 20: 0x0014, 30: 0x001e, 40: 40, a: ****42
+
+
+If the same formatting string should be applied to all the values on an `IC` macro call,
+you can use the `IC_` macro as a shortcut. The code `IC(icecream::_("#x", a, b))` can be
+rewritten as `IC_("#x", a, b)`.
+
+
+#### Format string syntax
+
+The adopted formatting string is strongly based on
+[{fmt}](https://fmt.dev/latest/syntax.html#format-specification-mini-language) and [STL
+Formatting](https://en.cppreference.com/w/cpp/utility/format/formatter#Standard_format_specification)
+has the following syntax:
+
+```
+format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
+fill        ::=  <a character>
+align       ::=  "<" | ">" | "v"
+sign        ::=  "+" | "-"
+width       ::=  integer
+precision   ::=  integer
+type        ::=  "a" | "A" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X"
+integer     ::=  digit+
+digit       ::=  "0"..."9"
+```
+
+##### [[fill]align]
+
+The fill character can be any char. The presence of a fill character is signaled by the
+character following it, which must be one of the alignment options. The meaning of the
+alignment options is as follows:
+
+| Symbol | Meaning                                                                                                                                                |
+|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `'<'`  | Left align within the available space.                                                                                                                 |
+| `'>'`  | Right align within the available space. This is the default.                                                                                           |
+| `'v'`  | Internally align the data, with the fill character being placed between the digits and either the base or sign. Applies to integer and floating-point. |
+
+Note that unless a minimum field width is defined, the field width will always be the same
+size as the data to fill it, so that the alignment option has no meaning in this case.
+
+##### [sign]
+
+The sign option is only valid for number types, and can be one of the following:
+
+| Symbol | Meaning                                                                 |
+|--------|-------------------------------------------------------------------------|
+| `'+'`  | A sign will be used for both nonnegative as well as negative numbers. |
+| `'-'`  | A sign will be used only for negative numbers. This is the default.   |
+
+##### ["#"]
+
+Causes the “alternate form” to be used for the conversion. The alternate form is defined
+differently for different types. This option is only valid for integer and floating-point
+types. For integers, when binary, octal, or hexadecimal output is used, this option adds
+the prefix respective "0b" ("0B"), "0", or "0x" ("0X") to the output value. Whether the
+prefix is lower-case or upper-case is determined by the case of the type specifier, for
+example, the prefix "0x" is used for the type 'x' and "0X" is used for 'X'. For
+floating-point numbers the alternate form causes the result of the conversion to always
+contain a decimal-point character, even if no digits follow it. Normally, a decimal-point
+character appears in the result of these conversions only if a digit follows it. In
+addition, for 'g' and 'G' conversions, trailing zeros are not removed from the result.
+
+##### [width]
+
+A decimal integer defining the minimum field width. If not specified, then the field width
+will be determined by the content.
+
+##### ["." precision]
+
+The precision is a decimal number indicating how many digits should be displayed after the
+decimal point for a floating-point value formatted with 'f' and 'F', or before and after
+the decimal point for a floating-point value formatted with 'g' or 'G'. For non-number
+types the field indicates the maximum field size - in other words, how many characters
+will be used from the field content. The precision is not allowed for integer, character,
+Boolean, and pointer values. Note that a C string must be null-terminated even if
+precision is specified.
+
+##### [type]
+
+Determines how the data should be presented.
+
+The available integer presentation types are:
+
+| Symbol | Meaning                                                                                                                                                                   |
+|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `'d'`  | Decimal integer. Outputs the number in base 10.                                                                                                                           |
+| `'o'`  | Octal format. Outputs the number in base 8.                                                                                                                               |
+| `'x'`  | Hex format. Outputs the number in base 16, using lower-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0x" to the output value. |
+| `'X'`  | Hex format. Outputs the number in base 16, using upper-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0X" to the output value. |
+
+The available presentation types for floating-point values are:
+
+| Symbol | Meaning                                                                                                                                                                                                                                                                     |
+|--------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `'a'`  | Hexadecimal floating point format. Prints the number in base 16 with prefix "0x" and lower-case letters for digits above 9. Uses 'p' to indicate the exponent.                                                                                                              |
+| `'A'`  | Same as 'a' except it uses upper-case letters for the prefix, digits above 9 and to indicate the exponent.                                                                                                                                                                  |
+| `'e'`  | Exponent notation. Prints the number in scientific notation using the letter ‘e’ to indicate the exponent.                                                                                                                                                                  |
+| `'E'`  | Exponent notation. Same as 'e' except it uses an upper-case 'E' as the separator character.                                                                                                                                                                                 |
+| `'f'`  | Fixed point. Displays the number as a fixed-point number.                                                                                                                                                                                                                   |
+| `'F'`  | Fixed point. Same as 'f', but converts nan to NAN and inf to INF.                                                                                                                                                                                                           |
+| `'g'`  | General format. For a given precision p >= 1, this rounds the number to p significant digits and then formats the result in either fixed-point format or in scientific notation, depending on its magnitude. A precision of 0 is treated as equivalent to a precision of 1. |
+| `'G'`  | General format. Same as 'g' except switches to 'E' if the number gets too large. The representations of infinity and NaN are uppercased, too.                                                                                                                               |
 
 ### Configuration
 
@@ -566,6 +704,7 @@ will print:
 ```
 ic| s: {f: 3.14, ii: [1, 2, 3]}
 ```
+
 
 ## Pitfalls
 
