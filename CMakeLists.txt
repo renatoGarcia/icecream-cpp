@@ -6,6 +6,8 @@ cmake_policy(SET CMP0048 NEW)
 project(IcecreamCpp VERSION 0.3.1 LANGUAGES CXX)
 
 include(CMakePackageConfigHelpers)
+
+option(BUILD_TESTING "" OFF)
 include(CTest)
 
 if(UNIX)

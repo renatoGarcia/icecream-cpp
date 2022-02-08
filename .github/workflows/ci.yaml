@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: run
-        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "cmake /home/src -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} && cmake --build . && ctest -V"
+        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "cmake /home/src -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build . && ctest -V"
 
   clang:
     name: ${{ matrix.version }} C++${{ matrix.cpp }}
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: run
-        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "cmake /home/src -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} && cmake --build . && ctest -V"
+        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "cmake /home/src -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build . && ctest -V"
 
   msvc:
     name: ${{ matrix.name }} C++${{ matrix.cpp }}
@@ -67,7 +67,7 @@ jobs:
       - name: prepare
         run: choco install boost-msvc-14.2 -y
       - name: build
-        run: cmake . -DBOOST_ROOT="${env:BOOST_ROOT_1_72_0}" -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} && cmake --build . --config Debug
+        run: cmake . -DBOOST_ROOT="${env:BOOST_ROOT_1_72_0}" -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build . --config Debug
       - name: run
         run: ctest -V -C Debug
 
@@ -85,6 +85,6 @@ jobs:
       - name: prepare
         run: brew install boost
       - name: build
-        run: cmake . -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} && cmake --build .
+        run: cmake . -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build .
       - name: run
         run: ctest -V
