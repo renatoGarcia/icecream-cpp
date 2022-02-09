@@ -17,7 +17,7 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
      * [Format string syntax](#format-string-syntax)
   * [Configuration](#configuration)
      * [enable/disable](#enabledisable)
-     * [stream](#stream)
+     * [output](#output)
      * [prefix](#prefix)
      * [show_c_string](#show_c_string)
      * [line_wrap_width](#line_wrap_width)
@@ -374,25 +374,32 @@ ic| 1: 1
 ic| 3: 3
 ```
 
-#### stream
+#### output
 
-Warning: this method will return a reference to the internal `std::ostream`. The
-operations done on that reference will not be thread safe.
+Sets where the serialized textual data will be printed. By default that data will be
+printed on the standard error output, the same as `std::cerr`.
 
-The `std::ostream` where the output will be streamed.
-
-- get:
+- set:
     ```C++
-    auto stream() -> std::ostream&;
+    template <typename T>
+    auto output(T&& t) -> IcecreamAPI&;
     ```
 
-The default stream buffer associated is the same as `std::cerr`, but that can be changed.
-For instance, to stream the output to a string:
+The type `T` can be any of:
+- A class inheriting from `std::ostream`.
+- A class having a method `push_back(char)`.
+- An output iterator that accepts the operation `*it = 'c'`
 
+For instance, the code:
 ```C++
-auto sstr = std::stringstream {};
-ic.stream().rdbuf(sstr.rdbuf());
+auto str = std::string{};
+icecream::ic.output(str);
+IC(1, 2);
 ```
+Will print the output `"ic| 1: 1, 2: 2\n"` on the `str` string.
+
+*Warning:* The `Icecream` class won't take property of the argument `t`, so care must be
+taken by the user to keep it alive.
 
 #### prefix
 
