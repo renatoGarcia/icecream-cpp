@@ -81,11 +81,11 @@
 #if defined(ICECREAM_LONG_NAME)
     #define ICECREAM(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define ICECREAM0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
-    #define ICECREAM_(F,...) ICECREAM(::icecream::_(F, __VA_ARGS__))
+    #define ICECREAM_(S,...) ICECREAM(::icecream::f_(S, __VA_ARGS__))
 #else
     #define IC(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
-    #define IC_(F,...) IC(::icecream::_(F, __VA_ARGS__))
+    #define IC_(S,...) IC(::icecream::f_(S, __VA_ARGS__))
 #endif
 
 
@@ -486,7 +486,7 @@ namespace icecream{ namespace detail
                 conjunction<
                     negation<is_instantiation<FormatterPack, typename std::decay<Ts>::type>>...
                 >::value,
-                "It is not possible to nest FormmaterPack's as in IC_(\"#\", 7, _(\"#x\", 42))."
+                "It is not possible to nest FormmaterPack's as in IC_(\"#\", 7, f_(\"#x\", 42))."
             );
         }
 
@@ -2273,7 +2273,7 @@ namespace icecream{ namespace detail
             return std::string{b_it, e_it+1};
         }
 
-        // Receive a string with a `icecream::_("0v#4x", a, b, c)` call, and returns a vector with all the variable names.
+        // Receive a string with a `icecream::f_("0v#4x", a, b, c)` call, and returns a vector with all the variable names.
         // In this example, a vector with ["a", "b", "c"].
         static
         auto split_variable_names(std::string const& var_name) -> std::vector<std::string>
@@ -2487,7 +2487,7 @@ namespace icecream
     }
 
     template<typename... Ts>
-    auto _(std::string const& fmt, Ts&&... vs) -> detail::FormatterPack<decltype(std::forward<Ts>(vs))...>
+    auto f_(std::string const& fmt, Ts&&... vs) -> detail::FormatterPack<decltype(std::forward<Ts>(vs))...>
     {
         return detail::FormatterPack<decltype(std::forward<Ts>(vs))...>{fmt, std::forward<Ts>(vs)...};
     }
