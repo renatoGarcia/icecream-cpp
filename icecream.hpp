@@ -287,6 +287,22 @@ namespace icecream{ namespace detail
     using is_iterable = decltype(is_iterable_impl<T>(0));
 
 
+    // -------------------------------------------------- has_push_back_T
+    // Checks if the class `C` has a method push_back(`T`)
+
+    template <typename C, typename T>
+    auto has_push_back_T_impl(int) -> decltype(
+        std::declval<C&>().push_back(std::declval<T&>()),
+        std::true_type {}
+    );
+
+    template <typename C, typename T>
+    auto has_push_back_T_impl(...) -> std::false_type;
+
+    template <typename C, typename T>
+    using has_push_back_T = decltype(has_push_back_T_impl<C, T>(0));
+
+
     // -------------------------------------------------- has_insertion
 
     // Checks if T has an insertion overload, i.e.: std::ostream& << T const&
@@ -459,6 +475,23 @@ namespace icecream{ namespace detail
             has_insertion<returned_type<T>>
         >
     >;
+
+
+    // -------------------------------------------------- is_T_output_iterator
+    // Checks if `Iterator` is an output iterator with type `Item`
+
+    template <typename Iterator, typename Item>
+    auto is_T_output_iterator_impl(int) -> decltype(
+        *std::declval<Iterator&>() = std::declval<Item&>(),
+        std::true_type {}
+    );
+
+    template <typename Iterator, typename Item>
+    auto is_T_output_iterator_impl(...) -> std::false_type;
+
+    template <typename Iterator, typename Item>
+    using is_T_output_iterator = decltype(is_T_output_iterator_impl<Iterator, Item>(0));
+
 
     // -------------------------------------------------- Formatter
 
@@ -1953,10 +1986,34 @@ namespace icecream{ namespace detail
             this->enabled_ = false;
         }
 
-        auto stream() -> std::ostream&
+        auto output(std::ostream& stream) -> void
         {
             std::lock_guard<std::mutex> guard(this->mutex);
-            return this->stream_;
+
+            using OSIt = std::ostreambuf_iterator<char>;
+            this->output_.reset(new ErasedOutput<OSIt>{OSIt{stream}});
+        }
+
+        template <typename T>
+        auto output(T& container) ->
+            typename std::enable_if<
+                has_push_back_T<T, char>::value
+            >::type
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+
+            using OSIt = std::back_insert_iterator<T>;
+            this->output_.reset(new ErasedOutput<OSIt>{OSIt{container}});
+        }
+
+        template <typename T>
+        auto output(T iterator) ->
+            typename std::enable_if<
+                is_T_output_iterator<T, char>::value
+            >::type
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->output_.reset(new ErasedOutput<T>{iterator});
         }
 
         template <typename... Ts>
@@ -2043,9 +2100,7 @@ namespace icecream{ namespace detail
             }
 
             if (sizeof...(Ts) == 0)
-            {
-                this->stream_ << prefix << context;
-            }
+                *this->output_ << prefix << context;
             else
             {
                 auto const forest = Icecream::build_forest(
@@ -2054,10 +2109,39 @@ namespace icecream{ namespace detail
                 this->print_forest(prefix, context, forest);
             }
 
-            this->stream_ << std::endl;
+            *this->output_ << "\n";
         }
 
     private:
+        struct AnyOutput
+        {
+            virtual auto operator<<(std::string const&) -> AnyOutput& = 0;
+            virtual ~AnyOutput() = default;
+        };
+
+        template <typename T>
+        struct ErasedOutput
+            : public AnyOutput
+        {
+            ErasedOutput(T it)
+                : it{it}
+            {}
+
+            virtual ~ErasedOutput() = default;
+
+            auto operator<<(std::string const& str) -> AnyOutput& override
+            {
+                for (auto const& c : str)
+                {
+                    *this->it = c;
+                    ++this->it;
+                }
+                return *this;
+            }
+
+            T it;
+        };
+
         friend auto show_c_string() -> bool;
 
         constexpr static size_type INDENT_BASE = 4;
@@ -2066,7 +2150,9 @@ namespace icecream{ namespace detail
 
         bool enabled_ = true;
 
-        std::ostream stream_ {std::cerr.rdbuf()};
+        std::unique_ptr<AnyOutput> output_ {
+            new ErasedOutput<std::ostreambuf_iterator<char>>{std::ostreambuf_iterator<char>{std::cerr}}
+        };
 
         Prefix prefix_ {[]{return "ic| ";}};
 
@@ -2087,18 +2173,14 @@ namespace icecream{ namespace detail
         {
             auto const break_line = [&](int indent)
             {
-                this->stream_
-                    << "\n"
-                    << std::string(indent * Icecream::INDENT_BASE, ' ');
+                *this->output_ << "\n" << std::string(indent * Icecream::INDENT_BASE, ' ');
             };
 
             if (node.is_leaf())
-            {
-                this->stream_ << node.leaf();
-            }
+                *this->output_ << node.leaf();
             else
             {
-                this->stream_ << node.stem().open;
+                *this->output_ << node.stem().open;
 
                 if (is_tree_multiline)
                     break_line(indent_level+1);
@@ -2140,22 +2222,18 @@ namespace icecream{ namespace detail
                             else
                                 idx = node.stem().separator.size();
 
-                            this->stream_ << node.stem().separator.substr(0, idx);
+                            *this->output_ << node.stem().separator.substr(0, idx);
                             break_line(indent_level+1);
                         }
                         else
-                        {
-                            this->stream_ << node.stem().separator;
-                        }
+                            *this->output_ << node.stem().separator;
                     }
                     else
-                    {
                         if (is_tree_multiline)
                             break_line(indent_level);
-                    }
                 }
 
-                this->stream_ << node.stem().close;
+                *this->output_ << node.stem().close;
             }
         }
 
@@ -2184,14 +2262,14 @@ namespace icecream{ namespace detail
             }()};
 
             // Print prefix and context
-            this->stream_ << prefix;
+            *this->output_ << prefix;
             if (!context.empty())
             {
-                this->stream_ << context;
+                *this->output_ << context;
                 if (is_forest_multiline)
-                    this->stream_ << '\n' << std::string(Icecream::INDENT_BASE, ' ');
+                    *this->output_ << "\n" << std::string(Icecream::INDENT_BASE, ' ');
                 else
-                    this->stream_ << this->context_delimiter_;
+                    *this->output_ << this->context_delimiter_;
             }
 
             // The forest is built with trees in reverse order.
@@ -2229,15 +2307,15 @@ namespace icecream{ namespace detail
                     }
                 }()};
 
-                this->stream_ << arg_name << ": ";
+                *this->output_ << arg_name << ": ";
                 this->print_tree(tree, 1, is_tree_multiline);
 
                 if (it+1 != forest.crend())
                 {
                     if (is_forest_multiline)
-                        this->stream_ << "\n" << std::string(Icecream::INDENT_BASE, ' ');
+                        *this->output_ << "\n" << std::string(Icecream::INDENT_BASE, ' ');
                     else
-                        this->stream_ << ", ";
+                        *this->output_ << ", ";
                 }
             }
         }
@@ -2381,8 +2459,8 @@ namespace icecream{ namespace detail
 namespace icecream
 {
     // The Icecream class is a singleton. This IcecreamAPI class only task is be a
-    // syntactic sugar to make possible call ic.stream() instead of
-    // Icecream::instance().stream().
+    // syntactic sugar to make possible call ic.disable() instead of
+    // Icecream::instance().disable().
     class IcecreamAPI
     {
     public:
@@ -2405,9 +2483,18 @@ namespace icecream
             return *this;
         }
 
-        auto stream() -> std::ostream&
+        template <typename T>
+        auto output(T&& t) ->
+            typename std::enable_if<
+                detail::disjunction<
+                    std::is_base_of<std::ostream, typename std::decay<T>::type>,
+                    detail::has_push_back_T<T, char>,
+                    detail::is_T_output_iterator<T, char>
+                >::value,
+            IcecreamAPI&>::type
         {
-            return detail::Icecream::instance().stream();
+            detail::Icecream::instance().output(std::forward<T>(t));
+            return *this;
         }
 
         template <typename... Ts>
