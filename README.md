@@ -210,14 +210,14 @@ will print:
 
 
 The output formatting configuration is done wrapping a format string and the values with
-the function `icecream::_()`, like in:
+the function `icecream::f_()`, like in:
 
 ```C++
-using icecream::_;
+using icecream::f_;
 auto a = int{42};
 
-IC(_("X", a));
-IC(_("0v#6x", 20, 30), 40, _("*>6", a));
+IC(f_("X", a));
+IC(f_("0v#6x", 20, 30), 40, f_("*>6", a));
 ```
 
 that will print:
@@ -227,7 +227,7 @@ that will print:
 
 
 If the same formatting string should be applied to all the values on an `IC` macro call,
-you can use the `IC_` macro as a shortcut. The code `IC(icecream::_("#x", a, b))` can be
+you can use the `IC_` macro as a shortcut. The code `IC(icecream::f_("#x", a, b))` can be
 rewritten as `IC_("#x", a, b)`.
 
 

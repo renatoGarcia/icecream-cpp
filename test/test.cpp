@@ -143,7 +143,7 @@ TEST_CASE("return")
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
-    using icecream::_;
+    using icecream::f_;
 
     {
         // !v0 is a dangling reference!
@@ -200,9 +200,9 @@ TEST_CASE("return")
         auto a = int{10};
         auto const b = int{20};
 
-        auto&& v0 = IC(_("0v#4x", a, b), 49);
+        auto&& v0 = IC(f_("0v#4x", a, b), 49);
         REQUIRE(std::is_same<decltype(v0), std::tuple<int&, int const&, int&&>&&>::value);
-        REQUIRE(IC(_("0v#4x", a, b), 49) == std::make_tuple(10, 20, 49));
+        REQUIRE(IC(f_("0v#4x", a, b), 49) == std::make_tuple(10, 20, 49));
     }
 
     {
@@ -905,11 +905,11 @@ TEST_CASE("formatting")
     auto sstr = std::stringstream {};
     icecream::ic.stream().rdbuf(sstr.rdbuf());
 
-    using icecream::_;
+    using icecream::f_;
 
     {
         auto v0 = int{42};
-        IC(_("#x", v0), 7);
+        IC(f_("#x", v0), 7);
         REQUIRE(sstr.str() == "ic| v0: 0x2a, 7: 7\n");
         sstr.str("");
     }
@@ -923,14 +923,14 @@ TEST_CASE("formatting")
 
     {
         auto v0 = int{42};
-        IC( ((_("#", (v0) )   )), 7);
+        IC( ((f_("#", (v0) )   )), 7);
         REQUIRE(sstr.str() == "ic| v0: 42, 7: 7\n");
         sstr.str("");
     }
 
     {
         auto v0 = float{12.3456789};
-        IC((_("#A", v0)));
+        IC((f_("#A", v0)));
         REQUIRE(
             ((sstr.str() == "ic| v0: 0X1.8B0FCEP+3\n") ||
              (sstr.str() == "ic| v0: 0X1.8B0FCE0000000P+3\n")) // Visualstudio 2019 output
