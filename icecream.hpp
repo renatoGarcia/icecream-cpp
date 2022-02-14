@@ -77,15 +77,63 @@
     #define ICECREAM_FUNCTION __func__
 #endif
 
+// Used to force MSVC to unpack __VA_ARGS__
+#define ICECREAM_EXPAND(X) X
+
+// __VA_ARGS__ will have the callable name and the args. Returns the quantity of args.
+#define ICECREAM_ARGS_SIZE(...) ICECREAM_EXPAND(ICECREAM_ARGS_SIZE_(__VA_ARGS__, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0))
+#define ICECREAM_ARGS_SIZE_(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, N, ...) N
+
+#define ICECREAM_UNPACK_0(F, ICM, ...) [&](){ return F(
+#define ICECREAM_UNPACK_1(F, ICM, ...) [&](){ auto&& ret_value = ICECREAM_EXPAND(ICM(__VA_ARGS__)); auto&& ret_tuple = ::icecream::detail::ensure_tuple(std::move(ret_value)); return F(std::get<0>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_2(F, ICM, ...) ICECREAM_UNPACK_1(F, ICM, __VA_ARGS__), std::get<1>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_3(F, ICM, ...) ICECREAM_UNPACK_2(F, ICM, __VA_ARGS__), std::get<2>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_4(F, ICM, ...) ICECREAM_UNPACK_3(F, ICM, __VA_ARGS__), std::get<3>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_5(F, ICM, ...) ICECREAM_UNPACK_4(F, ICM, __VA_ARGS__), std::get<4>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_6(F, ICM, ...) ICECREAM_UNPACK_5(F, ICM, __VA_ARGS__), std::get<5>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_7(F, ICM, ...) ICECREAM_UNPACK_6(F, ICM, __VA_ARGS__), std::get<6>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_8(F, ICM, ...) ICECREAM_UNPACK_7(F, ICM, __VA_ARGS__), std::get<7>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_9(F, ICM, ...) ICECREAM_UNPACK_8(F, ICM, __VA_ARGS__), std::get<8>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_10(F, ICM, ...) ICECREAM_UNPACK_9(F, ICM, __VA_ARGS__), std::get<9>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_11(F, ICM, ...) ICECREAM_UNPACK_10(F, ICM, __VA_ARGS__), std::get<10>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_12(F, ICM, ...) ICECREAM_UNPACK_11(F, ICM, __VA_ARGS__), std::get<11>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_13(F, ICM, ...) ICECREAM_UNPACK_12(F, ICM, __VA_ARGS__), std::get<12>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_14(F, ICM, ...) ICECREAM_UNPACK_13(F, ICM, __VA_ARGS__), std::get<13>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_15(F, ICM, ...) ICECREAM_UNPACK_14(F, ICM, __VA_ARGS__), std::get<14>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_16(F, ICM, ...) ICECREAM_UNPACK_15(F, ICM, __VA_ARGS__), std::get<15>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_17(F, ICM, ...) ICECREAM_UNPACK_16(F, ICM, __VA_ARGS__), std::get<16>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_18(F, ICM, ...) ICECREAM_UNPACK_17(F, ICM, __VA_ARGS__), std::get<17>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_19(F, ICM, ...) ICECREAM_UNPACK_18(F, ICM, __VA_ARGS__), std::get<18>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_20(F, ICM, ...) ICECREAM_UNPACK_19(F, ICM, __VA_ARGS__), std::get<19>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_21(F, ICM, ...) ICECREAM_UNPACK_20(F, ICM, __VA_ARGS__), std::get<20>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_22(F, ICM, ...) ICECREAM_UNPACK_21(F, ICM, __VA_ARGS__), std::get<21>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_23(F, ICM, ...) ICECREAM_UNPACK_22(F, ICM, __VA_ARGS__), std::get<22>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_24(F, ICM, ...) ICECREAM_UNPACK_23(F, ICM, __VA_ARGS__), std::get<23>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_25(F, ICM, ...) ICECREAM_UNPACK_24(F, ICM, __VA_ARGS__), std::get<24>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_26(F, ICM, ...) ICECREAM_UNPACK_25(F, ICM, __VA_ARGS__), std::get<25>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_27(F, ICM, ...) ICECREAM_UNPACK_26(F, ICM, __VA_ARGS__), std::get<26>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_28(F, ICM, ...) ICECREAM_UNPACK_27(F, ICM, __VA_ARGS__), std::get<27>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_29(F, ICM, ...) ICECREAM_UNPACK_28(F, ICM, __VA_ARGS__), std::get<28>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_30(F, ICM, ...) ICECREAM_UNPACK_29(F, ICM, __VA_ARGS__), std::get<39>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_31(F, ICM, ...) ICECREAM_UNPACK_30(F, ICM, __VA_ARGS__), std::get<30>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_32(F, ICM, ...) ICECREAM_UNPACK_31(F, ICM, __VA_ARGS__), std::get<31>(std::move(ret_tuple))
+
+#define ICECREAM_APPLY__(F, ICM, N, ...) ICECREAM_UNPACK_##N(F, ICM, __VA_ARGS__) );}()
+#define ICECREAM_APPLY_(ICM, N, F, ...) ICECREAM_APPLY__(F, ICM, N, __VA_ARGS__)
+#define ICECREAM_APPLY_S_(ICM, N, S, F, ...) ICECREAM_APPLY__(F, ICM, N, S, __VA_ARGS__)
 
 #if defined(ICECREAM_LONG_NAME)
     #define ICECREAM(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define ICECREAM0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
-    #define ICECREAM_(S,...) ICECREAM(::icecream::f_(S, __VA_ARGS__))
+    #define ICECREAM_(S, ...) ICECREAM(::icecream::f_(S, __VA_ARGS__))
+    #define ICECREAM_A(...) ICECREAM_EXPAND(ICECREAM_APPLY_(ICECREAM, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
+    #define ICECREAM_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY_(ICECREAM_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
 #else
     #define IC(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
-    #define IC_(S,...) IC(::icecream::f_(S, __VA_ARGS__))
+    #define IC_(S, ...) IC(::icecream::f_(S, __VA_ARGS__))
+    #define IC_A(...) ICECREAM_EXPAND(ICECREAM_APPLY_(IC, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
+    #define IC_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY_S_(IC_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
 #endif
 
 
@@ -492,6 +540,20 @@ namespace icecream{ namespace detail
     template <typename Iterator, typename Item>
     using is_T_output_iterator = decltype(is_T_output_iterator_impl<Iterator, Item>(0));
 
+
+    // // -------------------------------------------------- ensure_tuple
+
+    template <typename T>
+    auto ensure_tuple(T&& t) -> std::tuple<decltype(std::forward<T>(t))>
+    {
+        return std::forward_as_tuple(std::forward<T>(t));
+    };
+
+    template <typename... Ts>
+    auto ensure_tuple(std::tuple<Ts...>&& t) -> std::tuple<Ts...>
+    {
+        return std::move(t);
+    };
 
     // -------------------------------------------------- Formatter
 

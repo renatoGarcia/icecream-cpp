@@ -21,6 +21,11 @@ auto test_empty_ic() -> void
     IC();
 }
 
+template <typename T>
+auto id_f(T&& t) -> T
+{
+    return std::forward<T>(t);
+}
 
 struct NonPrintable
 {};
@@ -48,7 +53,7 @@ class MyClass
 public:
     MyClass() = delete;
     MyClass(const MyClass &other) = delete;
-    MyClass(MyClass &&other) = delete;
+    MyClass(MyClass &&other) = default;
     MyClass& operator=(const MyClass &other) = delete;
     MyClass& operator=(MyClass &&other) = delete;
 
@@ -63,8 +68,22 @@ public:
      os << "<MyClass " << self.i << ">";
      return os;
     }
-};
 
+    auto ret_val() -> int
+    {
+        return this->i;
+    }
+
+    auto multiply(int p) -> int
+    {
+        return this->i * p;
+    }
+
+    auto add(MyClass&& mc) -> int
+    {
+        return this->i + mc.i;
+    }
+};
 
 auto sum(int i0, int i1) -> int
 {
@@ -93,6 +112,61 @@ TEST_CASE("output")
         icecream::ic.output(std::inserter(str, str.end()));
         IC(1, 2);
         REQUIRE(str == "ic| 1: 1, 2: 2\n");
+    }
+}
+
+// -------------------------------------------------- Test apply
+TEST_CASE("apply")
+{
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+        auto mc = MyClass{50};
+
+        auto r = IC_A(mc.ret_val);
+        REQUIRE(str == "");
+        REQUIRE(r == 50);
+    }
+
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+        IC_A(id_f, MyClass{42});
+        REQUIRE(str == "ic| MyClass{42}: <MyClass 42>\n");
+    }
+
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+        IC_A(sum, 1, 2);
+        REQUIRE(str == "ic| 1: 1, 2: 2\n");
+    }
+
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+        IC_A_("#x", sum, 10, 20);
+        REQUIRE(str == "ic| 10: 0xa, 20: 0x14\n");
+    }
+
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+
+        auto mc = MyClass{3};
+        auto r = IC_A(mc.multiply, 10);
+        REQUIRE(str == "ic| 10: 10\n");
+        REQUIRE(r == 30);
+    }
+
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+
+        auto mc = MyClass{3};
+        auto r = IC_A(mc.add, MyClass{7});
+        REQUIRE(str == "ic| MyClass{7}: <MyClass 7>\n");
+        REQUIRE(r == 10);
     }
 }
 

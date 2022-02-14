@@ -12,7 +12,7 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
   * [Nix](#nix)
   * [Conan](#conan)
 * [Usage](#usage)
-  * [Return value](#return-value)
+  * [Return value and IceCream apply macro](#return-value-and-icecream-apply-macro)
   * [Output formatting](#output-formatting)
      * [Format string syntax](#format-string-syntax)
   * [Configuration](#configuration)
@@ -78,12 +78,12 @@ std::cout << "a: " << a
 can be simplified to:
 
 ```c++
-IC(a, b, (sum(a, b)));
+IC(a, b, sum(a, b));
 ```
 
 and will print:
 
-    ic| a: 7, b: 2, (sum(a, b)): 9
+    ic| a: 7, b: 2, sum(a, b): 9
 
 This library is inspired by and aims to behave the most identical as possible to the
 original [Python IceCream](https://github.com/gruns/icecream) library.
@@ -176,21 +176,64 @@ will print:
 
     ic| v0: [1, 2, 3], s0: "bla", 3.14: 3.14
 
+All the functionalities of IceCream-Cpp library are implemented by the macros `IC`,
+[`IC_`](#output-formatting), [`IC_A`](#return-value-and-icecream-apply-macro), and
+[`IC_A_`](#output-formatting).
 
-### Return value
+### Return value and IceCream apply macro
 
-If called with no arguments the `IC(...)` macro will return `void`, if called with one argument it will return the argument itself, and if called with multiple arguments it will return a tuple with all of them:
+If called with no arguments the `IC(...)` macro will return `void`, if called with one
+argument it will return the argument itself, and if called with multiple arguments it will
+return a tuple with all of them.
 
+This is done in this way so that you can use `IC` to inspect a function argument at
+calling point, with no further code change. On the code:
 
 ```C++
-auto a = int {7};
-auto b = std::string {"bla"};
-auto c = float {3.14};
-
-IC();
-int& d = IC(a);
-std::tuple<std::string&, float&> e = IC(b, c);
+my_function(IC(MyClass{}));
 ```
+the created `MyClass` instance will be passed to `my_function` exactly the same as if the
+`IC` macro was not there. The `my_function` will keep receiving a rvalue reference of a
+`MyClass` object.
+
+This approach however is not so practical when the function has many arguments. On the code:
+```C++
+my_function(IC(a), IC(b), IC(c), IC(d));
+```
+besides writing four times the `IC` macro, the printed output will be split on four
+distinct lines. Something like:
+
+    ic| a: 1
+    ic| b: 2
+    ic| c: 3
+    ic| d: 4
+
+Unfortunately, just wrapping all the four arguments in a single `IC` call will not work
+too. The returned value will be a `std:::tuple` with `(a, b, c, d)` and the `my_function`
+expects four arguments.
+
+To work around that, there are the `IC_A` macro. `IC_A` behaves exactly as the `IC` macro,
+but receives a function (any callable actually) as its first argument, and will call that
+function with all the following arguments, printing all of them before. That last code can
+be rewritten as:
+```C++
+IC_A(my_function, a, b, c, d);
+```
+and this time will print:
+
+    ic| a: 1, b: 2, c: 3, d: 4
+
+`IC_A` will return the same value returned by the callable. The code:
+```C++
+auto mc = std::make_unique<MyClass>();
+auto r = IC_A(mc->my_function, a, b);
+```
+behaves exactly the same as:
+```C++
+auto mc = std::make_unique<MyClass>();
+auto r = mc->my_function(a, b);
+```
+but will print the values of `a` and `b`.
 
 
 ### Output formatting
@@ -229,6 +272,16 @@ that will print:
 If the same formatting string should be applied to all the values on an `IC` macro call,
 you can use the `IC_` macro as a shortcut. The code `IC(icecream::f_("#x", a, b))` can be
 rewritten as `IC_("#x", a, b)`.
+
+To configure the formating of [`IC_A`](#return-value-and-icecream-apply-macro) macro,
+there are the macro `IC_A_`. It is just like `IC_A` but receives a formating string as its
+first argument. The code:
+```C++
+IC_A_("#x", my_function, 10, 20);
+```
+will print:
+
+    ic| 10: 0xa, 20: 0x14
 
 
 #### Format string syntax
