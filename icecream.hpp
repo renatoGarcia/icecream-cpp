@@ -37,6 +37,7 @@
 #include <locale>
 #include <memory>
 #include <mutex>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -432,15 +433,21 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- is_std_string
 
-    // Checks if T is a std::basic_string<typename U> or
-    // std::basic_string_view<typename U> instantiation.
+    // Checks if T is a std::basic_string<typename U>
     template <typename T>
-    using is_std_string = disjunction<
-        is_instantiation<std::basic_string, T>
-    #if defined(ICECREAM_STRING_VIEW_HEADER)
-        ,is_instantiation<std::basic_string_view, T>
-    #endif
-    >;
+    using is_std_string = is_instantiation<std::basic_string, T>;
+
+
+    // -------------------------------------------------- is_string_view
+
+    // Checks if T is a std::basic_string_view<typename U>
+#if defined(ICECREAM_STRING_VIEW_HEADER)
+    template <typename T>
+    using is_string_view = is_instantiation<std::basic_string_view, T>;
+#else
+    template <typename>
+    using is_string_view = std::false_type;
+#endif
 
 
     // -------------------------------------------------- is_collection
@@ -448,7 +455,7 @@ namespace icecream{ namespace detail
     // Checks if T is a collection, i.e.: an iterable type that is not a std::string.
     template <typename T>
     using is_collection = conjunction<
-        is_iterable<T>, negation<is_std_string<T>>
+        is_iterable<T>, negation<is_std_string<T>>, negation<is_string_view<T>>
     >;
 
 
@@ -517,6 +524,7 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_valid_prefix = disjunction<
         is_std_string<T>,
+        is_string_view<T>,
         is_c_string<typename std::decay<T>::type>,
         conjunction<
             is_invocable<T>,
@@ -972,6 +980,7 @@ namespace icecream{ namespace detail
                 && !is_character<T>::value
                 && !is_xsig_char<T>::value
                 && !is_std_string<T>::value
+                && !is_string_view<T>::value
                 && !std::is_array<T>::value
             >::type* = 0
         )
@@ -991,29 +1000,36 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
-                using DT = typename std::decay<
-                    typename std::remove_pointer<
-                        typename std::decay<T>::type
-                    >::type
-                >::type;
-
-                using FF = typename FIX<DT>::type;
-                std::wstring_convert<
-                    deletable_facet<std::codecvt<FF, char, std::mbstate_t>>,
-                    FF
-                > cv {};
-
                 if (show_c_string())
                 {
-            #if defined(_MSC_VER) && _MSC_VER <= 1916
-                    FF const* e = (FF const*)value;
-                    while (*e != 0) ++e;
-                    buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
-            #elif defined(__APPLE__)
-                    buf << '"' << value << '"';
-            #else
-                    buf << '"' << cv.to_bytes(value) << '"';
-            #endif
+                    using DT = typename std::decay<
+                        typename std::remove_pointer<
+                            typename std::decay<T>::type
+                        >::type
+                    >::type;
+
+                    // On MacOS, an identity cv.to_bytes operation (between two identical
+                    // character types) throws an exception. If they are the same, we do not
+                    // make any conversion.
+                    if (std::is_same<DT, std::ostringstream::char_type>::value)
+                        buf << '"' << value << '"';
+                    else
+                    {
+                        using FF = typename FIX<DT>::type;
+                        std::wstring_convert<
+                            deletable_facet<std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>>,
+                            FF
+                        > cv {};
+
+                    #if defined(_MSC_VER) && _MSC_VER <= 1916
+                        std::cout << value << std::endl;
+                        FF const* e = (FF const*)value;
+                        while (*e != 0) ++e;
+                        buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
+                    #else
+                        buf << '"' << cv.to_bytes(value) << '"';
+                    #endif
+                    }
                 }
                 else
                     buf << reinterpret_cast<void const*>(value);
@@ -1031,26 +1047,53 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
-                using FF = typename FIX<typename T::value_type>::type;
-                std::wstring_convert<
-                    deletable_facet<std::codecvt<FF, char, std::mbstate_t>>,
-                    FF
-                > cv {};
+                using VT = typename T::value_type;
 
-            #if defined(_MSC_VER) && _MSC_VER <= 1916
-                FF const* b = (FF const*)value.data();
-                FF const* e = (FF const*)value.data();
-                while (*e != 0) ++e;
-                buf << '"' << cv.to_bytes(b, e) << '"';
-            #elif defined(__APPLE__)
-                buf << '"' << value << '"';
-            #else
-                buf << '"' << cv.to_bytes(value.data()) << '"';
-            #endif
+                // On MacOS, an identity cv.to_bytes operation (between two identical
+                // character types) throws an exception. If they are the same, we do not
+                // make any conversion.
+                if (std::is_same<VT, std::ostringstream::char_type>::value)
+                {
+                    // This is an idle reinterpret_cast, since both character types must
+                    // be the same to the program reaches this lines. However, this is
+                    // required because even not being reached, if the character types are
+                    // not the same, a compiling error would happens.
+                    using STR_PTR = std::basic_string<std::ostringstream::char_type> const*;
+                    buf << '"' << *reinterpret_cast<STR_PTR>(&value) << '"';
+                }
+                else
+                {
+                    using FF = typename FIX<VT>::type;
+                    std::wstring_convert<
+                        deletable_facet<std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>>,
+                        FF
+                    > cv {};
+
+                #if defined(_MSC_VER) && _MSC_VER <= 1916
+                    FF const* b = (FF const*)value.data();
+                    FF const* e = (FF const*)value.data();
+                    while (*e != 0) ++e;
+                    buf << '"' << cv.to_bytes(b, e) << '"';
+                #else
+                    buf << '"' << cv.to_bytes(value.data()) << '"';
+                #endif
+                }
 
                 return buf.str();
             }()}
         {}
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        // Print std::string_view
+        template <typename T>
+        Tree(T const& value, std::ostringstream&& buf,
+            typename std::enable_if<
+                is_string_view<T>::value
+            >::type* = 0
+        )
+            : Tree {std::basic_string<typename T::value_type>{value}, std::move(buf)}
+        {}
+    #endif
 
         // Print character
         template <typename T>
@@ -1061,10 +1104,11 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
-                using FF = typename FIX<typename std::decay<T>::type>::type;
+                using DT = typename std::decay<T>::type;
+                using FF = typename FIX<DT>::type;
                 std::wstring_convert<
                     deletable_facet<
-                        std::codecvt<FF, char, std::mbstate_t>
+                        std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>
                     >,
                     FF
                 > cv {};
@@ -1105,11 +1149,13 @@ namespace icecream{ namespace detail
                     break;
 
                 default:
-                #if defined(__APPLE__)
-                    str = value;
-                #else
-                    str = cv.to_bytes(value);
-                #endif
+                    // On MacOS, an identity cv.to_bytes operation (between two identical
+                    // character types) throws an exception. If they are the same, we do not
+                    // make any conversion.
+                    if (std::is_same<DT, std::ostringstream::char_type>::value)
+                        str = value;
+                    else
+                        str = cv.to_bytes(value);
                     break;
                 }
 
@@ -1234,6 +1280,7 @@ namespace icecream{ namespace detail
                     is_iterable<T>::value
                     && !has_insertion<T>::value
                     && !is_std_string<T>::value
+                    && !is_string_view<T>::value
                 )
                 || std::is_array<T>::value
             >::type* = 0
@@ -1296,6 +1343,7 @@ namespace icecream{ namespace detail
                 && !is_unstreamable_ptr<T>::value
                 && !is_weak_ptr<T>::value
                 && !is_std_string<T>::value
+                && !is_string_view<T>::value
                 && !is_variant<T>::value
                 && !is_optional<T>::value
                 && !has_insertion<T>::value
