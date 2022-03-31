@@ -670,7 +670,7 @@ TEST_CASE("character")
         REQUIRE(str == "ic| v0: 'a'\n");
         str.clear();
     }
-#if !defined(__APPLE__)
+
     {
         auto v0 = wchar_t {L'a'};
         IC(v0);
@@ -695,9 +695,23 @@ TEST_CASE("character")
     }
 
     {
+        auto v0 = char16_t {u'\u03B1'}; // Greek Small Letter Alpha
+        IC(v0);
+        REQUIRE(str == "ic| v0: '\xce\xb1'\n");
+        str.clear();
+    }
+
+    {
         auto v0 = char32_t {U'a'};
         IC(v0);
         REQUIRE(str == "ic| v0: 'a'\n");
+        str.clear();
+    }
+
+    {
+        auto v0 = char32_t {U'\U0001F427'}; // Penguin
+        IC(v0);
+        REQUIRE(str == "ic| v0: '\xF0\x9F\x90\xA7'\n");
         str.clear();
     }
 
@@ -714,7 +728,6 @@ TEST_CASE("character")
         REQUIRE(str == "ic| v0: '\\t'\n");
         str.clear();
     }
-#endif
 }
 
 
@@ -730,7 +743,7 @@ TEST_CASE("std_string")
         REQUIRE(str == "ic| v0: \"str 1\"\n");
         str.clear();
     }
-#if !defined(__APPLE__)
+
     {
         auto v0 = std::wstring {L"wstr 1"};
         IC(v0);
@@ -739,19 +752,18 @@ TEST_CASE("std_string")
     }
 
     {
-        auto v0 = std::u16string {u"u16str 1"};
+        auto v0 = std::u16string {u"u16str \u03B1"};
         IC(v0);
-        REQUIRE(str == "ic| v0: \"u16str 1\"\n");
+        REQUIRE(str == "ic| v0: \"u16str \xce\xb1\"\n");
         str.clear();
     }
 
     {
-        auto v0 = std::u32string {U"u32str 1"};
+        auto v0 = std::u32string {U"u32str \U0001F427"};
         IC(v0);
-        REQUIRE(str == "ic| v0: \"u32str 1\"\n");
+        REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
         str.clear();
     }
-#endif
 }
 
 // -------------------------------------------------- Test std::string_view
@@ -767,7 +779,15 @@ TEST_CASE("std_string_view")
         REQUIRE(str == "ic| v0: \"str 1\"\n");
         str.clear();
     }
-#if !defined(__APPLE__)
+
+    {
+        auto v0 = std::string {"ABCDE"};
+        auto v1 = std::string_view {v0.data() + 1, 3};
+        IC(v1);
+        REQUIRE(str == "ic| v1: \"BCD\"\n");
+        str.clear();
+    }
+
     {
         auto v0 = std::wstring_view {L"wstr 1"};
         IC(v0);
@@ -776,19 +796,18 @@ TEST_CASE("std_string_view")
     }
 
     {
-        auto v0 = std::u16string_view {u"u16str 1"};
+        auto v0 = std::u16string_view {u"u16str \u03B1"};
         IC(v0);
-        REQUIRE(str == "ic| v0: \"u16str 1\"\n");
+        REQUIRE(str == "ic| v0: \"u16str \xce\xb1\"\n");
         str.clear();
     }
 
     {
-        auto v0 = std::u32string_view {U"u32str 1"};
+        auto v0 = std::u32string_view {U"u32str \U0001F427"};
         IC(v0);
-        REQUIRE(str == "ic| v0: \"u32str 1\"\n");
+        REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
         str.clear();
     }
-#endif
 }
 #endif
 
@@ -838,7 +857,7 @@ TEST_CASE("c_string")
         str.clear();
         icecream::ic.show_c_string(true);
     }
-#if !defined(__APPLE__)
+
     {
         wchar_t const* v0 = L"wchar_t test";
         IC(v0);
@@ -847,9 +866,9 @@ TEST_CASE("c_string")
     }
 
     {
-        char16_t const* v0 = u"char16_t test";
+        char16_t const* v0 = u"char16_t test \u03B1";
         IC(v0);
-        REQUIRE(str == "ic| v0: \"char16_t test\"\n");
+        REQUIRE(str == "ic| v0: \"char16_t test \xce\xb1\"\n");
         str.clear();
     }
 
@@ -863,12 +882,11 @@ TEST_CASE("c_string")
     }
 
     {
-        char32_t const* const v0 = U"char32_t test";
+        char32_t const* const v0 = U"char32_t test \U0001F427";
         IC(v0);
-        REQUIRE(str == "ic| v0: \"char32_t test\"\n");
+        REQUIRE(str == "ic| v0: \"char32_t test \xF0\x9F\x90\xA7\"\n");
         str.clear();
     }
-#endif
 }
 
 // -------------------------------------------------- Test line wrap
@@ -1088,14 +1106,12 @@ TEST_CASE("dump_string")
             char v_char;
             signed char v_schar;
             unsigned char v_uchar;
-        #if !defined(__APPLE__)
             wchar_t v_wchart;
             wchar_t const* v_pwchar;
             char16_t v_char16_t;
             char16_t const* v_pchar16_t;
             char32_t v_char32_t;
             char32_t const* v_pchar32_t;
-        #endif
             char const* v_pchar;
         };
         auto v0 = S0 {
@@ -1104,14 +1120,12 @@ TEST_CASE("dump_string")
             'z',           // v_char
             -20,           // v_schar;
             200,           // v_uchar;
-        #if !defined(__APPLE__)
             L'w',          // v_wchart
             L"wchar test", // v_pwchart
             u'r',          // v_char16_t
             u"pchar16",    // v_pchar16_t
             U'R',          // v_char32_t
             U"pchar32",    // v_pchar32_t
-        #endif
             "test",        // v_pchar
         };
         auto const result =
@@ -1121,14 +1135,12 @@ TEST_CASE("dump_string")
             "        v_char: 'z',\n"
             "        v_schar: -20,\n"
             "        v_uchar: 200,\n"
-        #if !defined(__APPLE__)
             "        v_wchart: 'w',\n"
             "        v_pwchar: \"wchar test\",\n"
             "        v_char16_t: 'r',\n"
             "        v_pchar16_t: \"pchar16\",\n"
             "        v_char32_t: 'R',\n"
             "        v_pchar32_t: \"pchar32\",\n"
-        #endif
             "        v_pchar: \"test\"\n"
             "    }\n";
         IC(v0);
@@ -1280,11 +1292,9 @@ TEST_CASE("dump_string")
             unsigned char v_uchar[2];
 
             char v_char[4];
-        #if !defined(__APPLE__)
             wchar_t v_wchar[6];
             char16_t v_char16[3];
             char32_t v_char32[4];
-        #endif
 
             float v_float[2];
             MyFloat mfloat[2];
@@ -1307,11 +1317,9 @@ TEST_CASE("dump_string")
             {lowest<unsigned char>(), max<unsigned char>()},                   // v_uchar
 
             {'c', 'h', 'a', 'r'},                                              // v_char
-        #if !defined(__APPLE__)
             L"wchar",                                                          // v_wchar
             {u'1', u'2', u'3'},                                                // v_char16
             {U'3', U'a', U'b', U'c'},                                          // v_char32
-        #endif
 
             {1.1, 1.2},                                                        // v_float
             {2.1, 2.2},                                                        // mfloat
@@ -1335,11 +1343,9 @@ TEST_CASE("dump_string")
             "        v_schar: [" + str_lowest<signed char>() + ", " + str_max<signed char>() + "],\n"
             "        v_uchar: [" + str_lowest<unsigned char>() + ", " + str_max<unsigned char>() + "],\n"
             "        v_char: ['c', 'h', 'a', 'r'],\n"
-        #if !defined(__APPLE__)
             "        v_wchar: ['w', 'c', 'h', 'a', 'r', '\\0'],\n"
             "        v_char16: ['1', '2', '3'],\n"
             "        v_char32: ['3', 'a', 'b', 'c'],\n"
-        #endif
             "        v_float: [1.1, 1.2],\n"
             "        mfloat: <type aliased array, see issue #7 on github>,\n"
             "        v_double: [3.1, 3.2, 3.3],\n"
