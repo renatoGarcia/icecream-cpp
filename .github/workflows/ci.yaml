@@ -55,19 +55,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2019, windows-2016]
+        os: [windows-2022, windows-2019]
         cpp: [11, 14, 17]
         include:
+          - os: windows-2022
+            name: vs2022
           - os: windows-2019
             name: vs2019
-          - os: windows-2016
-            name: vs2017
     steps:
       - uses: actions/checkout@v2
       - name: prepare
         run: choco install boost-msvc-14.2 -y
       - name: build
-        run: cmake . -DBOOST_ROOT="${env:BOOST_ROOT_1_72_0}" -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build . --config Debug
+        run: cmake . -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build . --config Debug
       - name: run
         run: ctest -V -C Debug
 
