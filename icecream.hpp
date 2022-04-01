@@ -1022,7 +1022,6 @@ namespace icecream{ namespace detail
                         > cv {};
 
                     #if defined(_MSC_VER) && _MSC_VER <= 1916
-                        std::cout << value << std::endl;
                         FF const* e = (FF const*)value;
                         while (*e != 0) ++e;
                         buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
