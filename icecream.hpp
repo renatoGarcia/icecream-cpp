@@ -120,22 +120,22 @@
 #define ICECREAM_UNPACK_31(F, ICM, ...) ICECREAM_UNPACK_30(F, ICM, __VA_ARGS__), std::get<30>(std::move(ret_tuple))
 #define ICECREAM_UNPACK_32(F, ICM, ...) ICECREAM_UNPACK_31(F, ICM, __VA_ARGS__), std::get<31>(std::move(ret_tuple))
 
-#define ICECREAM_APPLY__(F, ICM, N, ...) ICECREAM_UNPACK_##N(F, ICM, __VA_ARGS__) );}()
-#define ICECREAM_APPLY_(ICM, N, F, ...) ICECREAM_APPLY__(F, ICM, N, __VA_ARGS__)
-#define ICECREAM_APPLY_S_(ICM, N, S, F, ...) ICECREAM_APPLY__(F, ICM, N, S, __VA_ARGS__)
+#define ICECREAM_APPLY_(F, ICM, N, ...) ICECREAM_UNPACK_##N(F, ICM, __VA_ARGS__) );}()
+#define ICECREAM_APPLY(ICM, N, F, ...) ICECREAM_APPLY_(F, ICM, N, __VA_ARGS__)
+#define ICECREAM_APPLY_S(ICM, N, S, F, ...) ICECREAM_APPLY_(F, ICM, N, S, __VA_ARGS__)
 
 #if defined(ICECREAM_LONG_NAME)
     #define ICECREAM(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define ICECREAM0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
     #define ICECREAM_(S, ...) ICECREAM(::icecream::f_(S, __VA_ARGS__))
-    #define ICECREAM_A(...) ICECREAM_EXPAND(ICECREAM_APPLY_(ICECREAM, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
-    #define ICECREAM_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY_(ICECREAM_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
+    #define ICECREAM_A(...) ICECREAM_EXPAND(ICECREAM_APPLY(ICECREAM, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
+    #define ICECREAM_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY(ICECREAM_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
 #else
     #define IC(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
     #define IC_(S, ...) IC(::icecream::f_(S, __VA_ARGS__))
-    #define IC_A(...) ICECREAM_EXPAND(ICECREAM_APPLY_(IC, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
-    #define IC_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY_S_(IC_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
+    #define IC_A(...) ICECREAM_EXPAND(ICECREAM_APPLY(IC, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
+    #define IC_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY_S(IC_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
 #endif
 
 
@@ -192,8 +192,11 @@ namespace icecream{ namespace detail
     struct deletable_facet: Facet
     {
         template<typename... Ts>
-        deletable_facet(Ts&& ...args) : Facet(std::forward<Ts>(args)...) {}
-        ~deletable_facet() {}
+        deletable_facet(Ts&& ...args)
+            : Facet(std::forward<Ts>(args)...)
+        {}
+
+        virtual ~deletable_facet() override = default;
     };
 
 
@@ -570,9 +573,9 @@ namespace icecream{ namespace detail
     template<typename T>
     struct Formatter
     {
-        Formatter(std::string const& fmt, T&& v)
-            : fmt{fmt}
-            , v{std::forward<T>(v)}
+        Formatter(std::string const& fmt_, T&& v_)
+            : fmt{fmt_}
+            , v{std::forward<T>(v_)}
         {}
 
         std::string fmt;
@@ -583,8 +586,8 @@ namespace icecream{ namespace detail
     template<typename... Ts>
     struct FormatterPack
     {
-        FormatterPack(std::string const& fmt, Ts&&... vs)
-            : vs{Formatter<Ts>(fmt, std::forward<Ts>(vs))...}
+        FormatterPack(std::string const& fmt, Ts&&... vs_)
+            : vs{Formatter<Ts>(fmt, std::forward<Ts>(vs_))...}
         {
             static_assert(
                 conjunction<
@@ -601,7 +604,7 @@ namespace icecream{ namespace detail
     using is_formatter_pack = is_instantiation<FormatterPack, typename std::decay<T>::type>;
 
     template <typename... Ts, int... Is>
-    auto drill_vars(FormatterPack<Ts...>&& fp, sequence<Is...> s) -> std::tuple<Ts...>
+    auto drill_vars(FormatterPack<Ts...>&& fp, sequence<Is...>) -> std::tuple<Ts...>
     {
         return std::tuple<Ts...>{std::forward<Ts>(std::get<Is>(fp.vs).v) ...};
     }
@@ -638,12 +641,9 @@ namespace icecream{ namespace detail
 
 #if defined(ICECREAM_DUMP_STRUCT_CLANG)
     class Tree;
-    static auto parse_struct_dump(char const* format, ...) -> int;
-    namespace
-    {
-        Tree* ds_this = nullptr;
-        std::ostringstream* ds_buf = nullptr;
-    }
+    static inline auto parse_struct_dump(char const* format, ...) -> int;
+    static Tree* ds_this = nullptr;
+    static std::ostringstream* ds_buf = nullptr;
 #endif
 
     class Tree
@@ -664,15 +664,15 @@ namespace icecream{ namespace detail
                 std::vector<Tree> children;
 
                 Stem(
-                    std::string&& open,
-                    std::string&& separator,
-                    std::string&& close,
-                    std::vector<Tree>&& children
+                    std::string&& open_,
+                    std::string&& separator_,
+                    std::string&& close_,
+                    std::vector<Tree>&& children_
                 )
-                    : open {std::move(open)}
-                    , separator {std::move(separator)}
-                    , close {std::move(close)}
-                    , children {std::move(children)}
+                    : open {std::move(open_)}
+                    , separator {std::move(separator_)}
+                    , close {std::move(close_)}
+                    , children {std::move(children_)}
                 {}
 
             } stem;
@@ -685,12 +685,12 @@ namespace icecream{ namespace detail
                     new (&stem) Stem{std::move(other.stem)};
             }
 
-            U(std::string&& leaf)
-                : leaf {std::move(leaf)}
+            U(std::string&& leaf_)
+                : leaf {std::move(leaf_)}
             {}
 
-            U(Stem&& stem)
-                : stem {std::move(stem)}
+            U(Stem&& stem_)
+                : stem {std::move(stem_)}
             {}
 
             ~U() {}
@@ -883,16 +883,16 @@ namespace icecream{ namespace detail
         }
 
         // Returns the sum of characters of the whole tree.
-        auto count_chars() const -> int
+        auto count_chars() const -> std::size_t
         {
-            auto const count_utf8_char = [&](std::string const& str) -> int
+            auto const count_utf8_char = [&](std::string const& str) -> std::size_t
             {
-                auto result = int{0};
+                auto result = std::size_t{0};
                 auto const n_bytes = str.length();
                 for (std::size_t idx = 0; idx < n_bytes; ++idx, ++result)
                 {
                     auto const c = static_cast<uint8_t>(str[idx]);
-                    if (c>=0 && c<=127) idx+=0;
+                    if (c<=127) idx+=0;
                     else if ((c & 0xE0) == 0xC0) idx+=1;
                     else if ((c & 0xF0) == 0xE0) idx+=2;
                     else if ((c & 0xF8) == 0xF0) idx+=3;
@@ -1000,7 +1000,7 @@ namespace icecream{ namespace detail
                 && !is_std_string<T>::value
                 && !is_string_view<T>::value
                 && !std::is_array<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {InnerTag{}, [&]
             {
@@ -1014,7 +1014,7 @@ namespace icecream{ namespace detail
         Tree(T const& value, std::ostringstream&& buf,
             typename std::enable_if<
                 is_c_string<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {InnerTag{}, [&]
             {
@@ -1060,7 +1060,7 @@ namespace icecream{ namespace detail
         Tree(T const& value, std::ostringstream&& buf,
             typename std::enable_if<
                 is_std_string<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {InnerTag{}, [&]
             {
@@ -1106,7 +1106,7 @@ namespace icecream{ namespace detail
         Tree(T const& value, std::ostringstream&& buf,
             typename std::enable_if<
                 is_string_view<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {std::basic_string<typename T::value_type>{value}, std::move(buf)}
         {}
@@ -1117,7 +1117,7 @@ namespace icecream{ namespace detail
         Tree(T const& value, std::ostringstream&& buf,
             typename std::enable_if<
                 is_character<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {InnerTag{}, [&]
             {
@@ -1170,7 +1170,8 @@ namespace icecream{ namespace detail
                     // character types) throws an exception. If they are the same, we do not
                     // make any conversion.
                     if (std::is_same<DT, std::ostringstream::char_type>::value)
-                        str = value;
+                        // Innocuous cast, just to silence a warning with types where this line is not reached.
+                        str = static_cast<std::ostringstream::char_type>(value);
                     else
                         str = cv.to_bytes(value);
                     break;
@@ -1187,7 +1188,7 @@ namespace icecream{ namespace detail
         Tree(T const& value, std::ostringstream&& buf,
             typename std::enable_if<
                 is_xsig_char<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {InnerTag{}, [&]
             {
@@ -1195,7 +1196,7 @@ namespace icecream{ namespace detail
                     std::is_signed<T>::value, int, unsigned int
                 >::type;
 
-                buf << (T0)value;
+                buf << static_cast<T0>(value);
                 return buf.str();
             }()}
         {}
@@ -1206,7 +1207,7 @@ namespace icecream{ namespace detail
             typename std::enable_if<
                 is_unstreamable_ptr<T>::value
                 && !has_insertion<T>::value // On C++20 unique_ptr will have a << overload.
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {InnerTag{}, [&]
             {
@@ -1220,7 +1221,7 @@ namespace icecream{ namespace detail
         Tree(T const& value, std::ostringstream&& buf,
             typename std::enable_if<
                 is_weak_ptr<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {value.expired() ? Tree{InnerTag{}, "expired"} : Tree {value.lock(), std::move(buf)}}
         {}
@@ -1232,7 +1233,7 @@ namespace icecream{ namespace detail
             typename std::enable_if<
                 is_optional<T>::value
                 && !has_insertion<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {value.has_value() ? Tree{*value, std::move(buf)} : Tree{InnerTag{}, "nullopt"}}
         {}
@@ -1240,8 +1241,8 @@ namespace icecream{ namespace detail
 
         struct Visitor
         {
-            Visitor(std::ostringstream&& buf)
-                : buf{std::move(buf)}
+            Visitor(std::ostringstream&& buf_)
+                : buf{std::move(buf_)}
             {}
 
             template <typename T>
@@ -1259,7 +1260,7 @@ namespace icecream{ namespace detail
             typename std::enable_if<
                 is_variant<T>::value
                 && !has_insertion<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {visit(Tree::Visitor{std::move(buf)}, value)}
         {}
@@ -1284,7 +1285,7 @@ namespace icecream{ namespace detail
             typename std::enable_if<
                 is_tuple<T>::value
                 && !has_insertion<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {InnerTag{}, U::Stem{"(", ", ", ")", Tree::tuple_traverser(value, std::move(buf))}}
         {}
@@ -1300,7 +1301,7 @@ namespace icecream{ namespace detail
                     && !is_string_view<T>::value
                 )
                 || std::is_array<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {
                 InnerTag{},
@@ -1324,7 +1325,7 @@ namespace icecream{ namespace detail
                 std::is_base_of<std::exception, T>::value
                 && !std::is_base_of<boost::exception, T>::value
                 && !has_insertion<T>::value
-             >::type* = 0
+             >::type* = nullptr
         )
             : Tree {InnerTag{}, value.what()}
         {}
@@ -1336,7 +1337,7 @@ namespace icecream{ namespace detail
                 std::is_base_of<std::exception, T>::value
                 && std::is_base_of<boost::exception, T>::value
                 && !has_insertion<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {
                 InnerTag{},
@@ -1364,7 +1365,7 @@ namespace icecream{ namespace detail
                 && !is_variant<T>::value
                 && !is_optional<T>::value
                 && !has_insertion<T>::value
-            >::type* = 0
+            >::type* = nullptr
         )
             : Tree {InnerTag{}, ""}
         {
@@ -1603,7 +1604,7 @@ namespace icecream{ namespace detail
         auto result = std::vector<T> {};
         for (std::size_t i = 0; i < size; ++i)
         {
-            result.push_back(va_arg(args, T0));
+            result.push_back(static_cast<T>(va_arg(args, T0)));
         }
 
 
@@ -1619,7 +1620,7 @@ namespace icecream{ namespace detail
         for (std::size_t i = 0; i < size; ++i)
         {
             auto v = va_arg(args, int) & 0x01;
-            result.push_back((bool)v);
+            result.push_back(static_cast<bool>(v));
         }
 
         auto buf_ = std::ostringstream {};
@@ -1638,12 +1639,12 @@ namespace icecream{ namespace detail
             // memory. It works on the tested machines, but can or can not work on other
             // architectures or future Clang releases. Please report any problem.
             double d = va_arg(args, double);
-            result.push_back(*(float*)&d);
+            result.push_back(*reinterpret_cast<float*>(&d));
             ++i;
 
             if ((sizeof(void*)*CHAR_BIT == 32) && i < size)
             {
-                result.push_back(*((float*)&d + 1));
+                result.push_back(*(reinterpret_cast<float*>(&d) + 1));
                 ++i;
             }
         }
@@ -1674,7 +1675,7 @@ namespace icecream{ namespace detail
 
         auto buf_ = std::ostringstream {};
         buf_.copyfmt(*ds_buf);
-        return Tree{(bool)i, std::move(buf_)};
+        return Tree{static_cast<bool>(i), std::move(buf_)};
     }
 
     template <>
@@ -1688,7 +1689,7 @@ namespace icecream{ namespace detail
 
         auto buf_ = std::ostringstream {};
         buf_.copyfmt(*ds_buf);
-        return Tree{*((float*)&d), std::move(buf_)};
+        return Tree{*reinterpret_cast<float*>(&d), std::move(buf_)};
     }
 
     static auto parse_array_dump(va_list& args, Tokens const& tokens) -> Tree
@@ -1850,7 +1851,7 @@ namespace icecream{ namespace detail
     #undef ICECREAM_MSG
     }
 
-    static auto parse_struct_dump(char const* format, ...) -> int
+    static inline auto parse_struct_dump(char const* format, ...) -> int
     {
         auto trim = [](std::string const& str) -> std::string
         {
@@ -1991,7 +1992,7 @@ namespace icecream{ namespace detail
         typename std::enable_if <
             is_std_string<T>::value
             || is_c_string<typename std::decay<T>::type>::value
-        >::type* = 0
+        >::type* = nullptr
     ) -> std::function<std::string()>
     {
         auto const str = std::string {value};
@@ -2003,7 +2004,7 @@ namespace icecream{ namespace detail
     auto to_invocable(T&& value,
         typename std::enable_if<
             is_invocable<T>::value
-        >::type* = 0
+        >::type* = nullptr
     ) -> T&&
     {
         return std::forward<T>(value);
@@ -2016,7 +2017,7 @@ namespace icecream{ namespace detail
         struct ErasedFunction
         {
             virtual auto operator()() -> std::string = 0;
-            virtual ~ErasedFunction() {};
+            virtual ~ErasedFunction() = default;
         };
 
         template <typename T>
@@ -2032,8 +2033,8 @@ namespace icecream{ namespace detail
             Function& operator=(Function const&) = delete;
             Function& operator=(Function&&) = default;
 
-            Function (T&& func)
-                : func {std::move(func)}
+            Function (T&& func_)
+                : func {std::move(func_)}
             {}
 
             auto operator()() -> std::string override
@@ -2250,11 +2251,11 @@ namespace icecream{ namespace detail
         struct ErasedOutput
             : public AnyOutput
         {
-            ErasedOutput(T it)
-                : it{it}
+            ErasedOutput(T it_)
+                : it{it_}
             {}
 
-            virtual ~ErasedOutput() = default;
+            virtual ~ErasedOutput() override = default;
 
             auto operator<<(std::string const& str) -> AnyOutput& override
             {
@@ -2298,7 +2299,7 @@ namespace icecream{ namespace detail
             Tree const& node, size_type const indent_level, bool const is_tree_multiline
         ) -> void
         {
-            auto const break_line = [&](int indent)
+            auto const break_line = [&](size_type indent)
             {
                 *this->output_ << "\n" << std::string(indent * Icecream::INDENT_BASE, ' ');
             };
@@ -2695,10 +2696,7 @@ namespace icecream
         }
     };
 
-    namespace
-    {
-        IcecreamAPI ic {};
-    }
+    static IcecreamAPI ic {};
 
     template<typename... Ts>
     auto f_(std::string const& fmt, Ts&&... vs) -> detail::FormatterPack<decltype(std::forward<Ts>(vs))...>
@@ -2730,27 +2728,27 @@ namespace icecream{ namespace detail
         // Used by compilers that expand an empyt __VA_ARGS__ in
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, ""}
         Dispatcher(
-            std::string const& file,
-            int line,
-            std::string const& function,
-            std::string const& arg_names
+            std::string const& file_,
+            int line_,
+            std::string const& function_,
+            std::string const& arg_names_
         )
-            : file {file}
-            , line {line}
-            , function {function}
-            , arg_names {arg_names}
+            : file {file_}
+            , line {line_}
+            , function {function_}
+            , arg_names {arg_names_}
         {}
 
         // Used by compilers that expand an empyt __VA_ARGS__ in
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, }
         Dispatcher(
-            std::string const& file,
-            int line,
-            std::string const& function
+            std::string const& file_,
+            int line_,
+            std::string const& function_
         )
-            : file {file}
-            , line {line}
-            , function {function}
+            : file {file_}
+            , line {line_}
+            , function {function_}
             , arg_names {""}
         {}
 
