@@ -1510,3 +1510,44 @@ TEST_CASE("dump_string")
     }
 }
 #endif
+
+
+// -------------------------------------------------- Test Tree char count
+TEST_CASE("Tree char count")
+{
+    {
+        auto v0 = std::string {"str"};
+        auto tree = icecream::detail::Tree{v0, std::ostringstream{}};
+        REQUIRE(tree.count_chars() == 5); // 3 chars (str) plus 2 char (quotes)
+    }
+
+    {
+        auto v0 = std::string {"\xce\xb1"}; // Greek small letter alpha
+        auto tree = icecream::detail::Tree{v0, std::ostringstream{}};
+        REQUIRE(tree.count_chars() == 3); // 1 chars plus 2 char (quotes)
+    }
+
+    {
+        auto v0 = std::string {"\xF0\x9F\x90\xA7"}; // Penguin
+        auto tree = icecream::detail::Tree{v0, std::ostringstream{}};
+        REQUIRE(tree.count_chars() == 3); // 1 chars plus 2 char (quotes)
+    }
+
+    {
+        auto v0 = std::wstring {L"wstr"};
+        auto tree = icecream::detail::Tree{v0, std::ostringstream{}};
+        REQUIRE(tree.count_chars() == 6);
+    }
+
+    {
+        auto v0 = std::u16string {u"u16\u03B1"}; // Greek small letter alpha
+        auto tree = icecream::detail::Tree{v0, std::ostringstream{}};
+        REQUIRE(tree.count_chars() == 6);
+    }
+
+    {
+        auto v0 = std::u32string {U"abcd\U0001F427"}; // Penguin
+        auto tree = icecream::detail::Tree{v0, std::ostringstream{}};
+        REQUIRE(tree.count_chars() == 7);
+    }
+}

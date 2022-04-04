@@ -28,6 +28,7 @@
 #include <codecvt>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <functional>
 #include <iomanip>
@@ -884,15 +885,32 @@ namespace icecream{ namespace detail
         // Returns the sum of characters of the whole tree.
         auto count_chars() const -> int
         {
+            auto const count_utf8_char = [&](std::string const& str) -> int
+            {
+                auto result = int{0};
+                auto const n_bytes = str.length();
+                for (std::size_t idx = 0; idx < n_bytes; ++idx, ++result)
+                {
+                    auto const c = static_cast<uint8_t>(str[idx]);
+                    if (c>=0 && c<=127) idx+=0;
+                    else if ((c & 0xE0) == 0xC0) idx+=1;
+                    else if ((c & 0xF0) == 0xE0) idx+=2;
+                    else if ((c & 0xF8) == 0xF0) idx+=3;
+                    else continue; //invalid utf8, silently move on
+                }
+
+                return result;
+            };
+
             if (this->is_leaf_)
             {
-                return this->content_.leaf.size();
+                return count_utf8_char(this->content_.leaf);
             }
             else
             {
                 // The enclosing chars.
                 auto result =
-                    this->content_.stem.open.size() + this->content_.stem.close.size();
+                    count_utf8_char(this->content_.stem.open) + count_utf8_char(this->content_.stem.close);
 
                 // count the size of each child
                 for (auto const& child : this->content_.stem.children)
@@ -902,7 +920,7 @@ namespace icecream{ namespace detail
                 if (this->content_.stem.children.size() > 1)
                     result +=
                         (this->content_.stem.children.size() - 1)
-                        * this->content_.stem.separator.size();
+                        * count_utf8_char(this->content_.stem.separator);
 
                 return result;
             }
