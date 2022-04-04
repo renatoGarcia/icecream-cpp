@@ -2014,30 +2014,17 @@ namespace icecream{ namespace detail
     // -------------------------------------------------- Prefix
     class Prefix
     {
-        struct ErasedFunction
-        {
-            virtual auto operator()() -> std::string = 0;
-            virtual ~ErasedFunction() = default;
-        };
-
+    private:
         template <typename T>
         struct Function
-            : public ErasedFunction
         {
             static_assert(is_invocable<T>::value, "");
-            static_assert(!std::is_reference<T>::value, "");
 
-            Function() = delete;
-            Function(Function const&) = delete;
-            Function(Function&&) = default;
-            Function& operator=(Function const&) = delete;
-            Function& operator=(Function&&) = default;
-
-            Function (T&& func_)
-                : func {std::move(func_)}
+            Function (T const& func_)
+                : func{func_}
             {}
 
-            auto operator()() -> std::string override
+            auto operator()() -> std::string
             {
                 auto buf = std::ostringstream {};
                 buf << this->func();
@@ -2047,7 +2034,7 @@ namespace icecream{ namespace detail
             T func;
         };
 
-        std::vector<std::unique_ptr<ErasedFunction>> functions;
+        std::vector<std::function<std::string()>> functions;
 
     public:
         Prefix() = delete;
@@ -2063,8 +2050,8 @@ namespace icecream{ namespace detail
             // Hack to call this->functions.emplace_back to all funcs
             (void) std::initializer_list<int> {
                 (
-                    (void) this->functions.emplace_back(
-                        new Function<typename std::decay<Ts>::type> {
+                    (void) this->functions.push_back(
+                        Function<typename std::decay<Ts>::type> {
                             std::forward<Ts>(funcs)
                         }
                     ),
@@ -2077,7 +2064,7 @@ namespace icecream{ namespace detail
         {
             auto result = std::string {};
             for (auto const& func : this->functions)
-                result.append((*func)());
+                result.append(func());
 
             return result;
         }
@@ -2119,7 +2106,7 @@ namespace icecream{ namespace detail
             std::lock_guard<std::mutex> guard(this->mutex);
 
             using OSIt = std::ostreambuf_iterator<char>;
-            this->output_.reset(new ErasedOutput<OSIt>{OSIt{stream}});
+            this->output_ = Output<OSIt>{OSIt{stream}};
         }
 
         template <typename T>
@@ -2131,7 +2118,7 @@ namespace icecream{ namespace detail
             std::lock_guard<std::mutex> guard(this->mutex);
 
             using OSIt = std::back_insert_iterator<T>;
-            this->output_.reset(new ErasedOutput<OSIt>{OSIt{container}});
+            this->output_ = Output<OSIt>{OSIt{container}};
         }
 
         template <typename T>
@@ -2141,7 +2128,7 @@ namespace icecream{ namespace detail
             >::type
         {
             std::lock_guard<std::mutex> guard(this->mutex);
-            this->output_.reset(new ErasedOutput<T>{iterator});
+            this->output_ = Output<T>{iterator};
         }
 
         template <typename... Ts>
@@ -2228,7 +2215,10 @@ namespace icecream{ namespace detail
             }
 
             if (sizeof...(Ts) == 0)
-                *this->output_ << prefix << context;
+            {
+                this->output_(prefix);
+                this->output_(context);
+            }
             else
             {
                 auto const forest = Icecream::build_forest(
@@ -2237,34 +2227,24 @@ namespace icecream{ namespace detail
                 this->print_forest(prefix, context, forest);
             }
 
-            *this->output_ << "\n";
+            this->output_("\n");
         }
 
     private:
-        struct AnyOutput
-        {
-            virtual auto operator<<(std::string const&) -> AnyOutput& = 0;
-            virtual ~AnyOutput() = default;
-        };
-
         template <typename T>
-        struct ErasedOutput
-            : public AnyOutput
+        struct Output
         {
-            ErasedOutput(T it_)
+            Output(T it_)
                 : it{it_}
             {}
 
-            virtual ~ErasedOutput() override = default;
-
-            auto operator<<(std::string const& str) -> AnyOutput& override
+            auto operator()(std::string const& str) -> void
             {
                 for (auto const& c : str)
                 {
                     *this->it = c;
                     ++this->it;
                 }
-                return *this;
             }
 
             T it;
@@ -2278,8 +2258,8 @@ namespace icecream{ namespace detail
 
         bool enabled_ = true;
 
-        std::unique_ptr<AnyOutput> output_ {
-            new ErasedOutput<std::ostreambuf_iterator<char>>{std::ostreambuf_iterator<char>{std::cerr}}
+        std::function<void(std::string const&)> output_ {
+            Output<std::ostreambuf_iterator<char>>{std::ostreambuf_iterator<char>{std::cerr}}
         };
 
         Prefix prefix_ {[]{return "ic| ";}};
@@ -2301,14 +2281,15 @@ namespace icecream{ namespace detail
         {
             auto const break_line = [&](size_type indent)
             {
-                *this->output_ << "\n" << std::string(indent * Icecream::INDENT_BASE, ' ');
+                this->output_("\n");
+                this->output_(std::string(indent * Icecream::INDENT_BASE, ' '));
             };
 
             if (node.is_leaf())
-                *this->output_ << node.leaf();
+                this->output_(node.leaf());
             else
             {
-                *this->output_ << node.stem().open;
+                this->output_(node.stem().open);
 
                 if (is_tree_multiline)
                     break_line(indent_level+1);
@@ -2350,18 +2331,18 @@ namespace icecream{ namespace detail
                             else
                                 idx = node.stem().separator.size();
 
-                            *this->output_ << node.stem().separator.substr(0, idx);
+                            this->output_(node.stem().separator.substr(0, idx));
                             break_line(indent_level+1);
                         }
                         else
-                            *this->output_ << node.stem().separator;
+                            this->output_(node.stem().separator);
                     }
                     else
                         if (is_tree_multiline)
                             break_line(indent_level);
                 }
 
-                *this->output_ << node.stem().close;
+                this->output_(node.stem().close);
             }
         }
 
@@ -2390,14 +2371,17 @@ namespace icecream{ namespace detail
             }()};
 
             // Print prefix and context
-            *this->output_ << prefix;
+            this->output_(prefix);
             if (!context.empty())
             {
-                *this->output_ << context;
+                this->output_(context);
                 if (is_forest_multiline)
-                    *this->output_ << "\n" << std::string(Icecream::INDENT_BASE, ' ');
+                {
+                    this->output_("\n");
+                    this->output_(std::string(Icecream::INDENT_BASE, ' '));
+                }
                 else
-                    *this->output_ << this->context_delimiter_;
+                    this->output_(this->context_delimiter_);
             }
 
             // The forest is built with trees in reverse order.
@@ -2435,15 +2419,19 @@ namespace icecream{ namespace detail
                     }
                 }()};
 
-                *this->output_ << arg_name << ": ";
+                this->output_(arg_name);
+                this->output_(": ");
                 this->print_tree(tree, 1, is_tree_multiline);
 
                 if (it+1 != forest.crend())
                 {
                     if (is_forest_multiline)
-                        *this->output_ << "\n" << std::string(Icecream::INDENT_BASE, ' ');
+                    {
+                        this->output_("\n");
+                        this->output_(std::string(Icecream::INDENT_BASE, ' '));
+                    }
                     else
-                        *this->output_ << ", ";
+                        this->output_(", ");
                 }
             }
         }

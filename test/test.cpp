@@ -47,6 +47,10 @@ struct MyIterable
     }
 };
 
+auto return_7() -> int
+{
+    return 7;
+}
 
 class MyClass
 {
@@ -647,6 +651,13 @@ TEST_CASE("prefix")
         icecream::ic.prefix("ic ", []{return 5;}, "| ");
         IC(1, 2);
         REQUIRE(str == "ic 5| 1: 1, 2: 2\n");
+        str.clear();
+    }
+
+    {
+        icecream::ic.prefix("id ", return_7, " | ");
+        IC(1, 2);
+        REQUIRE(str == "id 7 | 1: 1, 2: 2\n");
         str.clear();
     }
 
