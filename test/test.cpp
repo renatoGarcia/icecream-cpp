@@ -233,6 +233,39 @@ TEST_CASE("base")
     }
 
     {
+        auto const result =
+            "ic| 7: 7\n"
+            "    \"same<int, \\\"int>\": [\n"
+            "        's',\n"
+            "        'a',\n"
+            "        'm',\n"
+            "        'e',\n"
+            "        '<',\n"
+            "        'i',\n"
+            "        'n',\n"
+            "        't',\n"
+            "        ',',\n"
+            "        ' ',\n"
+            "        '\"',\n"
+            "        'i',\n"
+            "        'n',\n"
+            "        't',\n"
+            "        '>',\n"
+            "        '\\0'\n"
+            "    ]\n"
+            "    34: 34\n";
+        IC(7, "same<int, \"int>", 34);
+        REQUIRE(str == result);
+        str.clear();
+    }
+
+    {
+        IC(7, ',', 34);
+        REQUIRE(str == "ic| 7: 7, ',': ',', 34: 34\n");
+        str.clear();
+    }
+
+    {
         IC(v0);
         REQUIRE(str == "ic| v0: [1, 2, 3, 4, 5]\n");
         str.clear();
