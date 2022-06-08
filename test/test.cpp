@@ -6,6 +6,7 @@
 #include <sstream>
 #include <cstddef>
 #include <limits>
+#include <type_traits>
 
 #if defined (CPP_17)
 #include <optional>
@@ -196,7 +197,7 @@ TEST_CASE("base")
 
     {
         test_empty_ic();
-        REQUIRE_THAT(str, Catch::StartsWith("ic| test.cpp:21 in"));
+        REQUIRE_THAT(str, Catch::StartsWith("ic| test.cpp:22 in"));
         REQUIRE_THAT(str, Catch::Contains("test_empty_ic("));
         str.clear();
     }
@@ -222,6 +223,12 @@ TEST_CASE("base")
     {
         IC((sum(40, 2)), i0   , (((sum(3, 5)))));
         REQUIRE(str == "ic| sum(40, 2): 42, i0: 7, sum(3, 5): 8\n");
+        str.clear();
+    }
+
+    {
+        IC(std::is_same<int, int> :: value);
+        REQUIRE(str == "ic| std::is_same<int, int> :: value: 1\n");
         str.clear();
     }
 

@@ -25,6 +25,7 @@
 #define ICECREAM_HPP_INCLUDED
 
 #include <cassert>
+#include <cctype>
 #include <codecvt>
 #include <cstddef>
 #include <cstdint>
@@ -2743,38 +2744,64 @@ namespace icecream{ namespace detail
         template <typename... Ts>
         auto print(Ts&&... args) -> void
         {
-            auto split_names = std::vector<std::string> {};
-            auto b_it = std::begin(arg_names);
-            auto it = std::begin(arg_names);
-            auto par_count = int {0};
+            auto split_names = std::vector<std::string>{};
+            auto b_it = arg_names.crbegin();
+            auto it = arg_names.crbegin();
+            auto par_count = int{0};
+            auto angle_count = int{0};
+
+            // Check if the '>' char is the end of a template arguments listing. It will
+            // be a template closing at `std::is_same<int, int>::value` but not at `5 > 2`
+            using crev_it = std::string::const_reverse_iterator;
+            auto is_closing_template = [](crev_it it, crev_it b_it) -> bool
+            {
+                while (it != b_it)
+                {
+                    if (*it == ':' && *(it-1) == ':')
+                        return true;
+                    else if (*it != '>' && !std::isspace(*it))
+                        return false;
+                    else
+                        --it;
+                }
+                return false;
+            };
 
             // Split the the arg_names
             if (!this->arg_names.empty())
                 while (true)
                 {
-                    if (it == std::end(arg_names) || (*it == ',' && par_count == 0))
+                    if (it == arg_names.crend() || (*it == ',' && par_count == 0 && angle_count == 0))
                     {
-                        // Remove the trailing spaces
+                        // Remove the leading spaces
                         auto e_it = it - 1;
                         while (*e_it == ' ') --e_it;
                         ++e_it;
 
-                        // Remove the leading spaces
+                        // Remove the trailing spaces
                         while (*b_it == ' ') ++b_it;
 
-                        split_names.emplace_back(b_it, e_it);
-                        if (it != std::end(arg_names)) b_it = it + 1;
-                    }
-                    else if (*it == '(')
-                    {
-                        ++par_count;
+                        split_names.emplace(split_names.begin(), e_it.base(), b_it.base());
+                        if (it != arg_names.crend()) b_it = it + 1;
                     }
                     else if (*it == ')')
                     {
+                        ++par_count;
+                    }
+                    else if (*it == '(')
+                    {
                         --par_count;
                     }
+                    else if (is_closing_template(it, b_it))
+                    {
+                        ++angle_count;
+                    }
+                    else if (*it == '<' && angle_count > 0)
+                    {
+                        --angle_count;
+                    }
 
-                    if (it == std::end(arg_names))
+                    if (it == arg_names.crend())
                     {
                         break;
                     }
