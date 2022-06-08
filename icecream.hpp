@@ -2670,6 +2670,121 @@ namespace icecream
 
 namespace icecream{ namespace detail
 {
+    /** This function will receive a string as "foo, bar, baz" and return a vector with
+     * all the arguments split, such as ["foo", "bar", "baz"].
+     */
+    inline auto split_arguments(std::string const& all_names) -> std::vector<std::string>
+    {
+        auto result = std::vector<std::string>{};
+
+        if (all_names.empty())
+            return result;
+
+        // Check if the '>' char is the closing of a template arguments listing. It will
+        // be a template closing at `std::is_same<int, int>::value` but not at `5 > 2`
+        using crev_it = std::string::const_reverse_iterator;
+        auto is_closing_template = [](crev_it left_it, crev_it right_it) -> bool
+        {
+            if (*left_it != '>' || left_it == right_it)
+                return false;
+
+            --left_it; // move to right
+            while (
+                left_it != right_it
+                && (*left_it == ' ' || *left_it == '\t' || *left_it == '\n' || *left_it == '\r' || *left_it == '\f' || *left_it == '\v')
+            )
+            {
+                --left_it; // move to right
+            }
+
+            return *left_it == ':' && (left_it != right_it) && *(left_it-1) == ':';
+        };
+
+        auto right_cut = all_names.crbegin();
+        auto left_cut = all_names.crbegin();
+        auto const left_end = all_names.crend();
+        auto parenthesis_count = int{0};
+        auto angle_bracket_count = int{0};
+
+        // Parse the arguments string backward. It is easier this way to check if a '<' or
+        // '>' character is either a comparison operator, or a opening and closing of
+        // templates arguments.
+        while(true)
+        {
+            if (left_cut != left_end && (left_cut+1) != left_end)
+            {
+                // Ignore commas inside quotations (single and double)
+
+                if (*left_cut == '"' && *(left_cut+1) != '\\')
+                {
+                    // Don't split anything inside a string
+
+                    ++left_cut;
+                    while (!(*left_cut == '"' && (left_cut+1) != left_end && *(left_cut+1) != '\\')) ++left_cut;
+                    ++left_cut;
+                }
+                else if (*left_cut == '\'' && *(left_cut+1) != '\\')
+                {
+                    // Don't split a ',' (a comma between single quotation marks)
+
+                    ++left_cut;
+                    while (!(*left_cut == '\'' && (left_cut+1) != left_end && *(left_cut+1) != '\\')) ++left_cut;
+                    ++left_cut;
+                }
+            }
+
+            if (left_cut == left_end || (*left_cut == ',' && parenthesis_count == 0 && angle_bracket_count == 0))
+            {
+                // If it have found the comma separating two arguments, or the left ending
+                // of the leftmost argument.
+
+                // Remove the leading spaces
+                auto e_it = left_cut - 1;
+                while (*e_it == ' ') --e_it;
+                ++e_it;
+
+                // Remove the trailing spaces
+                while (*right_cut == ' ') ++right_cut;
+
+                result.emplace(result.begin(), e_it.base(), right_cut.base());
+                if (left_cut != left_end)
+                {
+                    right_cut = left_cut + 1;
+                }
+            }
+
+            // It won't cut on a comma within parentheses, such as when the argument is a
+            // function call, as in IC(foo(1, 2))
+            else if (*left_cut == ')')
+            {
+                ++parenthesis_count;
+            }
+            else if (*left_cut == '(')
+            {
+                --parenthesis_count;
+            }
+
+            // It won't cut on a comma within a template argument list, such as in
+            // IC(std::is_same<int, int>::value)
+            else if (is_closing_template(left_cut, right_cut))
+            {
+                ++angle_bracket_count;
+            }
+            else if (*left_cut == '<' && angle_bracket_count > 0)
+            {
+                --angle_bracket_count;
+            }
+
+            if (left_cut == left_end)
+                break;
+            else
+                ++left_cut;
+        }
+
+        return result;
+    }
+
+
     // The use of this struct instead of a free function is a needed hack because of the
     // trailing comma problem with __VA_ARGS__ expansion. A macro like:
     //
@@ -2717,74 +2832,8 @@ namespace icecream{ namespace detail
         template <typename... Ts>
         auto print(Ts&&... args) -> void
         {
-            auto split_names = std::vector<std::string>{};
-            auto b_it = arg_names.crbegin();
-            auto it = arg_names.crbegin();
-            auto par_count = int{0};
-            auto angle_count = int{0};
-
-            // Check if the '>' char is the end of a template arguments listing. It will
-            // be a template closing at `std::is_same<int, int>::value` but not at `5 > 2`
-            using crev_it = std::string::const_reverse_iterator;
-            auto is_closing_template = [](crev_it it, crev_it b_it) -> bool
-            {
-                while (it != b_it)
-                {
-                    if (*it == ':' && *(it-1) == ':')
-                        return true;
-                    else if (*it != '>' && !std::isspace(*it))
-                        return false;
-                    else
-                        --it;
-                }
-                return false;
-            };
-
-            // Split the the arg_names
-            if (!this->arg_names.empty())
-                while (true)
-                {
-                    if (it == arg_names.crend() || (*it == ',' && par_count == 0 && angle_count == 0))
-                    {
-                        // Remove the leading spaces
-                        auto e_it = it - 1;
-                        while (*e_it == ' ') --e_it;
-                        ++e_it;
-
-                        // Remove the trailing spaces
-                        while (*b_it == ' ') ++b_it;
-
-                        split_names.emplace(split_names.begin(), e_it.base(), b_it.base());
-                        if (it != arg_names.crend()) b_it = it + 1;
-                    }
-                    else if (*it == ')')
-                    {
-                        ++par_count;
-                    }
-                    else if (*it == '(')
-                    {
-                        --par_count;
-                    }
-                    else if (is_closing_template(it, b_it))
-                    {
-                        ++angle_count;
-                    }
-                    else if (*it == '<' && angle_count > 0)
-                    {
-                        --angle_count;
-                    }
-
-                    if (it == arg_names.crend())
-                    {
-                        break;
-                    }
-                    else
-                    {
-                        ++it;
-                    }
-                }
-
-            ::icecream::ic.print(file, line, function, split_names, std::forward<Ts>(args)...);
+            auto arg_names = split_arguments(this->arg_names);
+            ::icecream::ic.print(file, line, function, arg_names, std::forward<Ts>(args)...);
         }
 
         // Return a std::tuple with all the args, flattening the content of any FormatterPack
