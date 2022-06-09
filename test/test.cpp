@@ -418,6 +418,24 @@ TEST_CASE("std_variant")
 }
 #endif
 
+// -------------------------------------------------- Test filesystem
+
+#if defined(CPP_17) && defined(__cpp_lib_filesystem)
+#include <filesystem>
+TEST_CASE("std_filesystem")
+{
+    auto str = std::string{};
+    icecream::ic.output(str);
+
+    {
+        auto v0 = std::filesystem::path{"/one/two/three"};
+        IC(v0);
+        REQUIRE(str == "ic| v0: \"/one/two/three\"\n");
+        str.clear();
+    }
+}
+#endif
+
 
 // -------------------------------------------------- Test tuples
 

@@ -1945,42 +1945,10 @@ namespace icecream{ namespace detail
 
     // Check if IceCream can print the type T.
     template <typename T>
-    struct is_printable: std::conditional<
-        is_collection<T>::value,
-            disjunction<
-                conjunction<
-                    is_tree_argument<T>,
-                    is_printable<elements_type<T>>
-                >,
-                has_insertion<T>
-            >,
-            is_tree_argument<T>
-    >::type {};
+    struct is_printable: is_tree_argument<T> {};
 
     template <typename... Ts>
     struct is_printable<FormatterPack<Ts...>&>: conjunction<
-        is_printable<Ts>...
-    > {};
-
-    template <typename T0, typename T1>
-    struct is_printable<std::pair<T0, T1>&>: conjunction<
-        is_printable<T0>, is_printable<T1>
-    > {};
-
-    template <typename... Ts>
-    struct is_printable<std::tuple<Ts...>&>: conjunction<
-        is_printable<Ts>...
-    > {};
-
-#if defined(ICECREAM_VARIANT_HEADER)
-    template <typename... Ts>
-    struct is_printable<std::variant<Ts...>&>: conjunction<
-        is_printable<Ts>...
-    > {};
-#endif
-
-    template <typename... Ts>
-    struct is_printable<boost::variant2::variant<Ts...>&>: conjunction<
         is_printable<Ts>...
     > {};
 
