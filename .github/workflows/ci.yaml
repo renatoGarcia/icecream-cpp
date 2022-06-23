@@ -9,6 +9,7 @@ on:
       - 'LICENSE.txt'
       - 'AUTHORS'
       - '*.nix'
+      - 'example_project/**'
   pull_request:
     branches:
       - master
@@ -17,6 +18,7 @@ on:
       - 'LICENSE.txt'
       - 'AUTHORS'
       - '*.nix'
+      - 'example_project/**'
 
 jobs:
 

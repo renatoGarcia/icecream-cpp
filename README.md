@@ -91,11 +91,11 @@ original [Python IceCream](https://github.com/gruns/icecream) library.
 ## Install
 
 The IceCream-Cpp is a one file, header only library, having the STL as its only
-dependency. The most direct way to install it is just copy the `icecream.hpp` header
-to inside your project.
+dependency. The most immediate way to use it, is just copy the `icecream.hpp` header into
+your project.
 
-To properly install it system wide, together with the CMake project files, run on
-IceCream-Cpp project root directory:
+To properly install it system wide, together with the CMake project files, run these
+commands in IceCream-Cpp project root directory:
 ```Shell
 mkdir build
 cd build
@@ -105,23 +105,23 @@ cmake --install .
 
 ### Nix
 
-If using [Nix](https://nixos.org), any committed version on *master* branch can be
-installed using the archive
-`https://github.com/renatoGarcia/icecream-cpp/archive/<commmit>.tar.gz`, where
-`<commit>.tar.gz` could be any tag or commit hash of master branch.
-
-For instance, to install the master HEAD commit, environment wide:
-```Shell
-nix-env -if https://github.com/renatoGarcia/icecream-cpp/archive/master.tar.gz
+If using [Nix](https://nixos.org), IceCream-Cpp can be included as a flakes input as
+```Nix
+inputs.icecream-cpp.url = "github:renatoGarcia/icecream-cpp";
 ```
 
-To use a specific commit in a `shell.nix`:
-```Text
-icecream-cpp = pkgs.callPackage (
-  fetchTarball https://github.com/renatoGarcia/icecream-cpp/archive/<commit>.tar.gz
-) { inherit pkgs; };
+The IceCream-Cpp flake defines an overlay so that it can be used when importing `nixpkgs`:
+```Nix
+import nixpkgs {
+  system = "x86_64-linux";
+  overlays = [
+    icecream-cpp.overlays.default
+  ];
+}
 ```
-where `pkgs` is the variable with the evaluated `nixpkgs`.
+Doing this, an `icecream-cpp` derivation will be added to the `nixpkgs` attribute set.
+
+A working example of how to use IceCream-Cpp in a flake project is [here](example_project/flake.nix).
 
 
 ### Conan
