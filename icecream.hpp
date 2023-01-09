@@ -142,6 +142,16 @@
 
 #define ICECREAM_ASSERT(exp, msg) assert(((void)msg, exp))
 
+// Used to print char array to one line.
+//     IC("abcdefghijklmn")
+//     > ic| "abcdefghijklmn": abcdefghijklmn
+//#define ICECREAM_PRINT_CHAR_ARRAY_AS_STRING
+
+#if defined(ICECREAM_PRINT_CHAR_ARRAY_AS_STRING)
+template <class> struct is_bounded_char_array : std::false_type {};
+template <size_t N>
+struct is_bounded_char_array<char[N]> : std::true_type {};
+#endif
 
 namespace boost
 {
@@ -1301,7 +1311,13 @@ namespace icecream{ namespace detail
                     && !is_std_string<T>::value
                     && !is_string_view<T>::value
                 )
-                || std::is_array<T>::value
+                || 
+                (
+                    std::is_array<T>::value
+#if defined(ICECREAM_PRINT_CHAR_ARRAY_AS_STRING)
+                    && !is_bounded_char_array<T>{}
+#endif
+                )
             >::type* = nullptr
         )
             : Tree {
@@ -1318,6 +1334,20 @@ namespace icecream{ namespace detail
                     return result;
                 }()}}
         {}
+
+#if defined(ICECREAM_PRINT_CHAR_ARRAY_AS_STRING)
+        // Print all items of character array as string.
+        template <typename T>
+        Tree(T const& value, std::ostringstream&& buf,
+            typename std::enable_if <
+            is_bounded_char_array<T>{}
+            > ::type* = nullptr
+                )
+            : Tree{
+                InnerTag{},
+                std::string(value, sizeof(value)) }
+        {}
+#endif
 
         // Print classes deriving from only std::exception and not from boost::exception
         template <typename T>
