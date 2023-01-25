@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2019-2020 The IceCream-Cpp Developers. See the AUTHORS file at the
  * top-level directory of this distribution and at
  * https://github.com/renatoGarcia/icecream-cpp
@@ -24,6 +24,7 @@
 #ifndef ICECREAM_HPP_INCLUDED
 #define ICECREAM_HPP_INCLUDED
 
+#include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <codecvt>
@@ -145,7 +146,7 @@
 // Used to print char array to one line.
 //     IC("abcdefghijklmn")
 //     > ic| "abcdefghijklmn": abcdefghijklmn
-//#define ICECREAM_PRINT_CHAR_ARRAY_AS_STRING
+#define ICECREAM_PRINT_CHAR_ARRAY_AS_STRING
 
 #if defined(ICECREAM_PRINT_CHAR_ARRAY_AS_STRING)
 template <class> struct is_bounded_char_array : std::false_type {};
@@ -2383,11 +2384,26 @@ namespace icecream{ namespace detail
                     this->output_(this->context_delimiter_);
             }
 
+            auto remove_double_quotes = [](const std::string& target)
+            {
+                if (target.front() == '"' && target.back() == '"')
+                {
+                    std::string removed_quotes = target;
+                    removed_quotes.erase(0, 1);
+                    removed_quotes.erase(removed_quotes.size() - 1);
+                    return removed_quotes;
+                }
+
+                return target;
+            };
+
             // The forest is built with trees in reverse order.
             for (auto it = forest.crbegin(); it != forest.crend(); ++it)
             {
-                auto const& arg_name = std::get<0>(*it);
+                auto const& temp_arg_name = std::get<0>(*it);
                 auto const& tree = std::get<1>(*it);
+
+                const std::string& arg_name = remove_double_quotes(temp_arg_name);
 
                 auto const is_tree_multiline = bool {[&]
                 {
@@ -2419,8 +2435,21 @@ namespace icecream{ namespace detail
                 }()};
 
                 this->output_(arg_name);
-                this->output_(": ");
-                this->print_tree(tree, 1, is_tree_multiline);
+                if (tree.is_leaf())
+                {
+                    const std::string leaf = remove_double_quotes(tree.leaf());
+                    bool is_same_string = std::strncmp(arg_name.c_str(), leaf.c_str(), arg_name.size()) == 0;
+                    if (!is_same_string)
+                    {
+                        this->output_(": ");
+                        this->print_tree(tree, 1, is_tree_multiline);
+                    }
+                }
+                else
+                {
+                    this->output_(": ");
+                    this->print_tree(tree, 1, is_tree_multiline);
+                }
 
                 if (it+1 != forest.crend())
                 {
