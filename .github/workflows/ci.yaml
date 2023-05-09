@@ -75,7 +75,7 @@ jobs:
 
   xcode:
     name: Xcode C++${{ matrix.cpp }}
-    runs-on: macos-10.15
+    runs-on: macos-12
     strategy:
       fail-fast: false
       matrix:
