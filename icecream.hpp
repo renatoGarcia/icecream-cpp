@@ -1475,6 +1475,9 @@ namespace icecream{ namespace detail
             auto left = std::string::size_type {0};
             auto right = std::string::size_type {0};
 
+            // When printing a member like "int* foo[2]", the clang __builtin_dump_struct
+            // will delivery a line like "int *[2] foo". This loop will split that line on
+            // the lexemes: [int, *, [2], foo]
             auto lexemes = std::vector<std::string> {};
             while (true)
             {
@@ -1483,8 +1486,10 @@ namespace icecream{ namespace detail
 
                 if (line.at(left) == '*')
                     right = left + 1;
+                else if (line.at(left) == '[')
+                    right = line.find("]", left) + 1;
                 else
-                    right = line.find_first_of(" *", left);
+                    right = line.find_first_of(" *[", left);
                 right = right < line_size ? right : line_size;
 
                 lexemes.push_back(line.substr(left, right-left));
