@@ -2846,10 +2846,10 @@ namespace icecream{ namespace detail
 
         // Return the unique arg
         template <typename T>
-        auto ret(T&& arg) -> T
+        auto ret(T&& arg) -> decltype(arg)
         {
             this->print(arg);
-            return std::forward<T>(arg);
+            return std::forward<decltype(arg)>(arg);
         }
 
         // Return the flattened unique arg of FormatterPack
