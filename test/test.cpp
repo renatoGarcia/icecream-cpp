@@ -288,42 +288,46 @@ TEST_CASE("return")
     using icecream::f_;
 
     {
-        // !v0 is a dangling reference!
-        auto&& v0 = IC(7);
-        REQUIRE(std::is_same<decltype(v0), int&&>::value);
-
+        REQUIRE(std::is_same<decltype(IC(7)), int&&>::value);
         REQUIRE(IC(7) == 7);
     }
 
     {
         auto v0 = 'r';
-        auto&& v1 = IC(v0);
-        REQUIRE(std::is_same<decltype(v1), char&>::value);
+        REQUIRE(std::is_same<decltype(IC(v0)), char&>::value);
+
+        auto& v1 = IC(v0);
         REQUIRE(v1 == 'r');
         REQUIRE(&v1 == &v0);
     }
 
     {
-        auto v0 = double{3.14};
+        auto const v0 = double{3.14};
+
+        REQUIRE(std::is_same<decltype(IC_("A", v0)), double const&>::value);
+
         auto&& v1 = IC_("A", v0);
-        REQUIRE(std::is_same<decltype(v1), double&>::value);
         REQUIRE(v1 == 3.14);
         REQUIRE(&v1 == &v0);
     }
 
     {
-        // !v0 is a dangling reference!
-        auto&& v0 = IC_("#o", 7);
-        REQUIRE(std::is_same<decltype(v0), int&&>::value);
+        REQUIRE(std::is_same<decltype(IC_("#o", 7)), int&&>::value);
         REQUIRE(IC_("#o", 7) == 7);
     }
 
     {
         auto const a = int{20};
 
+        REQUIRE(
+            std::is_same<
+                decltype(IC(7, 3.14, a)),
+                std::tuple<int&&, double&&, int const&>
+            >::value
+        );
+
         // !v0 has a dangling reference to 7 and 3.14!
-        auto&& v0 = IC(7, 3.14, a);
-        REQUIRE(std::is_same<decltype(v0), std::tuple<int&&, double&&, int const&>&&>::value);
+        auto v0 = IC(7, 3.14, a);
         REQUIRE(&std::get<2>(std::move(v0)) == &a);
         REQUIRE((IC(7, 3.14, a) == std::make_tuple(7, 3.14, 20)));
     }
@@ -331,9 +335,15 @@ TEST_CASE("return")
     {
         auto a = int{30};
 
+        REQUIRE(
+            std::is_same<
+                decltype(IC_("#", 7, a, 3.14)),
+                std::tuple<int&&, int&, double&&>
+            >::value
+        );
+
         // !v0 has a dangling reference to 7 and 3.14!
-        auto&& v0 = IC_("#", 7, a, 3.14);
-        REQUIRE(std::is_same<decltype(v0), std::tuple<int&&, int&, double&&>&&>::value);
+        auto v0 = IC_("#", 7, a, 3.14);
         REQUIRE(&std::get<1>(std::move(v0)) == &a);
         REQUIRE(IC_("#", 7, a, 3.14) == std::make_tuple(7, 30, 3.14));
     }
@@ -342,8 +352,14 @@ TEST_CASE("return")
         auto a = int{10};
         auto const b = int{20};
 
+        REQUIRE(
+            std::is_same<
+                decltype(IC(f_("0v#4x", a, b), 49)),
+                std::tuple<int&, int const&, int&&>
+            >::value
+        );
+
         auto&& v0 = IC(f_("0v#4x", a, b), 49);
-        REQUIRE(std::is_same<decltype(v0), std::tuple<int&, int const&, int&&>&&>::value);
         REQUIRE(IC(f_("0v#4x", a, b), 49) == std::make_tuple(10, 20, 49));
     }
 
