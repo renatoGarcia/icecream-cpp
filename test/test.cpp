@@ -221,7 +221,7 @@ TEST_CASE("base")
     }
 
     {
-        IC((sum(40, 2)), i0   , (((sum(3, 5)))));
+        IC(sum(40, 2), i0   , sum(3, 5));
         REQUIRE(str == "ic| sum(40, 2): 42, i0: 7, sum(3, 5): 8\n");
         str.clear();
     }
@@ -285,8 +285,6 @@ TEST_CASE("return")
     auto str = std::string{};
     icecream::ic.output(str);
 
-    using icecream::f_;
-
     {
         REQUIRE(std::is_same<decltype(IC(7)), int&&>::value);
         REQUIRE(IC(7) == 7);
@@ -346,21 +344,6 @@ TEST_CASE("return")
         auto v0 = IC_("#", 7, a, 3.14);
         REQUIRE(&std::get<1>(std::move(v0)) == &a);
         REQUIRE(IC_("#", 7, a, 3.14) == std::make_tuple(7, 30, 3.14));
-    }
-
-    {
-        auto a = int{10};
-        auto const b = int{20};
-
-        REQUIRE(
-            std::is_same<
-                decltype(IC(f_("0v#4x", a, b), 49)),
-                std::tuple<int&, int const&, int&&>
-            >::value
-        );
-
-        auto&& v0 = IC(f_("0v#4x", a, b), 49);
-        REQUIRE(IC(f_("0v#4x", a, b), 49) == std::make_tuple(10, 20, 49));
     }
 
     {
@@ -1106,15 +1089,6 @@ TEST_CASE("formatting")
     auto str = std::string{};
     icecream::ic.output(str);
 
-    using icecream::f_;
-
-    {
-        auto v0 = int{42};
-        IC(f_("#x", v0), 7);
-        REQUIRE(str == "ic| v0: 0x2a, 7: 7\n");
-        str.clear();
-    }
-
     {
         auto v0 = int{42};
         IC_("#o", v0, 7);
@@ -1123,15 +1097,8 @@ TEST_CASE("formatting")
     }
 
     {
-        auto v0 = int{42};
-        IC( ((f_("#", (v0) )   )), 7);
-        REQUIRE(str == "ic| v0: 42, 7: 7\n");
-        str.clear();
-    }
-
-    {
         auto v0 = float{12.3456789};
-        IC((f_("#A", v0)));
+        IC_("#A", v0);
         REQUIRE(
             ((str == "ic| v0: 0X1.8B0FCEP+3\n") ||
              (str == "ic| v0: 0X1.8B0FCE0000000P+3\n")) // Visualstudio 2019 output
