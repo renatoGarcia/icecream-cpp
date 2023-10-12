@@ -126,15 +126,15 @@
 #define ICECREAM_APPLY_S(ICM, N, S, F, ...) ICECREAM_APPLY_(F, ICM, N, S, __VA_ARGS__)
 
 #if defined(ICECREAM_LONG_NAME)
-    #define ICECREAM(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
-    #define ICECREAM0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
-    #define ICECREAM_(S, ...) ICECREAM(::icecream::f_(S, __VA_ARGS__))
+    #define ICECREAM(...) ICECREAM_("", __VA_ARGS__)
+    #define ICECREAM0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, "", ""}.ret()
+    #define ICECREAM_(S, ...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, S, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define ICECREAM_A(...) ICECREAM_EXPAND(ICECREAM_APPLY(ICECREAM, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
     #define ICECREAM_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY(ICECREAM_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
 #else
-    #define IC(...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, #__VA_ARGS__}.ret(__VA_ARGS__)
-    #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, ""}.ret()
-    #define IC_(S, ...) IC(::icecream::f_(S, __VA_ARGS__))
+    #define IC(...) IC_("", __VA_ARGS__)
+    #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, "",  ""}.ret()
+    #define IC_(S, ...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, S, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define IC_A(...) ICECREAM_EXPAND(ICECREAM_APPLY(IC, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
     #define IC_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY_S(IC_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
 #endif
@@ -568,72 +568,6 @@ namespace icecream{ namespace detail
         return std::move(t);
     };
 
-    // -------------------------------------------------- Formatter
-
-    // Holds a variable and its formatting string.
-    template<typename T>
-    struct Formatter
-    {
-        Formatter(std::string const& fmt_, T&& v_)
-            : fmt{fmt_}
-            , v{std::forward<T>(v_)}
-        {}
-
-        std::string fmt;
-        T&& v;
-    };
-
-    // Holds a tuple with one Formatter to each `vs...`, all of them having the same `fmt` string.
-    template<typename... Ts>
-    struct FormatterPack
-    {
-        FormatterPack(std::string const& fmt, Ts&&... vs_)
-            : vs{Formatter<Ts>(fmt, std::forward<Ts>(vs_))...}
-        {
-            static_assert(
-                conjunction<
-                    negation<is_instantiation<FormatterPack, typename std::decay<Ts>::type>>...
-                >::value,
-                "It is not possible to nest FormmaterPack's as in IC_(\"#\", 7, f_(\"#x\", 42))."
-            );
-        }
-
-        std::tuple<Formatter<Ts>...> vs;
-    };
-
-    template <typename T>
-    using is_formatter_pack = is_instantiation<FormatterPack, typename std::decay<T>::type>;
-
-    template <typename... Ts, int... Is>
-    auto drill_vars(FormatterPack<Ts...>&& fp, sequence<Is...>) -> std::tuple<Ts...>
-    {
-        return std::tuple<Ts...>{std::forward<Ts>(std::get<Is>(fp.vs).v) ...};
-    }
-
-    template <typename T>
-    auto as_tuple(T&& t) -> std::tuple<decltype(std::forward<T>(t))>
-    {
-        return std::forward_as_tuple(std::forward<T>(t));
-    };
-
-    template <typename... Ts>
-    auto as_tuple(FormatterPack<Ts...>&& fp) -> std::tuple<Ts...>
-    {
-        using Seq = typename gen_sequence<sizeof...(Ts)>::type;
-        return drill_vars(std::move(fp), Seq{});
-    };
-
-
-    // Receive a sequence of parameters and return a tuple with all them. If there is any
-    // FormatterPack's on that sequence, the variables inside them will be put on that
-    // tuple, instead of the Formmaterpack itself.
-    template<typename... Ts>
-    auto flatten_formatter_pack(Ts&&... t) -> decltype(std::tuple_cat(as_tuple(std::forward<Ts>(t))...))
-    {
-        return std::tuple_cat(as_tuple(std::forward<Ts>(t))...);
-    }
-
-
     // -------------------------------------------------- Tree
 
     // Needed to access the Icecream::show_c_string() method before the Icecream class
@@ -646,6 +580,160 @@ namespace icecream{ namespace detail
     static Tree* ds_this = nullptr;
     static std::ostringstream* ds_buf = nullptr;
 #endif
+
+    // Builds an ostringstream and sets its state accordingly to `fmt` string
+    inline auto build_ostream(std::string const& fmt) -> std::tuple<bool, std::ostringstream>
+    {
+        // format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
+        // fill        ::=  <a character>
+        // align       ::=  "<" | ">" | "v"
+        // sign        ::=  "+" | "-"
+        // width       ::=  integer
+        // precision   ::=  integer
+        // type        ::=  "a" | "A" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X"
+        // integer     ::=  digit+
+        // digit       ::=  "0"..."9"
+
+        auto os = std::ostringstream {};
+
+        auto it = std::begin(fmt);
+        auto end_it = std::end(fmt);
+
+        if (it == end_it) return std::make_tuple(true, std::move(os));
+
+        // [[fill]align]
+        {
+            auto fill_char = os.fill();
+            if (*it != '<' && *it != '>' && *it != 'v')
+            {
+                auto la_it = it+1;
+                if (la_it != end_it && (*la_it == '<' || *la_it == '>' || *la_it == 'v'))
+                {
+                    fill_char = *it;
+                    ++it;
+                }
+            }
+            if (it != end_it && *it == '<')
+            {
+                os << std::left << std::setfill(fill_char);
+                ++it;
+            }
+            else if (it != end_it && *it == '>')
+            {
+                os << std::right << std::setfill(fill_char);
+                ++it;
+            }
+            else if (it != end_it && *it == 'v')
+            {
+                os << std::internal << std::setfill(fill_char);
+                ++it;
+            }
+        }
+
+        // [sign]
+        if (it != end_it && *it == '+')
+        {
+            os << std::showpos;
+            ++it;
+        }
+        else if (it != end_it && *it == '-')
+        {
+            os << std::noshowpos;
+            ++it;
+        }
+
+        // ["#"]
+        if (it != end_it && *it == '#')
+        {
+            os << std::showbase << std::showpoint;
+            ++it;
+        }
+
+        // [width]
+        {
+            auto b_it = it;
+            while (it != end_it && *it >= '0' && *it <= '9') ++it;
+            if (it != b_it)
+                os << std::setw(std::stoi(std::string(b_it, it)));
+        }
+
+        // ["." precision]
+        if (it != end_it && *it == '.')
+        {
+            auto b_it = it+1;
+            auto p_it = b_it;
+            while (p_it != end_it && *p_it >= '0' && *p_it <= '9') ++p_it;
+            if (p_it != b_it)
+            {
+                os << std::setprecision(std::stoi(std::string(b_it, p_it)));
+                it = p_it;
+            }
+        }
+
+        // [type]
+        if (it != end_it && *it == 'a')
+        {
+            os << std::hexfloat << std::nouppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'A')
+        {
+            os << std::hexfloat << std::uppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'd')
+        {
+            os << std::dec;
+            ++it;
+        }
+        else if (it != end_it && *it == 'e')
+        {
+            os << std::scientific << std::nouppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'E')
+        {
+            os << std::scientific << std::uppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'f')
+        {
+            os << std::fixed << std::nouppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'F')
+        {
+            os << std::fixed << std::uppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'g')
+        {
+            os << std::defaultfloat << std::nouppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'G')
+        {
+            os << std::defaultfloat << std::uppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'o')
+        {
+            os << std::oct;
+            ++it;
+        }
+        else if (it != end_it && *it == 'x')
+        {
+            os << std::hex << std::nouppercase;
+            ++it;
+        }
+        else if (it != end_it && *it == 'X')
+        {
+            os << std::hex << std::uppercase;
+            ++it;
+        }
+
+        return std::make_tuple((it == end_it), std::move(os));
+    }
 
     class Tree
     {
@@ -697,160 +785,6 @@ namespace icecream{ namespace detail
             ~U() {}
 
         } content_;
-
-        // Builds an ostringstream and sets its state accordingly to `fmt` string
-        static auto build_ostream(std::string const& fmt) -> std::tuple<bool, std::ostringstream>
-        {
-            // format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
-            // fill        ::=  <a character>
-            // align       ::=  "<" | ">" | "v"
-            // sign        ::=  "+" | "-"
-            // width       ::=  integer
-            // precision   ::=  integer
-            // type        ::=  "a" | "A" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X"
-            // integer     ::=  digit+
-            // digit       ::=  "0"..."9"
-
-            auto os = std::ostringstream {};
-
-            auto it = std::begin(fmt);
-            auto end_it = std::end(fmt);
-
-            if (it == end_it) return std::make_tuple(true, std::move(os));
-
-            // [[fill]align]
-            {
-                auto fill_char = os.fill();
-                if (*it != '<' && *it != '>' && *it != 'v')
-                {
-                    auto la_it = it+1;
-                    if (la_it != end_it && (*la_it == '<' || *la_it == '>' || *la_it == 'v'))
-                    {
-                        fill_char = *it;
-                        ++it;
-                    }
-                }
-                if (it != end_it && *it == '<')
-                {
-                    os << std::left << std::setfill(fill_char);
-                    ++it;
-                }
-                else if (it != end_it && *it == '>')
-                {
-                    os << std::right << std::setfill(fill_char);
-                    ++it;
-                }
-                else if (it != end_it && *it == 'v')
-                {
-                    os << std::internal << std::setfill(fill_char);
-                    ++it;
-                }
-            }
-
-            // [sign]
-            if (it != end_it && *it == '+')
-            {
-                os << std::showpos;
-                ++it;
-            }
-            else if (it != end_it && *it == '-')
-            {
-                os << std::noshowpos;
-                ++it;
-            }
-
-            // ["#"]
-            if (it != end_it && *it == '#')
-            {
-                os << std::showbase << std::showpoint;
-                ++it;
-            }
-
-            // [width]
-            {
-                auto b_it = it;
-                while (it != end_it && *it >= '0' && *it <= '9') ++it;
-                if (it != b_it)
-                    os << std::setw(std::stoi(std::string(b_it, it)));
-            }
-
-            // ["." precision]
-            if (it != end_it && *it == '.')
-            {
-                auto b_it = it+1;
-                auto p_it = b_it;
-                while (p_it != end_it && *p_it >= '0' && *p_it <= '9') ++p_it;
-                if (p_it != b_it)
-                {
-                    os << std::setprecision(std::stoi(std::string(b_it, p_it)));
-                    it = p_it;
-                }
-            }
-
-            // [type]
-            if (it != end_it && *it == 'a')
-            {
-                os << std::hexfloat << std::nouppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'A')
-            {
-                os << std::hexfloat << std::uppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'd')
-            {
-                os << std::dec;
-                ++it;
-            }
-            else if (it != end_it && *it == 'e')
-            {
-                os << std::scientific << std::nouppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'E')
-            {
-                os << std::scientific << std::uppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'f')
-            {
-                os << std::fixed << std::nouppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'F')
-            {
-                os << std::fixed << std::uppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'g')
-            {
-                os << std::defaultfloat << std::nouppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'G')
-            {
-                os << std::defaultfloat << std::uppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'o')
-            {
-                os << std::oct;
-                ++it;
-            }
-            else if (it != end_it && *it == 'x')
-            {
-                os << std::hex << std::nouppercase;
-                ++it;
-            }
-            else if (it != end_it && *it == 'X')
-            {
-                os << std::hex << std::uppercase;
-                ++it;
-            }
-
-            return std::make_tuple((it == end_it), std::move(os));
-        }
 
         struct InnerTag {};
 
@@ -960,18 +894,6 @@ namespace icecream{ namespace detail
         {
             return Tree{InnerTag{}, std::move(text)};
         }
-
-        template<typename T>
-        explicit Tree(Formatter<T> const& v)
-            : Tree {[&]
-            {
-                auto result_os = Tree::build_ostream(v.fmt);
-                if (std::get<0>(result_os))
-                    return Tree{v.v, std::move(std::get<1>(result_os))};
-                else
-                    return Tree::literal("*Error* on formatting string");
-            }()}
-        {}
 
         Tree(
             std::string&& open,
@@ -1952,11 +1874,6 @@ namespace icecream{ namespace detail
     template <typename T>
     struct is_printable: is_tree_argument<T> {};
 
-    template <typename... Ts>
-    struct is_printable<FormatterPack<Ts...>&>: conjunction<
-        is_printable<Ts>...
-    > {};
-
 
     // -------------------------------------------------- to_invocable
 
@@ -2165,6 +2082,7 @@ namespace icecream{ namespace detail
             std::string const& file,
             int line,
             std::string const& function,
+            std::string const& format,
             std::vector<std::string> const& arg_names,
             Ts&&... args
         ) -> void
@@ -2196,7 +2114,7 @@ namespace icecream{ namespace detail
             else
             {
                 auto const forest = Icecream::build_forest(
-                    std::begin(arg_names), std::forward<Ts>(args)...
+                    format, std::begin(arg_names), std::forward<Ts>(args)...
                 );
                 this->print_forest(prefix, context, forest);
             }
@@ -2410,72 +2328,9 @@ namespace icecream{ namespace detail
             }
         }
 
-        static
-        auto clean_variable_name(std::string const& var_name) -> std::string
-        {
-            auto b_it = std::begin(var_name);
-            auto e_it = std::end(var_name) - 1;
-
-            auto par_count = int{0};
-
-            // Remove outer left parenthesis
-            while (*b_it == ' ' || *b_it == '\t' || *b_it == '\n' || *b_it == '(')
-            {
-                if (*b_it == '(')
-                    par_count += 1;
-                ++b_it;
-            }
-
-            // Remove outer right parenthesis
-            while (par_count > 0)
-            {
-                if (*e_it == ')')
-                    par_count -= 1;
-                --e_it;
-            }
-
-            // Remove right white spaces
-            while (*e_it == ' ' || *e_it == '\t' || *e_it == '\n')
-                --e_it;
-
-            return std::string{b_it, e_it+1};
-        }
-
-        // Receive a string with a `icecream::f_("0v#4x", a, b, c)` call, and returns a vector with all the variable names.
-        // In this example, a vector with ["a", "b", "c"].
-        static
-        auto split_variable_names(std::string const& var_name) -> std::vector<std::string>
-        {
-            auto b_it = std::begin(var_name);
-            auto e_it = std::end(var_name) - 1;
-
-            std::vector<std::string> result;
-
-            // Find format string/value splitting comma
-            {
-                auto nesting_deep = int{0};
-                b_it = e_it;
-                do
-                {
-                    if (*b_it == ')')
-                        nesting_deep += 1;
-                    else if (*b_it == '(')
-                        nesting_deep -= 1;
-                    else if (*b_it == ',' && nesting_deep == 1)
-                    {
-                        result.push_back(clean_variable_name(std::string{b_it+1, e_it}));
-                        e_it = b_it;
-                    }
-
-                    --b_it;
-                } while (nesting_deep > 0);
-                ++b_it;
-            }
-
-            return std::vector<std::string>{result.rbegin(), result.rend()};
-        }
 
         auto build_forest(
+            std::string const& format,
             std::vector<std::string>::const_iterator
         ) -> std::vector<std::tuple<std::string, Tree>>
         {
@@ -2495,45 +2350,32 @@ namespace icecream{ namespace detail
 
         template <typename T, typename... Ts>
         auto build_forest(
+            std::string const& format,
             std::vector<std::string>::const_iterator arg_name,
             T&& arg_value,
             Ts&&... args_tail
-        ) ->
-            typename std::enable_if<
-                is_formatter_pack<T>::value,
-                std::vector<std::tuple<std::string, Tree>>
-            >::type
+        ) -> std::vector<std::tuple<std::string, Tree>>
         {
             auto forest = Icecream::build_forest(
-                arg_name+1, std::forward<Ts>(args_tail)...
+                format, arg_name+1, std::forward<Ts>(args_tail)...
             );
 
-            Icecream::fill_forest_from_tuple(
-                Icecream::split_variable_names(Icecream::clean_variable_name(*arg_name)),
-                arg_value.vs,
-                forest
-            );
+            auto result_os = build_ostream(format);
+            if (std::get<0>(result_os))
+            {
+                forest.emplace_back(
+                    *arg_name,
+                    Tree{std::move(arg_value), std::move(std::get<1>(result_os))}
+                );
+            }
+            else
+            {
+                forest.emplace_back(
+                    *arg_name,
+                    Tree::literal("*Error* on formatting string")
+                );
+            }
 
-            return forest;
-        }
-
-        template <typename T, typename... Ts>
-        auto build_forest(
-            std::vector<std::string>::const_iterator arg_name,
-            T&& arg_value,
-            Ts&&... args_tail
-        ) ->
-            typename std::enable_if<
-                !is_formatter_pack<T>::value,
-                std::vector<std::tuple<std::string, Tree>>
-            >::type
-        {
-            auto forest = Icecream::build_forest(
-                arg_name+1, std::forward<Ts>(args_tail)...
-            );
-            forest.emplace_back(
-                Icecream::clean_variable_name(*arg_name),
-                Tree{std::move(arg_value), std::ostringstream{}});
             return forest;
         }
     };
@@ -2646,6 +2488,7 @@ namespace icecream
             std::string const& file,
             int line,
             std::string const& function,
+            std::string const& format,
             std::vector<std::string> const& arg_names,
             Ts&&... args
         ) -> typename std::enable_if<
@@ -2653,18 +2496,12 @@ namespace icecream
             >::type
         {
             detail::Icecream::instance().print(
-                file, line, function, arg_names, std::forward<Ts>(args)...
+                file, line, function, format, arg_names, std::forward<Ts>(args)...
             );
         }
     };
 
     static IcecreamAPI ic {};
-
-    template<typename... Ts>
-    auto f_(std::string const& fmt, Ts&&... vs) -> detail::FormatterPack<decltype(std::forward<Ts>(vs))...>
-    {
-        return detail::FormatterPack<decltype(std::forward<Ts>(vs))...>{fmt, std::forward<Ts>(vs)...};
-    }
 
 } // namespace icecream
 
@@ -2800,6 +2637,7 @@ namespace icecream{ namespace detail
         std::string const file;
         int line;
         std::string const function;
+        std::string const format;
         std::string const arg_names;
 
         // Used by compilers that expand an empyt __VA_ARGS__ in
@@ -2808,11 +2646,13 @@ namespace icecream{ namespace detail
             std::string const& file_,
             int line_,
             std::string const& function_,
+            std::string const& format_,
             std::string const& arg_names_
         )
             : file {file_}
             , line {line_}
             , function {function_}
+            , format {format_}
             , arg_names {arg_names_}
         {}
 
@@ -2821,11 +2661,13 @@ namespace icecream{ namespace detail
         Dispatcher(
             std::string const& file_,
             int line_,
-            std::string const& function_
+            std::string const& function_,
+            std::string const& format_
         )
             : file {file_}
             , line {line_}
             , function {function_}
+            , format {format_}
             , arg_names {""}
         {}
 
@@ -2833,15 +2675,15 @@ namespace icecream{ namespace detail
         auto print(Ts&&... args) -> void
         {
             auto arg_names = split_arguments(this->arg_names);
-            ::icecream::ic.print(file, line, function, arg_names, std::forward<Ts>(args)...);
+            ::icecream::ic.print(file, line, function, format, arg_names, std::forward<Ts>(args)...);
         }
 
-        // Return a std::tuple with all the args, flattening the content of any FormatterPack
+        // Return a std::tuple with all the args
         template <typename... Ts>
-        auto ret(Ts&&... args) -> decltype(flatten_formatter_pack(std::forward<Ts>(args)...))
+        auto ret(Ts&&... args) -> decltype(std::forward_as_tuple(std::forward<Ts>(args)...))
         {
             this->print(args...);
-            return flatten_formatter_pack(std::forward<Ts>(args)...);
+            return std::forward_as_tuple(std::forward<Ts>(args)...);
         }
 
         // Return the unique arg
@@ -2850,22 +2692,6 @@ namespace icecream{ namespace detail
         {
             this->print(arg);
             return std::forward<decltype(arg)>(arg);
-        }
-
-        // Return the flattened unique arg of FormatterPack
-        template <typename T>
-        auto ret(FormatterPack<T>&& arg) -> T
-        {
-            this->print(arg);
-            return std::forward<T>(std::get<0>(arg.vs).v);
-        }
-
-        // Return a std::tuple with the content of the FormatterPack
-        template <typename... Ts>
-        auto ret(FormatterPack<Ts...>&& arg) -> std::tuple<Ts...>
-        {
-            this->print(arg);
-            return flatten_formatter_pack(std::move(arg));
         }
 
         auto ret() -> void

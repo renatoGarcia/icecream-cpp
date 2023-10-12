@@ -251,31 +251,11 @@ will print:
 
     ic| a: 0X2A, b: 0X14
 
-
-The output formatting configuration is done wrapping a format string and the values with
-the function `icecream::f_()`, like in:
-
-```C++
-using icecream::f_;
-auto a = int{42};
-
-IC(f_("X", a));
-IC(f_("0v#6x", 20, 30), 40, f_("*>6", a));
-```
-
-that will print:
-
-    ic| a: 2A
-    ic| 20: 0x0014, 30: 0x001e, 40: 40, a: ****42
-
-
-If the same formatting string should be applied to all the values on an `IC` macro call,
-you can use the `IC_` macro as a shortcut. The code `IC(icecream::f_("#x", a, b))` can be
-rewritten as `IC_("#x", a, b)`.
+The same formatting string will be applied to all the values on an `IC` macro call.
 
 To configure the formating of [`IC_A`](#return-value-and-icecream-apply-macro) macro,
-there are the macro `IC_A_`. It is just like `IC_A` but receives a formating string as its
-first argument. The code:
+there are the macro `IC_A_`. It is just like `IC_A` but receiving a formating string as
+its first argument. The code:
 ```C++
 IC_A_("#x", my_function, 10, 20);
 ```
