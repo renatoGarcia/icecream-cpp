@@ -11,6 +11,8 @@ elseif(CMAKE_CXX_STANDARD EQUAL 14)
     add_compile_definitions(CPP_14)
 elseif(CMAKE_CXX_STANDARD EQUAL 17)
     add_compile_definitions(CPP_17)
+elseif(CMAKE_CXX_STANDARD EQUAL 20)
+    add_compile_definitions(CPP_20)
 endif()
 
 include_directories(${PROJECT_SOURCE_DIR})

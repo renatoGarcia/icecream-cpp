@@ -28,11 +28,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [gcc6, gcc7, gcc8, gcc9]
-        cpp: [11, 14, 17]
+        version: [gcc6, gcc7, gcc9, gcc13]
+        cpp: [11, 14, 17, 20]
         exclude:
           - version: gcc6
             cpp: 17
+          - version: gcc6
+            cpp: 20
+          - version: gcc7
+            cpp: 20
+          - version: gcc9
+            cpp: 20
     steps:
       - uses: actions/checkout@v2
       - name: run
@@ -45,7 +51,10 @@ jobs:
       fail-fast: false
       matrix:
         version: [clang5, clang10]
-        cpp: [11, 14, 17]
+        cpp: [11, 14, 17, 20]
+        exclude:
+          - version: clang5
+            cpp: 20
     steps:
       - uses: actions/checkout@v2
       - name: run
@@ -58,7 +67,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2022, windows-2019]
-        cpp: [11, 14, 17]
+        cpp: [11, 14, 17, 20]
+        exclude:
+          - os: windows-2019
+            cpp: 20
         include:
           - os: windows-2022
             name: vs2022
@@ -79,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cpp: [11, 14, 17]
+        cpp: [11, 14, 17, 20]
     env:
       CPP_STANDARD: ${{ matrix.cpp }}
     steps:
