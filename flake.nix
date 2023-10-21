@@ -57,6 +57,27 @@
             ] ++ app.nativeBuildInputs;
        };
 
+      ci-docker = { pkgs, compiler, tagname }:
+        pkgs.dockerTools.buildLayeredImage {
+            name = "icecream-ci";
+            tag = tagname;
+
+            contents = with pkgs; [
+              compiler
+              gnumake
+              cmake
+              boost.dev
+              busybox
+            ];
+
+            config = {
+              WorkingDir = "/home";
+              Env = [
+                "Boost_INCLUDE_DIR=/include"
+              ];
+            };
+        };
+
     in {
       overlays.default = final: prev: {
         icecream-cpp = application { pkgs = final; };
@@ -71,7 +92,10 @@
         };
       in
       {
-        packages.default = pkgs.icecream-cpp;
+        packages = {
+          default = pkgs.icecream-cpp;
+          ci-gcc13 = ci-docker { inherit pkgs; compiler = pkgs.gcc13; tagname = "gcc13"; };
+        };
         devShells.default = dev-env { inherit pkgs; };
       }
     );

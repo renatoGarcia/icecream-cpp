@@ -27,6 +27,7 @@
 #include <cassert>
 #include <cctype>
 #include <codecvt>
+#include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -68,6 +69,12 @@
         #define ICECREAM_DUMP_STRUCT_CLANG
         #include <climits>
     #endif
+#endif
+
+#if defined(__cpp_if_constexpr)
+    #define ICECREAM_IF_CONSTEXPR constexpr
+#else
+    #define ICECREAM_IF_CONSTEXPR
 #endif
 
 #define ICECREAM_DEV_HASH "$Format:%H$"
@@ -197,7 +204,7 @@ namespace icecream{ namespace detail
             : Facet(std::forward<Ts>(args)...)
         {}
 
-        virtual ~deletable_facet() override = default;
+        virtual ~deletable_facet() = default;
     };
 
 
@@ -949,11 +956,16 @@ namespace icecream{ namespace detail
                         >::type
                     >::type;
 
-                    // On MacOS, an identity cv.to_bytes operation (between two identical
-                    // character types) throws an exception. If they are the same, we do not
-                    // make any conversion.
-                    if (std::is_same<DT, std::ostringstream::char_type>::value)
-                        buf << '"' << value << '"';
+                    if ICECREAM_IF_CONSTEXPR (
+                        // On MacOS, an identity cv.to_bytes operation (between two identical
+                        // character types) throws an exception. If they are the same, we do not
+                        // make any conversion.
+                        std::is_same<DT, std::ostringstream::char_type>::value
+                    #if defined(__cpp_char8_t)
+                        || std::is_same<DT, char8_t>::value
+                    #endif
+                    )
+                        buf << '"' << reinterpret_cast<std::ostringstream::char_type const*>(value) << '"';
                     else
                     {
                         using FF = typename FIX<DT>::type;
@@ -989,10 +1001,15 @@ namespace icecream{ namespace detail
             {
                 using VT = typename T::value_type;
 
-                // On MacOS, an identity cv.to_bytes operation (between two identical
-                // character types) throws an exception. If they are the same, we do not
-                // make any conversion.
-                if (std::is_same<VT, std::ostringstream::char_type>::value)
+                if ICECREAM_IF_CONSTEXPR (
+                    // On MacOS, an identity cv.to_bytes operation (between two identical
+                    // character types) throws an exception. If they are the same, we do not
+                    // make any conversion.
+                    std::is_same<VT, std::ostringstream::char_type>::value
+                #if defined(__cpp_char8_t)
+                    || std::is_same<VT, char8_t>::value
+                #endif
+                )
                 {
                     // This is an idle reinterpret_cast, since both character types must
                     // be the same to the program reaches this lines. However, this is
@@ -1046,12 +1063,6 @@ namespace icecream{ namespace detail
             {
                 using DT = typename std::decay<T>::type;
                 using FF = typename FIX<DT>::type;
-                std::wstring_convert<
-                    deletable_facet<
-                        std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>
-                    >,
-                    FF
-                > cv {};
 
                 auto str = std::string {};
                 switch (value)
@@ -1089,14 +1100,27 @@ namespace icecream{ namespace detail
                     break;
 
                 default:
-                    // On MacOS, an identity cv.to_bytes operation (between two identical
-                    // character types) throws an exception. If they are the same, we do not
-                    // make any conversion.
-                    if (std::is_same<DT, std::ostringstream::char_type>::value)
+                    if ICECREAM_IF_CONSTEXPR (
+                        // On MacOS, an identity cv.to_bytes operation (between two identical
+                        // character types) throws an exception. If they are the same, we do not
+                        // make any conversion.
+                        std::is_same<DT, std::ostringstream::char_type>::value
+                    #if defined(__cpp_char8_t)
+                        || std::is_same<DT, char8_t>::value
+                    #endif
+                    )
                         // Innocuous cast, just to silence a warning with types where this line is not reached.
                         str = static_cast<std::ostringstream::char_type>(value);
                     else
-                        str = cv.to_bytes(value);
+                        {
+                            std::wstring_convert<
+                                deletable_facet<
+                                    std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>
+                                >,
+                                FF
+                            > cv {};
+                            str = cv.to_bytes(value);
+                        }
                     break;
                 }
 
@@ -1288,6 +1312,8 @@ namespace icecream{ namespace detail
                 && !is_variant<T>::value
                 && !is_optional<T>::value
                 && !has_insertion<T>::value
+                && !is_character<T>::value
+                && !is_c_string<T>::value
             >::type* = nullptr
         )
             : Tree {InnerTag{}, ""}

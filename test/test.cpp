@@ -8,7 +8,7 @@
 #include <limits>
 #include <type_traits>
 
-#if defined (CPP_17)
+#if defined (CPP_17) || defined (CPP_20)
 #include <optional>
 #include <variant>
 #endif
@@ -378,7 +378,7 @@ TEST_CASE("boost_optional")
 }
 
 
-#if defined(CPP_17)
+#if defined(CPP_17) || defined (CPP_20)
 auto operator<<(std::ostream& os, std::optional<MyClass> const& value) -> std::ostream&
 {
     os << "||opt MyClass|| ";
@@ -435,7 +435,7 @@ TEST_CASE("boost_variant2")
 }
 
 
-#if defined(CPP_17)
+#if defined(CPP_17) || defined (CPP_20)
 TEST_CASE("std_variant")
 {
     auto str = std::string{};
@@ -452,7 +452,7 @@ TEST_CASE("std_variant")
 
 // -------------------------------------------------- Test filesystem
 
-#if defined(CPP_17) && defined(__cpp_lib_filesystem)
+#if (defined(CPP_17) || defined (CPP_20)) && defined(__cpp_lib_filesystem)
 #include <filesystem>
 TEST_CASE("std_filesystem")
 {
@@ -832,10 +832,19 @@ TEST_CASE("std_string")
         REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
         str.clear();
     }
+
+#if defined(__cpp_char8_t)
+    {
+        auto v0 = std::u8string {u8"u8str \uAB8C"}; // Cherokee Small Letter MO
+        IC(v0);
+        REQUIRE(str == "ic| v0: \"u8str \xEA\xAE\x8C\"\n");
+        str.clear();
+    }
+#endif
 }
 
 // -------------------------------------------------- Test std::string_view
-#if defined (CPP_17)
+#if defined (CPP_17) || defined (CPP_20)
 TEST_CASE("std_string_view")
 {
     auto str = std::string{};
@@ -876,6 +885,15 @@ TEST_CASE("std_string_view")
         REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
         str.clear();
     }
+
+#if defined(__cpp_char8_t)
+    {
+        auto v0 = std::u8string_view {u8"u8str \uAB8C"}; // Cherokee Small Letter MO
+        IC(v0);
+        REQUIRE(str == "ic| v0: \"u8str \xEA\xAE\x8C\"\n");
+        str.clear();
+    }
+#endif
 }
 #endif
 
@@ -955,6 +973,15 @@ TEST_CASE("c_string")
         REQUIRE(str == "ic| v0: \"char32_t test \xF0\x9F\x90\xA7\"\n");
         str.clear();
     }
+
+#if defined(__cpp_char8_t)
+    {
+        char8_t const* const v0 = u8"char8_t test \uAB8C";
+        IC(v0);
+        REQUIRE(str == "ic| v0: \"char8_t test \xEA\xAE\x8C\"\n");
+        str.clear();
+    }
+#endif
 }
 
 // -------------------------------------------------- Test line wrap
