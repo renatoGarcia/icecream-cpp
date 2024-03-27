@@ -585,7 +585,7 @@ namespace icecream{ namespace detail
     class Tree;
     static inline auto parse_struct_dump(char const* format, ...) -> int;
     static Tree* ds_this = nullptr;
-    static std::ostringstream* ds_buf = nullptr;
+    static std::basic_ostream<char> const* ds_buf = nullptr;
 #endif
 
     // Builds an ostringstream and sets its state accordingly to `fmt` string
@@ -921,7 +921,7 @@ namespace icecream{ namespace detail
 
         // Print any class that overloads operator<<(std::ostream&, T)
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 has_insertion<T>::value
                 && !is_c_string<T>::value
@@ -934,6 +934,8 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
+                std::ostringstream buf;
+                buf.copyfmt(stream_ref);
                 buf << value;
                 return buf.str();
             }()}
@@ -941,13 +943,16 @@ namespace icecream{ namespace detail
 
         // Print C string
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_c_string<T>::value
             >::type* = nullptr
         )
             : Tree {InnerTag{}, [&]
             {
+                std::ostringstream buf;
+                buf.copyfmt(stream_ref);
+
                 if (show_c_string())
                 {
                     using DT = typename std::decay<
@@ -992,7 +997,7 @@ namespace icecream{ namespace detail
 
         // Print std::string
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_std_string<T>::value
             >::type* = nullptr
@@ -1000,6 +1005,9 @@ namespace icecream{ namespace detail
             : Tree {InnerTag{}, [&]
             {
                 using VT = typename T::value_type;
+
+                std::ostringstream buf;
+                buf.copyfmt(stream_ref);
 
                 if ICECREAM_IF_CONSTEXPR (
                     // On MacOS, an identity cv.to_bytes operation (between two identical
@@ -1043,18 +1051,18 @@ namespace icecream{ namespace detail
     #if defined(ICECREAM_STRING_VIEW_HEADER)
         // Print std::string_view
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_string_view<T>::value
             >::type* = nullptr
         )
-            : Tree {std::basic_string<typename T::value_type>{value}, buf}
+            : Tree {std::basic_string<typename T::value_type>{value}, stream_ref}
         {}
     #endif
 
         // Print character
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_character<T>::value
             >::type* = nullptr
@@ -1063,6 +1071,9 @@ namespace icecream{ namespace detail
             {
                 using DT = typename std::decay<T>::type;
                 using FF = typename FIX<DT>::type;
+
+                std::ostringstream buf;
+                buf.copyfmt(stream_ref);
 
                 auto str = std::string {};
                 switch (value)
@@ -1132,7 +1143,7 @@ namespace icecream{ namespace detail
 
         // Print signed and unsigned char
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_xsig_char<T>::value
             >::type* = nullptr
@@ -1143,6 +1154,8 @@ namespace icecream{ namespace detail
                     std::is_signed<T>::value, int, unsigned int
                 >::type;
 
+                std::ostringstream buf;
+                buf.copyfmt(stream_ref);
                 buf << static_cast<T0>(value);
                 return buf.str();
             }()}
@@ -1150,7 +1163,7 @@ namespace icecream{ namespace detail
 
         // Print smart pointers without an operator<<(ostream&) overload.
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_unstreamable_ptr<T>::value
                 && !has_insertion<T>::value // On C++20 unique_ptr will have a << overload.
@@ -1158,6 +1171,8 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
+                std::ostringstream buf;
+                buf.copyfmt(stream_ref);
                 buf << reinterpret_cast<void const*>(value.get());
                 return buf.str();
             }()}
@@ -1165,81 +1180,79 @@ namespace icecream{ namespace detail
 
         // Print weak pointer classes
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_weak_ptr<T>::value
             >::type* = nullptr
         )
-            : Tree {value.expired() ? Tree{InnerTag{}, "expired"} : Tree {value.lock(), buf}}
+            : Tree {value.expired() ? Tree{InnerTag{}, "expired"} : Tree {value.lock(), stream_ref}}
         {}
 
     #if defined(ICECREAM_OPTIONAL_HEADER)
         // Print std::optional<> classes
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_optional<T>::value
                 && !has_insertion<T>::value
             >::type* = nullptr
         )
-            : Tree {value.has_value() ? Tree{*value, buf} : Tree{InnerTag{}, "nullopt"}}
+            : Tree {value.has_value() ? Tree{*value, stream_ref} : Tree{InnerTag{}, "nullopt"}}
         {}
     #endif
 
         struct Visitor
         {
-            Visitor(std::ostringstream& buf_)
-                : buf{buf_}
+            Visitor(std::basic_ostream<char> const& stream_ref_)
+                : stream_ref{stream_ref_}
             {}
 
             template <typename T>
             auto operator()(T const& arg) -> Tree
             {
-                return Tree {arg, this->buf};
+                return Tree {arg, this->stream_ref};
             }
-
-            std::ostringstream& buf;
+            std::basic_ostream<char> const& stream_ref;
         };
 
         // Print *::variant<Ts...> classes
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_variant<T>::value
                 && !has_insertion<T>::value
             >::type* = nullptr
         )
-            : Tree {visit(Tree::Visitor{buf}, value)}
+            : Tree {visit(Tree::Visitor{stream_ref}, value)}
         {}
 
         // Fill this->content.stem.children with all the tuple elements
         template<typename T, std::size_t N = std::tuple_size<T>::value-1>
-        static auto tuple_traverser(T const& t, std::ostringstream& buf) -> std::vector<Tree>
+        static auto tuple_traverser(
+            T const& t, std::basic_ostream<char> const& stream_ref
+        ) -> std::vector<Tree>
         {
             auto result = N > 0 ?
-                tuple_traverser<T, (N > 0) ? N-1 : 0>(t, buf) : std::vector<Tree> {};
+                tuple_traverser<T, (N > 0) ? N-1 : 0>(t, stream_ref) : std::vector<Tree> {};
 
-            auto buf_ = std::ostringstream {};
-            buf_.copyfmt(buf);
-
-            result.emplace_back(std::get<N>(t), buf_);
+            result.emplace_back(std::get<N>(t), stream_ref);
             return result;
         }
 
         // Print tuple like classes
         template <typename T>
-        Tree(T&& value, std::ostringstream& buf,
+        Tree(T&& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_tuple<T>::value
                 && !has_insertion<T>::value
             >::type* = nullptr
         )
-            : Tree {InnerTag{}, U::Stem{"(", ", ", ")", Tree::tuple_traverser(value, buf)}}
+            : Tree {InnerTag{}, U::Stem{"(", ", ", ")", Tree::tuple_traverser(value, stream_ref)}}
         {}
 
         // Print all items of any iterable class
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 (
                     is_iterable<T>::value
@@ -1257,9 +1270,7 @@ namespace icecream{ namespace detail
                     auto result = std::vector<Tree> {};
                     for (auto const& i : value)
                     {
-                        auto buf_ = std::ostringstream {};
-                        buf_.copyfmt(buf);
-                        result.emplace_back(i, buf_);
+                        result.emplace_back(i, stream_ref);
                     }
                     return result;
                 }()}}
@@ -1267,7 +1278,7 @@ namespace icecream{ namespace detail
 
         // Print classes deriving from only std::exception and not from boost::exception
         template <typename T>
-        Tree(T const& value, std::ostringstream&,
+        Tree(T const& value, std::basic_ostream<char> const&,
             typename std::enable_if<
                 std::is_base_of<std::exception, T>::value
                 && !std::is_base_of<boost::exception, T>::value
@@ -1279,7 +1290,7 @@ namespace icecream{ namespace detail
 
         // Print classes deriving from both std::exception and boost::exception
         template <typename T>
-        Tree(T const& value, std::ostringstream&,
+        Tree(T const& value, std::basic_ostream<char> const&,
             typename std::enable_if<
                 std::is_base_of<std::exception, T>::value
                 && std::is_base_of<boost::exception, T>::value
@@ -1300,7 +1311,7 @@ namespace icecream{ namespace detail
 
     #if defined(ICECREAM_DUMP_STRUCT_CLANG)
         template <typename T>
-        Tree(T const& value, std::ostringstream& buf,
+        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 std::is_standard_layout<T>::value
                 && !is_collection<T>::value
@@ -1319,7 +1330,7 @@ namespace icecream{ namespace detail
             : Tree {InnerTag{}, ""}
         {
             ds_this = this;
-            ds_buf = &buf;
+            ds_buf = &stream_ref;
             __builtin_dump_struct(&value, &parse_struct_dump);
             ds_this = nullptr;
             ds_buf = nullptr;
@@ -1561,10 +1572,7 @@ namespace icecream{ namespace detail
             result.push_back(static_cast<T>(va_arg(args, T0)));
         }
 
-
-        auto buf_ = std::ostringstream {};
-        buf_.copyfmt(*ds_buf);
-        return Tree{result, buf_};
+        return Tree{result, *ds_buf};
     }
 
     template <>
@@ -1577,9 +1585,7 @@ namespace icecream{ namespace detail
             result.push_back(static_cast<bool>(v));
         }
 
-        auto buf_ = std::ostringstream {};
-        buf_.copyfmt(*ds_buf);
-        return Tree{result, buf_};
+        return Tree{result, *ds_buf};
     }
 
     template <>
@@ -1602,9 +1608,7 @@ namespace icecream{ namespace detail
                 ++i;
             }
         }
-        auto buf_ = std::ostringstream {};
-        buf_.copyfmt(*ds_buf);
-        return Tree{result, buf_};
+        return Tree{result, *ds_buf};
     }
 
     template <typename T>
@@ -1617,19 +1621,14 @@ namespace icecream{ namespace detail
         >::type;
         using T1 = transition_type<T>;
 
-        auto buf_ = std::ostringstream {};
-        buf_.copyfmt(*ds_buf);
-        return Tree{(T)(T1)va_arg(args, T0), buf_};
+        return Tree{(T)(T1)va_arg(args, T0), *ds_buf};
     }
 
     template <>
     auto va_list_to_tree<bool>(va_list& args) -> Tree
     {
         auto i = va_arg(args, int) & 0x01;
-
-        auto buf_ = std::ostringstream {};
-        buf_.copyfmt(*ds_buf);
-        return Tree{static_cast<bool>(i), buf_};
+        return Tree{static_cast<bool>(i), *ds_buf};
     }
 
     template <>
@@ -1640,10 +1639,7 @@ namespace icecream{ namespace detail
         // memory. It works on the tested machines, but can or can not work on other
         // architectures or future Clang releases. Please report any problem.
         auto d = va_arg(args, double);
-
-        auto buf_ = std::ostringstream {};
-        buf_.copyfmt(*ds_buf);
-        return Tree{*reinterpret_cast<float*>(&d), buf_};
+        return Tree{*reinterpret_cast<float*>(&d), *ds_buf};
     }
 
     static auto parse_array_dump(va_list& args, Tokens const& tokens) -> Tree
@@ -1882,7 +1878,7 @@ namespace icecream{ namespace detail
 
     template <typename T>
     auto is_tree_argument_impl(int) -> decltype (
-        Tree {std::declval<T&>(), std::declval<std::ostringstream&>()},
+        Tree {std::declval<T&>(), std::declval<std::basic_ostream<char> const&>()},
         std::true_type {}
     );
 
