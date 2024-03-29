@@ -27,7 +27,7 @@ endif()
 
 if (
     CMAKE_CXX_COMPILER_ID MATCHES "Clang"
-    AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "7"
+    AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "15"
 )
     add_executable(test_clang test_clang.cpp)
     add_test(NAME test_clang COMMAND test_clang)

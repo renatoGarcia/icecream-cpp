@@ -65,9 +65,8 @@
 #endif
 
 #if defined(__has_builtin) && defined(__clang__)
-    #if __has_builtin(__builtin_dump_struct)
+    #if __has_builtin(__builtin_dump_struct) && __clang_major__ >= 15
         #define ICECREAM_DUMP_STRUCT_CLANG
-        #include <climits>
     #endif
 #endif
 
@@ -583,9 +582,11 @@ namespace icecream{ namespace detail
 
 #if defined(ICECREAM_DUMP_STRUCT_CLANG)
     class Tree;
-    static inline auto parse_struct_dump(char const* format, ...) -> int;
-    static Tree* ds_this = nullptr;
-    static std::basic_ostream<char> const* ds_buf = nullptr;
+    static auto ds_this = static_cast<Tree*>(nullptr);
+    static auto ds_delayed_structs = std::vector<std::pair<std::string, std::function<void()>>>{};
+    static auto ds_stream_ref = static_cast<std::basic_ostream<char> const*>(nullptr);
+    static auto ds_call_count = int{0};
+    template<typename... T> auto parse_dump_struct(char const* format, T&& ...args) -> int;
 #endif
 
     // Builds an ostringstream and sets its state accordingly to `fmt` string
@@ -1310,11 +1311,11 @@ namespace icecream{ namespace detail
         {}
 
     #if defined(ICECREAM_DUMP_STRUCT_CLANG)
+        // Print classes using clang's __builtin_dump_struct (clang >= 15).
         template <typename T>
         Tree(T const& value, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
-                std::is_standard_layout<T>::value
-                && !is_collection<T>::value
+                !is_collection<T>::value
                 && !is_tuple<T>::value
                 && !is_unstreamable_ptr<T>::value
                 && !is_weak_ptr<T>::value
@@ -1325,554 +1326,269 @@ namespace icecream{ namespace detail
                 && !has_insertion<T>::value
                 && !is_character<T>::value
                 && !is_c_string<T>::value
+                && !std::is_base_of<std::exception, T>::value
+                && !std::is_base_of<boost::exception, T>::value
             >::type* = nullptr
         )
             : Tree {InnerTag{}, ""}
         {
-            ds_this = this;
-            ds_buf = &stream_ref;
-            __builtin_dump_struct(&value, &parse_struct_dump);
-            ds_this = nullptr;
-            ds_buf = nullptr;
+            // Search among the children of `this` Tree, by a Tree having `key` as its
+            // content. Returns `nullptr` if no child has been found.
+            auto find_tree = [this](std::string const& key) -> Tree*
+            {
+                auto to_visit = std::vector<Tree*>{this};
+                while (!to_visit.empty())
+                {
+                    auto current = to_visit.back();
+                    to_visit.pop_back();
+
+                    if (!current->is_leaf_)
+                    {
+                        for (auto& child : current->content_.stem.children)
+                        {
+                            to_visit.push_back(&child);
+                        }
+                    }
+                    else if (current->content_.leaf == key)
+                    {
+                        return current;
+                    }
+                }
+
+                return nullptr;
+            };
+
+            if (!ds_this)  // If this is the outermost class being printed
+            {
+                ds_this = this;  // Put `this` on scope to be assigned inside `parse_dump_struct`
+                ds_stream_ref = &stream_ref;
+                __builtin_dump_struct(&value, &parse_dump_struct);  // Print the outermost class
+
+                // Loop on each class that is an internal attribute of the outermost class
+                while (!ds_delayed_structs.empty())
+                {
+                    auto const delayed_struct = ds_delayed_structs.back();
+                    ds_delayed_structs.pop_back();
+
+                    // Put that attribute class on scope to `parse_struct_dump`
+                    ds_this = find_tree(delayed_struct.first);
+
+                    if (ds_this == nullptr)
+                    {
+                        std::cerr
+                            << "ICECREAM: Failure finding a child Tree, this should not have happened. "
+                            "Please report a bug on https://github.com/renatoGarcia/icecream-cpp/issues\n";
+                    }
+
+                    delayed_struct.second();  // Print the class
+                }
+
+                ds_this = nullptr;
+                ds_call_count = 0;
+            }
+
+            // Otherwise, the class at hand is an internal attribute from the outermost
+            // class. If this is the case, this present calling of Tree constructor is
+            // being made from inside a __builtin_dump_struct calling. So here we delay
+            // the calling of __builtin_dump_struct to avoid a reentrant function call.
+            else
+            {
+                auto const unique_id =
+                    "icecream_415a8a88-aa51-44d5-8ccb-377d953413ef_" + std::to_string(ds_call_count);
+
+                this->content_.leaf = unique_id;
+                ds_delayed_structs.emplace_back(
+                    unique_id,
+                    [&value]()
+                    {
+                        __builtin_dump_struct(&value, &parse_dump_struct);
+                    }
+                );
+                ds_call_count += 1;
+            }
         }
     #endif
-    };
 
-    // -------------------------------------------------- clang dump struct parsing
+    };
 
 #if defined(ICECREAM_DUMP_STRUCT_CLANG)
 
-    struct Tokens
+    // Receives an argument from parse_dump_struct and builds a Tree using it.
+    //
+    // When clang doesn't know how to format a value within __builtin_dump_struct, it will
+    // pass a pointer to that value instead of a reference. This function specialization
+    // will handle that scenario, as it specializes on pointers. However, to distinguish
+    // between actual pointer values and a "don't know how to format" value, the `deref`
+    // boolean is used.
+    template<typename T>
+    auto build_tree(bool deref, T* const& t) -> Tree
     {
-        struct TkArray
-        {
-            std::size_t Size = 0;
+        if (deref)
+            return Tree {*t, *ds_stream_ref};
+        else
+            return Tree {t, *ds_stream_ref};
+    }
 
-            TkArray() = default;
-            TkArray(TkArray const&) = default;
-            TkArray(TkArray&&) = default;
-            TkArray& operator=(TkArray const&) = default;
-            TkArray& operator=(TkArray&&) = default;
+    // Receives an argument from parse_dump_struct and builds a Tree using it.
+    template<typename T>
+    auto build_tree(bool, T const& t) -> Tree
+    {
+        return Tree {t, *ds_stream_ref};
+    }
 
-            TkArray(std::size_t size)
-                : Size {size}
-                , exist {true}
-            {}
+    // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
+    // argument name and its Tree representation.
+    // This overload accepts zero, one, or two values from the variadic inputs. It is
+    // here just so the code compiles and never will be called. When receiving these
+    // number of inputs an argument to be printed will never be among them.
+    inline
+    auto build_name_tree_pair(
+          bool, std::string const& = "", std::string const& = ""
+    ) -> std::pair<std::string, Tree>
+    {
+        ICECREAM_ASSERT(false, "Shoud not reach here.");
+        return std::pair<std::string, Tree>("", Tree::literal(""));
+    }
 
-            explicit operator bool() const
+    // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
+    // argument name and its Tree representation.
+    // This overload will be called when starting the printing of an argument that is
+    // itself a struct with other attributes. The empty `Tree` is a placeholder that will
+    // be replaced when the actual tree is built.
+    inline auto build_name_tree_pair(
+        bool, std::string const&, std::string const&, std::string const& arg_name
+    ) -> std::pair<std::string, Tree>
+    {
+        return std::pair<std::string, Tree>(arg_name, Tree::literal(""));
+    }
+
+    // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
+    // argument name and its Tree representation.
+    template<typename T>
+    auto build_name_tree_pair(
+        bool deref,
+        std::string const&,
+        std::string const&,
+        std::string const& arg_name,
+        T const& value
+    ) -> std::pair<std::string, Tree>
+    {
+        return std::pair<std::string, Tree>(arg_name, build_tree(deref, value));
+    }
+
+    // Each call to `parse_dump_struct` will deal with at most one attribute from the
+    // struct being printed. This `attributes_stack` will hold the pairs (argument name,
+    // Tree) constructed to each attribute until all of them are processed.
+    static auto attributes_stack = std::vector<std::vector<std::pair<std::string, Tree>>> {};
+
+    // When printing the attributes of a base class (inheritance), Clang will open and
+    // close braces, similarly to when printing an attribute that is a struct
+    // (composition). It is possible distinguish the two cases when at opening, but they
+    // are identical when closing. This vector mark if the current context is inside a
+    // inheritance attributes or a composition attributes.
+    static auto is_inside_baseclass = std::vector<bool> {};
+
+    template<typename... T>
+    int parse_dump_struct(const char *format_, T&& ...args)
+    {
+        // Removes any left and right white spaces
+        auto const trim =
+            [](std::string const& str) -> std::string
             {
-                return this->exist;
-            }
+                auto const left = str.find_first_not_of(" \t\n");
+                if (left == std::string::npos)
+                    return "";
 
-        private:
-            bool exist = false;
-        };
+                auto const right = str.find_last_not_of(" \t\n");
+                return str.substr(left, right-left+1);
+            };
 
-        bool Bool = false;
-        bool Int = false;
-
-        bool Int8 = false;
-        bool Int16 = false;
-        bool Int32 = false;
-        bool Int64 = false;
-        bool Int_fast8 = false;
-        bool Int_fast16 = false;
-        bool Int_fast32 = false;
-        bool Int_fast64 = false;
-        bool Int_least8 = false;
-        bool Int_least16 = false;
-        bool Int_least32 = false;
-        bool Int_least64 = false;
-        bool Intmax = false;
-        bool Intptr = false;
-
-        bool Uint8 = false;
-        bool Uint16 = false;
-        bool Uint32 = false;
-        bool Uint64 = false;
-        bool Uint_fast8 = false;
-        bool Uint_fast16 = false;
-        bool Uint_fast32 = false;
-        bool Uint_fast64 = false;
-        bool Uint_least8 = false;
-        bool Uint_least16 = false;
-        bool Uint_least32 = false;
-        bool Uint_least64 = false;
-        bool Uintmax = false;
-        bool Uintptr = false;
-
-        bool Size_t = false;
-        bool Ptrdiff = false;
-
-        bool Double = false;
-        bool Float = false;
-        bool Char = false;
-        bool Wchar = false;
-        bool Char16 = false;
-        bool Char32 = false;
-        bool Signed = false;
-        bool Unsigned = false;
-        bool Short = false;
-        int Long = 0;
-        int Star = 0;
-        bool Struct = false;
-        bool Enum = false;
-        TkArray Array {};
-        int Unknown = 0;
-        std::string Name = "";
-
-        Tokens() = default;
-        Tokens(Tokens const&) = default;
-        Tokens(Tokens&&) = default;
-        Tokens& operator=(Tokens const&) = default;
-        Tokens& operator=(Tokens&&) = default;
-
-        Tokens(std::string const& line)
-        {
-            static auto const& npos = std::string::npos;
-            auto const line_size = line.size();
-            auto left = std::string::size_type {0};
-            auto right = std::string::size_type {0};
-
-            // When printing a member like "int* foo[2]", the clang __builtin_dump_struct
-            // will delivery a line like "int *[2] foo". This loop will split that line on
-            // the lexemes: [int, *, [2], foo]
-            auto lexemes = std::vector<std::string> {};
-            while (true)
+        // Check if the last format specifier, the one related to the value to be printed,
+        // means that clang doesn't know how to format that value.
+        auto const knows_how_to_format =
+            [](std::string const& str) -> bool
             {
-                left = line.find_first_not_of(' ', left);
-                if (left == npos) break;
+                auto const left = str.find_last_of(" \t");
+                return str.substr(left+1) != "*%p";
+            };
 
-                if (line.at(left) == '*')
-                    right = left + 1;
-                else if (line.at(left) == '[')
-                    right = line.find("]", left) + 1;
-                else
-                    right = line.find_first_of(" *[", left);
-                right = right < line_size ? right : line_size;
+        auto const format = trim(format_);
 
-                lexemes.push_back(line.substr(left, right-left));
-                left = right;
-            }
-
-            this->Name = lexemes.back();
-            lexemes.pop_back();
-            for (auto const& t : lexemes)
-            {
-                if (t == "_Bool") this->Bool = true;
-                else if (t == "int") this->Int = true;
-
-                else if ((t == "std::int8_t") || (t == "int8_t")) this->Int8 = true;
-                else if ((t == "std::int8_t") || (t == "int8_t")) this->Int8 = true;
-                else if ((t == "std::int16_t") || (t == "int16_t")) this->Int16 = true;
-                else if ((t == "std::int16_t") || (t == "int16_t")) this->Int16 = true;
-                else if ((t == "std::int32_t") || (t == "int32_t")) this->Int32 = true;
-                else if ((t == "std::int32_t") || (t == "int32_t")) this->Int32 = true;
-                else if ((t == "std::int64_t") || (t == "int64_t")) this->Int64 = true;
-                else if ((t == "std::int64_t") || (t == "int64_t")) this->Int64 = true;
-                else if ((t == "std::int_fast8_t") || (t == "int_fast8_t")) this->Int_fast8 = true;
-                else if ((t == "std::int_fast8_t") || (t == "int_fast8_t")) this->Int_fast8 = true;
-                else if ((t == "std::int_fast16_t") || (t == "int_fast16_t")) this->Int_fast16 = true;
-                else if ((t == "std::int_fast16_t") || (t == "int_fast16_t")) this->Int_fast16 = true;
-                else if ((t == "std::int_fast32_t") || (t == "int_fast32_t")) this->Int_fast32 = true;
-                else if ((t == "std::int_fast32_t") || (t == "int_fast32_t")) this->Int_fast32 = true;
-                else if ((t == "std::int_fast64_t") || (t == "int_fast64_t")) this->Int_fast64 = true;
-                else if ((t == "std::int_fast64_t") || (t == "int_fast64_t")) this->Int_fast64 = true;
-                else if ((t == "std::int_least8_t") || (t == "int_least8_t")) this->Int_least8 = true;
-                else if ((t == "std::int_least8_t") || (t == "int_least8_t")) this->Int_least8 = true;
-                else if ((t == "std::int_least16_t") || (t == "int_least16_t")) this->Int_least16 = true;
-                else if ((t == "std::int_least16_t") || (t == "int_least16_t")) this->Int_least16 = true;
-                else if ((t == "std::int_least32_t") || (t == "int_least32_t")) this->Int_least32 = true;
-                else if ((t == "std::int_least32_t") || (t == "int_least32_t")) this->Int_least32 = true;
-                else if ((t == "std::int_least64_t") || (t == "int_least64_t")) this->Int_least64 = true;
-                else if ((t == "std::int_least64_t") || (t == "int_least64_t")) this->Int_least64 = true;
-                else if ((t == "std::intmax_t") || (t == "intmax_t")) this->Intmax = true;
-                else if ((t == "std::intptr_t") || (t == "intptr_t")) this->Intptr = true;
-
-                else if ((t == "std::uint8_t") || (t == "uint8_t")) this->Uint8 = true;
-                else if ((t == "std::uint8_t") || (t == "uint8_t")) this->Uint8 = true;
-                else if ((t == "std::uint16_t") || (t == "uint16_t")) this->Uint16 = true;
-                else if ((t == "std::uint16_t") || (t == "uint16_t")) this->Uint16 = true;
-                else if ((t == "std::uint32_t") || (t == "uint32_t")) this->Uint32 = true;
-                else if ((t == "std::uint32_t") || (t == "uint32_t")) this->Uint32 = true;
-                else if ((t == "std::uint64_t") || (t == "uint64_t")) this->Uint64 = true;
-                else if ((t == "std::uint64_t") || (t == "uint64_t")) this->Uint64 = true;
-                else if ((t == "std::uint_fast8_t") || (t == "uint_fast8_t")) this->Uint_fast8 = true;
-                else if ((t == "std::uint_fast8_t") || (t == "uint_fast8_t")) this->Uint_fast8 = true;
-                else if ((t == "std::uint_fast16_t") || (t == "uint_fast16_t")) this->Uint_fast16 = true;
-                else if ((t == "std::uint_fast16_t") || (t == "uint_fast16_t")) this->Uint_fast16 = true;
-                else if ((t == "std::uint_fast32_t") || (t == "uint_fast32_t")) this->Uint_fast32 = true;
-                else if ((t == "std::uint_fast32_t") || (t == "uint_fast32_t")) this->Uint_fast32 = true;
-                else if ((t == "std::uint_fast64_t") || (t == "uint_fast64_t")) this->Uint_fast64 = true;
-                else if ((t == "std::uint_fast64_t") || (t == "uint_fast64_t")) this->Uint_fast64 = true;
-                else if ((t == "std::uint_least8_t") || (t == "uint_least8_t")) this->Uint_least8 = true;
-                else if ((t == "std::uint_least8_t") || (t == "uint_least8_t")) this->Uint_least8 = true;
-                else if ((t == "std::uint_least16_t") || (t == "uint_least16_t")) this->Uint_least16 = true;
-                else if ((t == "std::uint_least16_t") || (t == "uint_least16_t")) this->Uint_least16 = true;
-                else if ((t == "std::uint_least32_t") || (t == "uint_least32_t")) this->Uint_least32 = true;
-                else if ((t == "std::uint_least32_t") || (t == "uint_least32_t")) this->Uint_least32 = true;
-                else if ((t == "std::uint_least64_t") || (t == "uint_least64_t")) this->Uint_least64 = true;
-                else if ((t == "std::uint_least64_t") || (t == "uint_least64_t")) this->Uint_least64 = true;
-                else if ((t == "std::uintmax_t") || (t == "uintmax_t")) this->Uintmax = true;
-                else if ((t == "std::uintptr_t") || (t == "uintptr_t")) this->Uintptr = true;
-
-                else if ((t == "std::size_t") || (t == "size_t")) this->Size_t = true;
-                else if ((t == "std::ptrdiff_t") || (t == "ptrdiff_t")) this->Ptrdiff = true;
-
-                else if (t == "double") this->Double = true;
-                else if (t == "float") this->Float = true;
-                else if (t == "char") this->Char = true;
-                else if (t == "wchar_t") this->Wchar = true;
-                else if (t == "char16_t") this->Char16 = true;
-                else if (t == "char32_t") this->Char32 = true;
-                else if (t == "signed") this->Signed = true;
-                else if (t == "unsigned") this->Unsigned = true;
-                else if (t == "long") this->Long++;
-                else if (t == "short") this->Short = true;
-                else if (t == "struct") this->Struct = true;
-                else if (t == "enum") this->Enum = true;
-                else if (t == "*") this->Star++;
-                else if (t.front() == '[') this->Array = std::stoul(t.substr(1));
-                else this->Unknown++;
-            }
-        }
-    };
-
-    // 1 - If T is a pointer result will be T.
-    // 2.0 - If T is a [signed|unsigned] integral narrower than [signed|unsigned] int,
-    //       then result will be [signed|unsigned] int. Otherwise result will be T.
-    // 2.1 - if T is either double or long double, result will be T.
-    template <typename T>
-    using promoted_type = typename std::common_type<
-        T,
-        typename std::conditional<
-            std::is_pointer<T>::value,
-            T,
-            typename std::conditional<
-                std::is_signed<T>::value, int, unsigned int
-            >::type
-        >::type
-    >::type;
-
-    template <typename T>
-    using transition_type = typename std::conditional<
-        is_one_of<T, wchar_t, char16_t, char32_t>::value,
-        std::ptrdiff_t,
-        T
-    >::type;
-
-    template <typename T>
-    static auto va_list_to_tree(va_list& args, std::size_t size) -> Tree
-    {
-        using T0 = promoted_type<T>;
-
-        auto result = std::vector<T> {};
-        for (std::size_t i = 0; i < size; ++i)
+        // When true, the next parse_dump_struct call will be the opening brace of a base
+        // class scope.
+        if (sizeof...(args) == 2)
         {
-            result.push_back(static_cast<T>(va_arg(args, T0)));
+            is_inside_baseclass.push_back(true);
         }
 
-        return Tree{result, *ds_buf};
-    }
-
-    template <>
-    auto va_list_to_tree<bool>(va_list& args, std::size_t size) -> Tree
-    {
-        auto result = std::vector<bool> {};
-        for (std::size_t i = 0; i < size; ++i)
+        // When true, the next parse_dump_struct call will be the opening brace of a scope
+        // printing the content of a struct attribute.
+        else if (sizeof...(args) == 3)
         {
-            auto v = va_arg(args, int) & 0x01;
-            result.push_back(static_cast<bool>(v));
+            is_inside_baseclass.push_back(false);
+
+            attributes_stack.back().push_back(
+                build_name_tree_pair(!knows_how_to_format(format), args...)
+            );
+
+            // The next attributes will be from this struct. Collect them all before
+            // merging on a Tree.
+            attributes_stack.emplace_back();
         }
 
-        return Tree{result, *ds_buf};
-    }
-
-    template <>
-    auto va_list_to_tree<float>(va_list& args, std::size_t size) -> Tree
-    {
-        auto result = std::vector<float> {};
-        for (std::size_t i = 0; i < size;)
+        // When true, is printing an actual value. Like "int i = 7".
+        else if (sizeof...(args) == 4)
         {
-            // See https://bugs.llvm.org/show_bug.cgi?id=45143
-            // Hackish empirical workaround, found by inspecting the bit patterns in
-            // memory. It works on the tested machines, but can or can not work on other
-            // architectures or future Clang releases. Please report any problem.
-            double d = va_arg(args, double);
-            result.push_back(*reinterpret_cast<float*>(&d));
-            ++i;
-
-            if ((sizeof(void*)*CHAR_BIT == 32) && i < size)
-            {
-                result.push_back(*(reinterpret_cast<float*>(&d) + 1));
-                ++i;
-            }
-        }
-        return Tree{result, *ds_buf};
-    }
-
-    template <typename T>
-    static auto va_list_to_tree(va_list& args) -> Tree
-    {
-        using T0 = typename std::conditional<
-            is_one_of<T, wchar_t, char16_t, char32_t>::value,
-            void*,
-            promoted_type<T>
-        >::type;
-        using T1 = transition_type<T>;
-
-        return Tree{(T)(T1)va_arg(args, T0), *ds_buf};
-    }
-
-    template <>
-    auto va_list_to_tree<bool>(va_list& args) -> Tree
-    {
-        auto i = va_arg(args, int) & 0x01;
-        return Tree{static_cast<bool>(i), *ds_buf};
-    }
-
-    template <>
-    auto va_list_to_tree<float>(va_list& args) -> Tree
-    {
-        // See https://bugs.llvm.org/show_bug.cgi?id=45143
-        // Hackish empirical workaround, found by inspecting the bit patterns in
-        // memory. It works on the tested machines, but can or can not work on other
-        // architectures or future Clang releases. Please report any problem.
-        auto d = va_arg(args, double);
-        return Tree{*reinterpret_cast<float*>(&d), *ds_buf};
-    }
-
-    static auto parse_array_dump(va_list& args, Tokens const& tokens) -> Tree
-    {
-    #define ICECREAM_CND(condition, type) \
-        (condition) return va_list_to_tree<type>(args, tokens.Array.Size)
-
-        auto const& t = tokens;
-
-        if ICECREAM_CND(t.Star, void*);
-        else if ICECREAM_CND(t.Bool, bool);
-
-        else if ICECREAM_CND(t.Short && !t.Unsigned, short int);
-        else if ICECREAM_CND(t.Short && t.Unsigned, unsigned short int);
-        else if ICECREAM_CND(t.Int && !t.Unsigned && !t.Long, int);
-        else if ICECREAM_CND(t.Signed && !t.Char && !t.Long, int);
-        else if ICECREAM_CND(t.Unsigned && !t.Char && !t.Long, unsigned int);
-        else if ICECREAM_CND((t.Long==1) && !t.Unsigned && !t.Double && !t.Float, long int);
-        else if ICECREAM_CND((t.Long==1) && t.Unsigned, unsigned long int);
-        else if ICECREAM_CND((t.Long==2) && !t.Unsigned, long long int);
-        else if ICECREAM_CND((t.Long==2) && t.Unsigned, unsigned long long int);
-        else if ICECREAM_CND(t.Char && !t.Unsigned && !t.Signed, char);
-        else if ICECREAM_CND(t.Char && t.Signed, signed char);
-        else if ICECREAM_CND(t.Char && t.Unsigned, unsigned char);
-
-        else if ICECREAM_CND(t.Wchar, wchar_t);
-        else if ICECREAM_CND(t.Char16, char16_t);
-        else if ICECREAM_CND(t.Char32, char32_t);
-
-        else if ICECREAM_CND(t.Float, float);
-        else if ICECREAM_CND(t.Double && !t.Long, double);
-        else if ICECREAM_CND(t.Double && t.Long, long double);
-
-    #if defined(INT8_MAX)
-        else if ICECREAM_CND(t.Int8, std::int8_t);
-    #endif
-    #if defined(INT16_MAX)
-        else if ICECREAM_CND(t.Int16, std::int16_t);
-    #endif
-    #if defined(INT32_MAX)
-        else if ICECREAM_CND(t.Int32, std::int32_t);
-    #endif
-    #if defined(INT64_MAX)
-        else if ICECREAM_CND(t.Int64, std::int64_t);
-    #endif
-        else if ICECREAM_CND(t.Int_fast8, std::int_fast8_t);
-        else if ICECREAM_CND(t.Int_fast16, std::int_fast16_t);
-        else if ICECREAM_CND(t.Int_fast32, std::int_fast32_t);
-        else if ICECREAM_CND(t.Int_fast64, std::int_fast64_t);
-        else if ICECREAM_CND(t.Int_least8, std::int_least8_t);
-        else if ICECREAM_CND(t.Int_least16, std::int_least16_t);
-        else if ICECREAM_CND(t.Int_least32, std::int_least32_t);
-        else if ICECREAM_CND(t.Int_least64, std::int_least64_t);
-        else if ICECREAM_CND(t.Intmax, std::intmax_t);
-    #if defined(INTPTR_MAX)
-        else if ICECREAM_CND(t.Intptr, std::intptr_t);
-    #endif
-
-    #if defined(UINT8_MAX)
-        else if ICECREAM_CND(t.Uint8, std::uint8_t);
-    #endif
-    #if defined(UINT16_MAX)
-        else if ICECREAM_CND(t.Uint16, std::uint16_t);
-    #endif
-    #if defined(UINT32_MAX)
-        else if ICECREAM_CND(t.Uint32, std::uint32_t);
-    #endif
-    #if defined(UINT64_MAX)
-        else if ICECREAM_CND(t.Uint64, std::uint64_t);
-    #endif
-        else if ICECREAM_CND(t.Uint_fast8, std::uint_fast8_t);
-        else if ICECREAM_CND(t.Uint_fast16, std::uint_fast16_t);
-        else if ICECREAM_CND(t.Uint_fast32, std::uint_fast32_t);
-        else if ICECREAM_CND(t.Uint_fast64, std::uint_fast64_t);
-        else if ICECREAM_CND(t.Uint_least8, std::uint_least8_t);
-        else if ICECREAM_CND(t.Uint_least16, std::uint_least16_t);
-        else if ICECREAM_CND(t.Uint_least32, std::uint_least32_t);
-        else if ICECREAM_CND(t.Uint_least64, std::uint_least64_t);
-        else if ICECREAM_CND(t.Uintmax, std::uintmax_t);
-    #if defined(UINTPTR_MAX)
-        else if ICECREAM_CND(t.Uintptr, std::uintptr_t);
-    #endif
-
-        else if ICECREAM_CND(t.Size_t, std::size_t);
-        else if ICECREAM_CND(t.Ptrdiff, std::ptrdiff_t);
-
-        else if (t.Enum) return Tree::literal("<array of enums, see issue #7 on github>");
-        else if (t.Struct) return Tree::literal("<array of structs, see issue #7 on github>");
-        else return Tree::literal("<type aliased array, see issue #7 on github>");
-    #undef ICECREAM_CND
-    }
-
-    static auto parse_attribute_dump(
-        va_list& args, std::string const& spec, Tokens const& tokens
-    ) -> Tree
-    {
-    #define ICECREAM_CND(spec_str, type) \
-        (spec == spec_str) return va_list_to_tree<type>(args)
-    #define ICECREAM_MSG(spec_str, message) \
-        (spec == spec_str) return Tree::literal(message)
-
-        if ICECREAM_CND("%c", char);
-        else if ICECREAM_CND("%s", char*);
-        else if ICECREAM_CND("%hhd", signed char);
-        else if ICECREAM_CND("%hhi", signed char);
-        else if ICECREAM_CND("%hd", short int);
-        else if ICECREAM_CND("%hi", short int);
-        else if ICECREAM_CND("%d" && tokens.Bool, bool);
-        else if ICECREAM_CND("%i" && tokens.Bool, bool);
-        else if ICECREAM_CND("%d" && !tokens.Bool, int);
-        else if ICECREAM_CND("%i" && !tokens.Bool, int);
-        else if ICECREAM_CND("%ld", long int);
-        else if ICECREAM_CND("%li", long int);
-        else if ICECREAM_CND("%lld", long long int);
-        else if ICECREAM_CND("%lli", long long int);
-        else if ICECREAM_CND("%jd", std::intmax_t);
-        else if ICECREAM_CND("%ji", std::intmax_t);
-        else if ICECREAM_MSG("%zd", "<unimplemented %zd specifiers>");
-        else if ICECREAM_MSG("%zi", "<unimplemented %zi specifiers>");
-        else if ICECREAM_CND("%td", std::ptrdiff_t);
-        else if ICECREAM_CND("%ti", std::ptrdiff_t);
-        else if ICECREAM_CND("%hhu", unsigned char);
-        else if ICECREAM_CND("%hu", unsigned short int);
-        else if ICECREAM_CND("%u", unsigned int);
-        else if ICECREAM_CND("%lu", unsigned long int);
-        else if ICECREAM_CND("%llu", unsigned long long int);
-        else if ICECREAM_CND("%ju", std::uintmax_t);
-        else if ICECREAM_CND("%zu", std::size_t);
-        else if ICECREAM_MSG("%tu", "<unimplemented %tu specifiers>");
-        else if ICECREAM_CND("%f" && tokens.Float, float);
-        else if ICECREAM_CND("%f" && tokens.Double, double);
-        else if (spec == "%f" && !(tokens.Float || tokens.Double))
-        {
-            auto t = va_list_to_tree<double>(args);
-            return Tree::literal(t.leaf() + " <NOT RELIABLE, see issue #6 on github>");
-        }
-        else if ICECREAM_CND("%lf", double);
-        else if ICECREAM_CND("%Lf", long double);
-
-        // Clang delivers arrays and wide characters with a %p specifier. This implemented
-        // heuristic solution works with canonical names only, aliased names will be
-        // interpreted as pointers yet.
-        else if (spec == "%p" && tokens.Array) return parse_array_dump(args, tokens);
-        else if ICECREAM_CND("%p" && (tokens.Wchar && !tokens.Star), wchar_t);
-        else if ICECREAM_CND("%p" && (tokens.Wchar && tokens.Star == 1), wchar_t*);
-        else if ICECREAM_CND("%p" && (tokens.Char16 && !tokens.Star), char16_t);
-        else if ICECREAM_CND("%p" && (tokens.Char16 && tokens.Star == 1), char16_t*);
-        else if ICECREAM_CND("%p" && (tokens.Char32 && !tokens.Star), char32_t);
-        else if ICECREAM_CND("%p" && (tokens.Char32 && tokens.Star == 1), char32_t*);
-        else if ICECREAM_MSG("%p" && tokens.Enum, "<enum member, see issue #7 on github>");
-        else if ICECREAM_CND("%p", void*);
-
-        else ICECREAM_ASSERT(false, "Invalid va_arg code");
-
-        // To silence a non returning warning
-        return Tree::literal("");
-
-    #undef ICECREAM_CND
-    #undef ICECREAM_MSG
-    }
-
-    static inline auto parse_struct_dump(char const* format, ...) -> int
-    {
-        auto trim = [](std::string const& str) -> std::string
-        {
-            auto left = str.find_first_not_of(" \t\n");
-            if (left == std::string::npos)
-                return "";
-
-            auto right = str.find_last_not_of(" \t\n");
-            return str.substr(left, right-left+1);
-        };
-
-        va_list args;
-        va_start(args, format);
-
-        // Stack with trees being constructed. Each level is a set with the children of
-        // trees under construction. The top level is the set of the tree currently being
-        // constructed. Once it is closed, i.e. the token '}' is read, a new Tree object
-        // will be built with all top elements as children and added to the level below.
-        // The elements at index 0 are the elements of `ds_this` tree.
-        static auto tree_stack = std::vector<std::vector<Tree>> {};
-
-        static auto name_stack = std::vector<Tree> {};
-        static auto tokens = Tokens {};
-
-        auto line = trim(format);
-
-        if(line.back() == '{') // "struct <type> {" the opening of a new struct
-        {
-            tree_stack.push_back(std::vector<Tree>{});
+            attributes_stack.back().push_back(
+                build_name_tree_pair(!knows_how_to_format(format), args...)
+            );
         }
 
-        // "<qualifiers>* <type> <array>? <name> :" type and name of an attribute
-        else if(line.back() == ':')
+        // The closing brace of a baseclass attributes section
+        else if (format.back() == '}' && is_inside_baseclass.back())
         {
-            line.pop_back(); // Remove the trailing ':'
-            tokens = Tokens{line};
-            name_stack.push_back(Tree::literal(tokens.Name));
+            is_inside_baseclass.pop_back();
         }
-        else if (line.front() == '%') // an attribute value
-        {
-            auto t_pair = std::vector<Tree> {};
-            t_pair.push_back(std::move(name_stack.back()));
-            t_pair.push_back(parse_attribute_dump(args, line, tokens));
 
-            tree_stack.back().emplace_back("", ": ", "", std::move(t_pair));
-            name_stack.pop_back();
-        }
-        else if (line == "}")  // The closing of an struct
+        // The closing brace of either a struct attribute or the root struct being printed
+        else if (format.back() == '}')
         {
-            auto children = std::move(tree_stack.back());
-            tree_stack.pop_back();
+            is_inside_baseclass.pop_back();
 
-            if (tree_stack.empty())
-                *ds_this = Tree {"{", ", ", "}", std::move(children)};
-            else
+            auto ttributes_stack = std::move(attributes_stack.back());
+            attributes_stack.pop_back();
+
+            auto children = std::vector<Tree>{};
+            for (auto& att : ttributes_stack)
             {
                 auto t_pair = std::vector<Tree> {};
-                t_pair.push_back(std::move(name_stack.back()));
-                t_pair.emplace_back("{", ", ", "}", std::move(children));
+                t_pair.push_back(Tree::literal(std::get<0>(att)));
+                t_pair.push_back(std::move(std::get<1>(att)));
 
-                tree_stack.back().emplace_back("", ": ", "", std::move(t_pair));
-                name_stack.pop_back();
+                children.emplace_back("", ": ", "", std::move(t_pair));
+            }
+
+            auto tttree = Tree {"{", ", ", "}", std::move(children)};
+
+            if (attributes_stack.empty())
+                *ds_this = std::move(tttree);
+            else
+            {
+                std::get<1>(attributes_stack.back().back()) = std::move(tttree);
             }
         }
 
-        va_end(args);
+        // The opening of the root struct being printed
+        else if (sizeof...(args) == 1)
+        {
+            attributes_stack.emplace_back();
+            is_inside_baseclass.push_back(false);
+        }
+
         return 0;
     }
 
-#endif // ICECREAM_DUMP_STRUCT_CLANG
-
+#endif  // ICECREAM_DUMP_STRUCT_CLANG
 
     // -------------------------------------------------- is_tree_argument
 

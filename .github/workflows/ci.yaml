@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [clang5, clang10]
+        version: [clang5, clang10, clang17]
         cpp: [11, 14, 17, 20]
         exclude:
           - version: clang5
