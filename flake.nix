@@ -70,6 +70,11 @@
               busybox
             ];
 
+            # Required by clang using mktemp and failing when /tmp doesn't exist.
+            extraCommands = ''
+              mkdir -p tmp
+            '';
+
             config = {
               WorkingDir = "/home";
               Env = [
@@ -94,7 +99,6 @@
       {
         packages = {
           default = pkgs.icecream-cpp;
-          ci-gcc13 = ci-docker { inherit pkgs; compiler = pkgs.gcc13; tagname = "gcc13"; };
         };
         devShells.default = dev-env { inherit pkgs; };
       }

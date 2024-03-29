@@ -722,11 +722,7 @@ ic| v0: error description
 
 #### Standard layout types (Clang only)
 
-With some exceptions (see issue
-[#7](https://github.com/renatoGarcia/icecream-cpp/issues/7)), if using Clang >= 7, any
-[standard layout type](https://en.cppreference.com/w/cpp/named_req/StandardLayoutType) (C
-compatible structs roughly speaking) is printable even without an `operator<<(ostream&,
-T)` overload.
+If using Clang >= 15, a class will be printable even without an `operator<<(ostream&, T)` overload.
 
 The code:
 ```C++
