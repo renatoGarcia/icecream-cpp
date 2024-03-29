@@ -47,5 +47,5 @@ install(
 )
 
 if(BUILD_TESTING)
-  add_subdirectory(test)
+  add_subdirectory(tests)
 endif()
