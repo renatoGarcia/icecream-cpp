@@ -2579,7 +2579,14 @@ namespace icecream{ namespace detail
                     // Don't split anything inside a string
 
                     ++left_cut;
-                    while (!(*left_cut == '"' && (left_cut+1) != left_end && *(left_cut+1) != '\\')) ++left_cut;
+                    while (
+                        !(  // Will iterate with left_cut until the stop condition:
+                            (left_cut+1) == left_end                        // The next position is the end iterator
+                            || (*left_cut == '"' && *(left_cut+1) != '\\')  // The current char the closing quotation
+                        )
+                    ) {
+                        ++left_cut;
+                    }
                     ++left_cut;
                 }
                 else if (*left_cut == '\'' && *(left_cut+1) != '\\')
@@ -2587,7 +2594,14 @@ namespace icecream{ namespace detail
                     // Don't split a ',' (a comma between single quotation marks)
 
                     ++left_cut;
-                    while (!(*left_cut == '\'' && (left_cut+1) != left_end && *(left_cut+1) != '\\')) ++left_cut;
+                    while (
+                        !(  // Will iterate with left_cut until the stop condition:
+                            (left_cut+1) == left_end                         // The next position is the end iterator
+                            || (*left_cut == '\'' && *(left_cut+1) != '\\')  // The current char is the closing quotation
+                        )
+                    ) {
+                        ++left_cut;
+                    }
                     ++left_cut;
                 }
             }
