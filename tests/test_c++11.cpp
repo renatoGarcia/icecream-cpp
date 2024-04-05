@@ -299,6 +299,22 @@ TEST_CASE("base")
         IC(mc);
         REQUIRE(str == "ic| mc: <MyClass 20>\n");
     }
+
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+
+        IC("Hi");
+        REQUIRE(str == "ic| \"Hi\": ['H', 'i', '\\0']\n");
+    }
+
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+
+        IC('a');
+        REQUIRE(str == "ic| 'a': 'a'\n");
+    }
 }
 
 
