@@ -5,7 +5,7 @@
 
 IceCream-Cpp is a little (single header) library to help with the print debugging on C++11 and forward.
 
-[Try it at godbolt!](https://godbolt.org/z/zgvv79)
+[Try it at godbolt!](https://godbolt.org/z/4133d1Kxq)
 
 **Contents**
 * [Install](#install)
