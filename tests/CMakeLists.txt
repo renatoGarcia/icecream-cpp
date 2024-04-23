@@ -13,16 +13,22 @@ if (
 )
     add_executable(test_c++11 test_c++11.cpp test_2.cpp)
     add_test(NAME test_c++11 COMMAND test_c++11)
+
+    add_executable(test_strings_c++11 test_strings_c++11.cpp)
+    add_test(NAME test_strings_c++11 COMMAND test_strings_c++11)
 endif()
 
 if (CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20)
     add_executable(test_c++17 test_c++17.cpp)
-    add_test(NAME test_c++17 COMMAND test_c++11)
+    add_test(NAME test_c++17 COMMAND test_c++17)
+
+    add_executable(test_strings_c++17 test_strings_c++17.cpp)
+    add_test(NAME test_strings_c++17 COMMAND test_strings_c++17)
 endif()
 
 if (CMAKE_CXX_STANDARD EQUAL 20)
-    add_executable(test_c++20 test_c++20.cpp)
-    add_test(NAME test_c++20 COMMAND test_c++20)
+    add_executable(test_strings_c++20 test_strings_c++20.cpp)
+    add_test(NAME test_strings_c++20 COMMAND test_strings_c++20)
 endif()
 
 if (

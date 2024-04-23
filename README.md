@@ -15,16 +15,23 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
   * [Return value and IceCream apply macro](#return-value-and-icecream-apply-macro)
   * [Output formatting](#output-formatting)
      * [Format string syntax](#format-string-syntax)
+  * [Character Encoding](#character-encoding)
   * [Configuration](#configuration)
      * [enable/disable](#enabledisable)
      * [output](#output)
      * [prefix](#prefix)
      * [show_c_string](#show_c_string)
+     * [wide_string_transcoder](#wide_string_transcoder)
+     * [unicode_transcoder](#unicode_transcoder)
+     * [output_transcoder](#output_transcoder)
      * [line_wrap_width](#line_wrap_width)
      * [include_context](#include_context)
      * [context_delimiter](#context_delimiter)
   * [Printing logic](#printing-logic)
      * [C strings](#c-strings)
+     * [Ordinary narrow strings](#ordinary-narrow-strings)
+     * [Wide strings](#wide-strings)
+     * [Unicode strings](#unicode-strings)
      * [Pointer like types](#pointer-like-types)
      * [Iterable types](#iterable-types)
      * [Tuple like types](#tuple-like-types)
@@ -361,6 +368,61 @@ The available presentation types for floating-point values are:
 | `'g'`  | General format. For a given precision p >= 1, this rounds the number to p significant digits and then formats the result in either fixed-point format or in scientific notation, depending on its magnitude. A precision of 0 is treated as equivalent to a precision of 1. |
 | `'G'`  | General format. Same as 'g' except switches to 'E' if the number gets too large. The representations of infinity and NaN are uppercased, too.                                                                                                                               |
 
+
+### Character Encoding
+
+Character encoding in C++ is messy.
+
+The `char8_t`, `char16_t`, and `char32_t` strings are well defined. They are capable, and
+do hold Unicode code units of 8, 16, and 32 bits respectively, and they are encoded in
+UTF-8, UTF-16, and UTF-32 also respectively.
+
+The `char` strings have a well defined code unit bit size (given by
+[`CHAR_BIT`](https://en.cppreference.com/w/cpp/types/climits), usually 8 bits), but there
+are no requirements about its encoding.
+
+The `wchar_t` strings have [neither a well defined code unit
+size](https://en.cppreference.com/w/cpp/language/types#Character_types), nor any
+requirements about its encoding.
+
+In a code like this:
+
+```C++
+auto const str = std::string{"foo"};
+std::cout << str;
+```
+
+We will have three character encoding points of interest. In the first one, before
+compiling, that code will be in a source file in an unspecified "source encoding". In the
+second interest point, the compiled binary will have the "foo" string saved in an
+unspecified "execution encoding". Finally on the third point, the "foo" byte stream
+received by `std::cout` will be ultimately forwarded to the system, that expects the
+stream being encoded in an also unspecified "output encoding".
+
+From that three interest points of character encoding, both "execution encoding", and
+"output encoding" have impact in the working flow of Icecream-cpp, and there is no way to
+know for sure what is the used encoding in both of them. In face of this uncertainty, the
+adopted strategy is offer a reasonable default transcoding function, that will try convert
+the data to the right encoding, and allow the user to use its own implementation when
+needed.
+
+Except for wide and Unicode string types (discussed below), when printing any other type
+we will have its serialized textual data in "execution encoding". That "execution
+encoding" may or may not be the same as the "output encoding", this one being the encoded
+expected by the configured [output](#output). Because of that, before we send that data to
+the output, we must transcode it to make sure that we have it in "output encoding". To
+that end, before delivering the text data to the [output](#output), we send it to the
+configured [output_transcoder](#output_transcoder) function, that must ensure it is
+encoded in the correct "output encoding".
+
+When printing the wide and Unicode string types, we need to have one more transcoding
+level, because it is possible that the text data is in a distinct character encoding from
+the expected "execution encoding".  Because of that, additional logic is applied to make
+sure that the strings are in "execution encoding" before we send them to output. This is
+further discussed in [wide strings](#wide-strings), and [unicode
+strings](#unicode-strings) sections.
+
+
 ### Configuration
 
 The `Icecream` class is internally implemented as a singleton. All the configuration
@@ -498,6 +560,67 @@ ic| flavor: "mango";
 ic| flavor: 0x55587b6f5410
 ```
 
+#### wide_string_transcoder
+
+Function that transcodes a `wchar_t` string, from a system defined encoding to a `char`
+string in the system "execution encoding".
+
+- set:
+    ```C++
+    auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)> transcoder) -> IcecreamAPI&;
+    auto wide_string_transcoder(std::function<std::string(std::wstring_view)> transcoder) -> IcecreamAPI&;
+    ```
+
+There is no guarantee that the input string will end on a null terminator (this is the
+actual semantic of string_view), so the user must observe the input string size value.
+
+The default implementation will check if the C locale is set to other value than "C" or
+"POSIX". If yes, it will forward the input to the
+[std::wcrtomb](https://en.cppreference.com/w/cpp/string/multibyte/wcrtomb) function.
+Otherwise, it will assume that the input is Unicode encoded (UTF-16 or UTF-32, accordingly
+to the byte size of `wchar_t`), and transcoded it to UTF-8.
+
+#### unicode_transcoder
+
+Function that transcodes a `char32_t` string, from a UTF-32 encoding to a `char` string in
+the system "execution encoding".
+
+- set:
+    ```C++
+    auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)> transcoder) -> IcecreamAPI&;
+    auto unicode_transcoder(std::function<std::string(std::u32string_view)> transcoder) -> IcecreamAPI&;
+    ```
+
+There is no guarantee that the input string will end on a null terminator (this is the
+actual semantic of string_view), so the user must observe the input string size value.
+
+The default implementation will check the C locale is set to other value than "C" or
+"POSIX". If yes, it will forward the input to the
+[std::c32rtomb](https://en.cppreference.com/w/cpp/string/multibyte/c32rtomb) function.
+Otherwise, it will just transcoded it to UTF-8.
+
+This function will be used to transcode all the `char8_t`, `char16_t`, and `char32_t`
+strings.  When transcoding `char8_t` and `char16_t` strings, they will be first converted
+to a `char32_t` string, before being sent as input to this function.
+
+#### output_transcoder
+
+Function that transcodes a `char` string, from in the system "execution encoding" to a
+`char` string in the system "output encoding", as expected by the configured
+[output](#output).
+
+- set:
+    ```C++
+    auto output_transcoder(std::function<std::string(char const*, std::size_t)> transcoder) -> IcecreamAPI&;
+    auto output_transcoder(std::function<std::string(std::string_view)> transcoder) -> IcecreamAPI&;
+    ```
+
+There is no guarantee that the input string will end on a null terminator (this is the
+actual semantic of string_view), so the user must observe the input string size value.
+
+The default implementation assumes that the "execution encoding" is the same as the
+"output encoding", and will just return an unchanged input.
+
 #### line_wrap_width
 
 The maximum number of characters before the output be broken on multiple lines. Default
@@ -547,11 +670,11 @@ strings (C strings, `std::string`, and `std::string_view`), `char` and bounded a
 Strings will be enclosed by `"`, `char` will be enclosed by `'`, and arrays are considered
 iterables rather than let decay to raw pointers.
 
-In general, if an overload of `operator<<(ostream&, T)` is not available to a type `T`, a
+In general, if an `operator<<(ostream&, T)` overload is not available to a type `T`, a
 call to `IC(t)` will result on a compiling error. All exceptions to that rule, when
-IceCream-Cpp will print a type `T` even without a `operator<<` overload are discussed
-below. Note however that even to those, if a user implements a custom
-`operator<<(ostream&, T)` that will take precedence and used instead.
+IceCream-Cpp will print a type `T` even without an `operator<<(ostream&, T)` overload are
+discussed below. Note however that even to those, if a user implements a custom
+`operator<<(ostream&, T)` it will take precedence and be used instead.
 
 #### C strings
 
@@ -594,6 +717,27 @@ ic| flavor: ['c', 'h', 'o', 'c', 'o', 'l', 'a', 't', 'e', '\0']
 unbounded `char[]` arrays (i.e.: array with an unknown size) will decay to `char*`
 pointers, and will be printed either as a string or a pointer as configured by the
 [show_c_string](#show_c_string) option.
+
+
+#### Wide strings
+
+Any realization of `wchar_t` strings, like `wchar_t*`, `std::wstring`, and `std::string_view`
+
+Since the [output](#output) expects a `char` string, we must convert the text data to that
+format, making sure that it is in "execution encoding". Icecream-cpp implements a default
+transcoder function for doing that, but is possible to customize it by setting the
+[wide_string_transcoder](#wide_string_transcoder) option.
+
+#### Unicode strings
+
+Any realization of `char8_t`, `char16_t`, and `char32_t` strings, like `char32_t*`,
+`std::u8string`, and `std::u16string_view`
+
+Since the [output](#output) expects a `char` string, we must convert the data to that
+format, making sure that it is in "execution encoding". Icecream-cpp implements a default
+transcoder function for doing that, but is possible to customize it by setting the
+[unicode_transcoder](#unicode_transcoder) option.
+
 
 #### Pointer like types
 

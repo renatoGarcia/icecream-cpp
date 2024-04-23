@@ -85,51 +85,21 @@ TEST_CASE("std_filesystem")
 #endif
 
 
-TEST_CASE("std_string_view")
+TEST_CASE("output transcoding")
 {
     {
         auto str = std::string{};
         icecream::ic.output(str);
 
-        auto v0 = std::string_view {"str 1"};
+        icecream::ic.output_transcoder(
+            [](std::string_view str) -> std::string
+            {
+                return std::string(str) + ";";
+            }
+        );
+
+        auto v0 = float{3.14};
         IC(v0);
-        REQUIRE(str == "ic| v0: \"str 1\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = std::string {"ABCDE"};
-        auto v1 = std::string_view {v0.data() + 1, 3};
-        IC(v1);
-        REQUIRE(str == "ic| v1: \"BCD\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = std::wstring_view {L"wstr 1"};
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"wstr 1\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = std::u16string_view {u"u16str \u03B1"};
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"u16str \xce\xb1\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = std::u32string_view {U"u32str \U0001F427"};
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
+        REQUIRE(str == "ic| ;v0;: ;3.14;\n;");
     }
 }
