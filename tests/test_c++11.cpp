@@ -692,215 +692,6 @@ TEST_CASE("prefix")
 }
 
 
-TEST_CASE("character")
-{
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = char {'a'};
-        IC(v0);
-        REQUIRE(str == "ic| v0: 'a'\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = wchar_t {L'a'};
-        IC(v0);
-        REQUIRE(str == "ic| v0: 'a'\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = char16_t {u'a'};
-        IC(v0);
-        REQUIRE(str == "ic| v0: 'a'\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = char16_t {u'\u03B1'}; // Greek Small Letter Alpha
-        IC(v0);
-        REQUIRE(str == "ic| v0: '\xce\xb1'\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = char32_t {U'a'};
-        IC(v0);
-        REQUIRE(str == "ic| v0: 'a'\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = char32_t {U'\U0001F427'}; // Penguin
-        IC(v0);
-        REQUIRE(str == "ic| v0: '\xF0\x9F\x90\xA7'\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = char16_t {u'\0'};
-        IC(v0);
-        REQUIRE(str == "ic| v0: '\\0'\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = char32_t {u'\t'};
-        IC(v0);
-        REQUIRE(str == "ic| v0: '\\t'\n");
-    }
-}
-
-
-TEST_CASE("std_string")
-{
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = std::string {"str 1"};
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"str 1\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = std::wstring {L"wstr 1"};
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"wstr 1\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = std::u16string {u"u16str \u03B1"};
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"u16str \xce\xb1\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        auto v0 = std::u32string {U"u32str \U0001F427"};
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
-    }
-}
-
-
-TEST_CASE("c_string")
-{
-    icecream::ic.show_c_string(true);
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        char const* v0 = "Icecream test";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"Icecream test\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        char const* const v0 = "Icecream test";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"Icecream test\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        char v0[] = "string 2";
-        char* const v1 = v0;
-        IC(v1);
-        REQUIRE(str == "ic| v1: \"string 2\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        char const* v0 = "Icecream test";
-        char const*& v1 = v0;
-        IC(v1);
-        REQUIRE(str == "ic| v1: \"Icecream test\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        char const* const v0 = "string 5";
-        icecream::ic.show_c_string(false);
-        IC(v0);
-        REQUIRE_THAT(str, Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
-        icecream::ic.show_c_string(true);
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        wchar_t const* v0 = L"wchar_t test";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"wchar_t test\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        char16_t const* v0 = u"char16_t test \u03B1";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"char16_t test \xce\xb1\"\n");
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        char16_t const* v0 = u"char16_t test";
-        icecream::ic.show_c_string(false);
-        IC(v0);
-        REQUIRE_THAT(str, Catch::Matches("ic\\| v0: (0x)*[0-9a-fA-F]+\n"));
-        icecream::ic.show_c_string(true);
-    }
-
-    {
-        auto str = std::string{};
-        icecream::ic.output(str);
-
-        char32_t const* const v0 = U"char32_t test \U0001F427";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"char32_t test \xF0\x9F\x90\xA7\"\n");
-    }
-}
-
-
 TEST_CASE("line_wrap")
 {
     icecream::ic.line_wrap_width(20);
@@ -1087,5 +878,24 @@ TEST_CASE("Tree char count")
         auto ostream = std::ostringstream{};
         auto tree = icecream::detail::Tree{v0, ostream};
         REQUIRE(tree.count_chars() == 7);
+    }
+}
+
+TEST_CASE("output transcoding")
+{
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+
+        icecream::ic.output_transcoder(
+            [](char const* str, std::size_t count) -> std::string
+            {
+                return std::string(str, count) + "|";
+            }
+        );
+
+        auto v0 = int{12345};
+        IC(v0);
+        REQUIRE(str == "ic| |v0|: |12345|\n|");
     }
 }

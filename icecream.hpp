@@ -26,18 +26,17 @@
 
 #include <cassert>
 #include <cctype>
-#include <codecvt>
-#include <cstdarg>
+#include <clocale>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cwchar>
 #include <exception>
 #include <functional>
 #include <iomanip>
 #include <ios>
 #include <iostream>
 #include <iterator>
-#include <locale>
 #include <memory>
 #include <mutex>
 #include <ostream>
@@ -48,6 +47,11 @@
 #include <utility>
 #include <valarray>
 #include <vector>
+
+#if !(defined(__APPLE__) && defined(__clang__))
+    #define ICECREAM_CUCHAR_HEADER
+    #include <cuchar>
+#endif
 
 #if defined(__cpp_lib_optional) || (__cplusplus >= 201703L)
     #define ICECREAM_OPTIONAL_HEADER
@@ -180,33 +184,6 @@ namespace boost
 
 namespace icecream{ namespace detail
 {
-#if defined(_MSC_VER) && _MSC_VER <= 1916
-    // Bug fix to VisualStudio not implementing char instantiations to std::codecvt<>,
-    // but int instead.
-    template<typename T> struct FIX;
-    template<> struct FIX<char> {using type = int8_t;};
-    template<> struct FIX<signed char> {using type = int8_t;};
-    template<> struct FIX<unsigned char> {using type = uint8_t;};
-    template<> struct FIX<wchar_t> {using type = int16_t;};
-    template<> struct FIX<char16_t> {using type = int16_t;};
-    template<> struct FIX<char32_t> {using type = int32_t;};
-#else
-    template<typename T> struct FIX {using type = T;};
-#endif
-
-    // Utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
-    template<class Facet>
-    struct deletable_facet: Facet
-    {
-        template<typename... Ts>
-        deletable_facet(Ts&& ...args)
-            : Facet(std::forward<Ts>(args)...)
-        {}
-
-        virtual ~deletable_facet() = default;
-    };
-
-
     // -------------------------------------------------- is_instantiation
 
     // Checks if a type T (like std::pair<int, float>) is an instantiation of a template
@@ -574,11 +551,240 @@ namespace icecream{ namespace detail
         return std::move(t);
     };
 
+    // -------------------------------------------------- Character transcoders
+
+    // Transcode a UTF-16 string with char16_t code units to a UTF-32 string with char32_t
+    // code units.
+    inline auto to_utf32(char16_t const* input, size_t count) -> std::u32string
+    {
+        auto result = std::u32string{};
+
+        for (auto i = size_t{0}; i < count;)
+        {
+            if ((input[i] - 0xD800u) >= 2048u)  // is not surrogate
+            {
+                result.push_back(input[i]);
+                i += 1;
+            }
+            else if (
+                (input[i] & 0xFFFFFC00u) == 0xD800u  // is high surrogate
+                && (i + 1) < count
+                && (input[i+1] & 0xFFFFFC00u) == 0xDC00u  // is low surrogate
+            ){
+                auto const high = uint32_t{input[i]};
+                auto const low = uint32_t{input[i+1]};
+                auto const codepoint = char32_t{(high << 10) + low - 0x35FDC00u};
+                result.push_back(codepoint);
+                i += 2;
+            }
+            else
+            {
+                // Encoding error, print the REPLACEMENT CHARACTER
+                result.push_back(0xFFFD);
+                i += 1;
+            }
+        }
+
+        return result;
+    }
+
+#if defined(__cpp_char8_t)
+    /* Decode the next character, C, from BUF, reporting errors in E.
+     *
+     * Since this is a branchless decoder, four bytes will be read from the
+     * buffer regardless of the actual length of the next character. This
+     * means the buffer _must_ have at least three bytes of zero padding
+     * following the end of the data stream.
+     *
+     * Errors are reported in E, which will be non-zero if the parsed
+     * character was somehow invalid: invalid byte sequence, non-canonical
+     * encoding, or a surrogate half.
+     *
+     * The function returns a pointer to the next character. When an error
+     * occurs, this pointer will be a guess that depends on the particular
+     * error, but it will always advance at least one byte.
+     */
+    // https://nullprogram.com/blog/2017/10/06/
+    inline auto utf8_decode(char8_t const* buf, uint32_t* c, int* e) -> char8_t const*
+    {
+        static const char lengths[] = {
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 3, 3, 4, 0
+        };
+        static const int masks[]  = {0x00, 0x7f, 0x1f, 0x0f, 0x07};
+        static const uint32_t mins[] = {4194304, 0, 128, 2048, 65536};
+        static const int shiftc[] = {0, 18, 12, 6, 0};
+        static const int shifte[] = {0, 6, 4, 2, 0};
+
+        char8_t const* s = buf;
+        int len = lengths[s[0] >> 3];
+
+        /* Compute the pointer to the next character early so that the next
+         * iteration can start working on the next character. Neither Clang
+         * nor GCC figure out this reordering on their own.
+         */
+        char8_t const* next = s + len + !len;
+
+        /* Assume a four-byte character and load four bytes. Unused bits are
+         * shifted out.
+         */
+        *c  = (uint32_t)(s[0] & masks[len]) << 18;
+        *c |= (uint32_t)(s[1] & 0x3f) << 12;
+        *c |= (uint32_t)(s[2] & 0x3f) <<  6;
+        *c |= (uint32_t)(s[3] & 0x3f) <<  0;
+        *c >>= shiftc[len];
+
+        /* Accumulate the various error conditions. */
+        *e  = (*c < mins[len]) << 6; // non-canonical encoding
+        *e |= ((*c >> 11) == 0x1b) << 7;  // surrogate half?
+        *e |= (*c > 0x10FFFF) << 8;  // out of range?
+        *e |= (s[1] & 0xc0) >> 2;
+        *e |= (s[2] & 0xc0) >> 4;
+        *e |= (s[3]       ) >> 6;
+        *e ^= 0x2a; // top two bits of each tail byte correct?
+        *e >>= shifte[len];
+
+        return next;
+    }
+
+    // Transcode a UTF-8 string with char8_t code units to a UTF-32 string with char32_t
+    // code units.
+    inline auto to_utf32(char8_t const* input, size_t count) -> std::u32string
+    {
+        auto result = std::u32string{};
+
+        auto const* input_next = input;
+        auto const* input_end = input + count;
+
+        // Each call to utf8_decode must have at least 4 more readable elements on input.
+        // Here we make sure that they are available.
+        while (input_end - input_next >= 4)
+        {
+            auto c = uint32_t{};
+            auto e = int{0};
+            input_next = utf8_decode(input_next, &c, &e);
+            if (e != 0)
+            {
+                // Encoding error, print the REPLACEMENT CHARACTER
+                result.push_back(0xFFFD);
+            }
+            else
+            {
+                result.push_back(c);
+            }
+        }
+
+        // Buffer to hold any remaining code unit from input string and \0 padding enough
+        // to make sure that all calls to utf8_decode will have at leas 4 readable
+        // elements.
+        char8_t remainder[6] = {'\0'};
+        for (auto i = std::size_t{0}; i < input_end - input_next; ++i)
+        {
+            remainder[i] = input_next[i];
+        }
+
+        auto const* rem_next = &remainder[0];
+        auto const* rem_end = rem_next + (input_end - input_next);
+
+        while (rem_next < rem_end)
+        {
+            auto c = uint32_t{};
+            auto e = int{0};
+            rem_next = utf8_decode(rem_next, &c, &e);
+            if (e != 0)
+            {
+                // Encoding error, print the REPLACEMENT CHARACTER
+                result.push_back(0xFFFD);
+            }
+            else
+            {
+                result.push_back(c);
+            }
+        }
+
+        return result;
+    }
+#endif
+
+    // Transcode a UTF-32 string with char32_t code units to a UTF-8 string with char code
+    // units.
+    inline auto to_utf8_string(char32_t const* input, size_t count) -> std::string
+    {
+        auto result = std::string{};
+
+        for (auto i = size_t{0}; i < count; ++i)
+        {
+            if (input[i] < 0x80)
+            {
+                result.push_back(input[i]);  // 0xxxxxxx
+            }
+            else if (input[i] < 0x800)  // 00000yyy yyxxxxxx
+            {
+                result.push_back(0xC0 | (input[i] >> 6));    // 110yyyyy
+                result.push_back(0x80 | (input[i] & 0x3F));  // 10xxxxxx
+            }
+            else if (input[i] < 0x10000)   // zzzzyyyy yyxxxxxx
+            {
+                result.push_back(0xE0 | (input[i] >> 12));          // 1110zzzz
+                result.push_back(0x80 | ((input[i] >> 6) & 0x3F));  // 10yyyyyy
+                result.push_back(0x80 | (input[i] & 0x3F));         // 10xxxxxx
+            }
+            else if (input[i] < 0x200000)  // 000uuuuu zzzzyyyy yyxxxxxx
+            {
+                result.push_back(0xF0 | (input[i] >> 18));           // 11110uuu
+                result.push_back(0x80 | ((input[i] >> 12) & 0x3F));  // 10uuzzzz
+                result.push_back(0x80 | ((input[i] >> 6)  & 0x3F));  // 10yyyyyy
+                result.push_back(0x80 | (input[i] & 0x3F));          // 10xxxxxx
+            }
+            else  // Encoding error, print the REPLACEMENT CHARACTER
+            {
+                result.push_back(0xEF);
+                result.push_back(0xBF);
+                result.push_back(0xBD);
+            }
+        }
+        return result;
+    }
+
+    template<typename CharT, size_t(*tomb)(char*, CharT, mbstate_t*)>
+    auto xrtomb(CharT const* str, std::size_t count) -> std::string
+    {
+        auto result = std::string{};
+
+        auto state = std::mbstate_t{};
+        for (auto i = size_t{0}; i <= count; ++i)
+        {
+            auto mb = std::string(MB_CUR_MAX, '\0');
+            if (tomb(&mb[0], str[i], &state) == static_cast<std::size_t>(-1))
+            {
+                result.append("<?>");
+            }
+            else
+            {
+                result.append(mb);
+            }
+        }
+
+        return result;
+    }
+
     // -------------------------------------------------- Tree
 
     // Needed to access the Icecream::show_c_string() method before the Icecream class
     // declaration.
     auto show_c_string() -> bool;
+
+    auto transcoder_dispatcher(char const* str, size_t count) -> std::string;
+
+    auto transcoder_dispatcher(wchar_t const* str, size_t count) -> std::string;
+
+#if defined(__cpp_char8_t)
+    auto transcoder_dispatcher(char8_t const* str, size_t count) -> std::string;
+#endif
+
+    auto transcoder_dispatcher(char16_t const* str, size_t count) -> std::string;
+
+    auto transcoder_dispatcher(char32_t const* str, size_t count) -> std::string;
 
 #if defined(ICECREAM_DUMP_STRUCT_CLANG)
     class Tree;
@@ -956,41 +1162,18 @@ namespace icecream{ namespace detail
 
                 if (show_c_string())
                 {
-                    using DT = typename std::decay<
+                    using CharT = typename std::remove_const<
                         typename std::remove_pointer<
                             typename std::decay<T>::type
                         >::type
                     >::type;
 
-                    if ICECREAM_IF_CONSTEXPR (
-                        // On MacOS, an identity cv.to_bytes operation (between two identical
-                        // character types) throws an exception. If they are the same, we do not
-                        // make any conversion.
-                        std::is_same<DT, std::ostringstream::char_type>::value
-                    #if defined(__cpp_char8_t)
-                        || std::is_same<DT, char8_t>::value
-                    #endif
-                    )
-                        buf << '"' << reinterpret_cast<std::ostringstream::char_type const*>(value) << '"';
-                    else
-                    {
-                        using FF = typename FIX<DT>::type;
-                        std::wstring_convert<
-                            deletable_facet<std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>>,
-                            FF
-                        > cv {};
-
-                    #if defined(_MSC_VER) && _MSC_VER <= 1916
-                        FF const* e = (FF const*)value;
-                        while (*e != 0) ++e;
-                        buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
-                    #else
-                        buf << '"' << cv.to_bytes(value) << '"';
-                    #endif
-                    }
+                    buf << '"' << transcoder_dispatcher(value, std::char_traits<CharT>::length(value)) << '"';
                 }
                 else
+                {
                     buf << reinterpret_cast<void const*>(value);
+                }
 
                 return buf.str();
             }()}
@@ -1005,46 +1188,9 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
-                using VT = typename T::value_type;
-
                 std::ostringstream buf;
                 buf.copyfmt(stream_ref);
-
-                if ICECREAM_IF_CONSTEXPR (
-                    // On MacOS, an identity cv.to_bytes operation (between two identical
-                    // character types) throws an exception. If they are the same, we do not
-                    // make any conversion.
-                    std::is_same<VT, std::ostringstream::char_type>::value
-                #if defined(__cpp_char8_t)
-                    || std::is_same<VT, char8_t>::value
-                #endif
-                )
-                {
-                    // This is an idle reinterpret_cast, since both character types must
-                    // be the same to the program reaches this lines. However, this is
-                    // required because even not being reached, if the character types are
-                    // not the same, a compiling error would happens.
-                    using STR_PTR = std::basic_string<std::ostringstream::char_type> const*;
-                    buf << '"' << *reinterpret_cast<STR_PTR>(&value) << '"';
-                }
-                else
-                {
-                    using FF = typename FIX<VT>::type;
-                    std::wstring_convert<
-                        deletable_facet<std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>>,
-                        FF
-                    > cv {};
-
-                #if defined(_MSC_VER) && _MSC_VER <= 1916
-                    FF const* b = (FF const*)value.data();
-                    FF const* e = (FF const*)value.data();
-                    while (*e != 0) ++e;
-                    buf << '"' << cv.to_bytes(b, e) << '"';
-                #else
-                    buf << '"' << cv.to_bytes(value.data()) << '"';
-                #endif
-                }
-
+                buf << '"' << transcoder_dispatcher(value.data(), value.size()) << '"';
                 return buf.str();
             }()}
         {}
@@ -1070,9 +1216,6 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
-                using DT = typename std::decay<T>::type;
-                using FF = typename FIX<DT>::type;
-
                 std::ostringstream buf;
                 buf.copyfmt(stream_ref);
 
@@ -1112,27 +1255,7 @@ namespace icecream{ namespace detail
                     break;
 
                 default:
-                    if ICECREAM_IF_CONSTEXPR (
-                        // On MacOS, an identity cv.to_bytes operation (between two identical
-                        // character types) throws an exception. If they are the same, we do not
-                        // make any conversion.
-                        std::is_same<DT, std::ostringstream::char_type>::value
-                    #if defined(__cpp_char8_t)
-                        || std::is_same<DT, char8_t>::value
-                    #endif
-                    )
-                        // Innocuous cast, just to silence a warning with types where this line is not reached.
-                        str = static_cast<std::ostringstream::char_type>(value);
-                    else
-                        {
-                            std::wstring_convert<
-                                deletable_facet<
-                                    std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>
-                                >,
-                                FF
-                            > cv {};
-                            str = cv.to_bytes(value);
-                        }
+                    str = transcoder_dispatcher(&value, 1);
                     break;
                 }
 
@@ -1779,6 +1902,60 @@ namespace icecream{ namespace detail
             this->show_c_string_ = value;
         }
 
+        auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)>&& transcoder) -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->wide_string_transcoder_ = std::move(transcoder);
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto wide_string_transcoder(std::function<std::string(std::wstring_view)>&& transcoder) -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->wide_string_transcoder_ =
+                [transcoder](wchar_t const* str, std::size_t count) -> std::string
+                {
+                    return transcoder({str, count});
+                };
+        }
+    #endif
+
+        auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)>&& transcoder) -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->unicode_transcoder_ = std::move(transcoder);
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto unicode_transcoder(std::function<std::string(std::u32string_view)>&& transcoder) -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->unicode_transcoder_ =
+                [transcoder](char32_t const* str, std::size_t count) -> std::string
+                {
+                    return transcoder({str, count});
+                };
+        }
+    #endif
+
+        auto output_transcoder(std::function<std::string(char const*, std::size_t)>&& transcoder) -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->output_transcoder_ = std::move(transcoder);
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto output_transcoder(std::function<std::string(std::string_view)>&& transcoder) -> void
+        {
+            std::lock_guard<std::mutex> guard(this->mutex);
+            this->output_transcoder_ =
+                [transcoder](char const* str, std::size_t count) -> std::string
+                {
+                    return transcoder({str, count});
+                };
+        }
+    #endif
+
         auto line_wrap_width() const -> std::size_t
         {
             std::lock_guard<std::mutex> guard(this->mutex);
@@ -1861,6 +2038,15 @@ namespace icecream{ namespace detail
         }
 
     private:
+
+        // Function to convert a string in "execution encoding" to "output encoding"
+        std::function<std::string(char const*, std::size_t)> output_transcoder_ {
+            [](char const* str, std::size_t count) -> std::string
+            {
+                return std::string(str, count);
+            }
+        };
+
         template <typename T>
         struct Output
         {
@@ -1870,7 +2056,9 @@ namespace icecream{ namespace detail
 
             auto operator()(std::string const& str) -> void
             {
-                for (auto const& c : str)
+                auto const out_str = Icecream::instance().output_transcoder_(str.data(), str.size());
+
+                for (auto const& c : out_str)
                 {
                     *this->it = c;
                     ++this->it;
@@ -1880,7 +2068,20 @@ namespace icecream{ namespace detail
             T it;
         };
 
+
         friend auto show_c_string() -> bool;
+
+        friend auto transcoder_dispatcher(char const* str, size_t count) -> std::string;
+
+        friend auto transcoder_dispatcher(wchar_t const* str, size_t count) -> std::string;
+
+    #if defined(__cpp_char8_t)
+        friend auto transcoder_dispatcher(char8_t const* str, size_t count) -> std::string;
+    #endif
+
+        friend auto transcoder_dispatcher(char16_t const* str, size_t count) -> std::string;
+
+        friend auto transcoder_dispatcher(char32_t const* str, size_t count) -> std::string;
 
         constexpr static size_type INDENT_BASE = 4;
 
@@ -1890,6 +2091,49 @@ namespace icecream{ namespace detail
 
         std::function<void(std::string const&)> output_ {
             Output<std::ostreambuf_iterator<char>>{std::ostreambuf_iterator<char>{std::cerr}}
+        };
+
+        std::function<std::string(wchar_t const*, std::size_t)> wide_string_transcoder_ {
+            [](wchar_t const* str, std::size_t count) -> std::string
+            {
+                auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
+                if (c_locale != "C" && c_locale != "POSIX")
+                {
+                    return xrtomb<wchar_t, std::wcrtomb>(str, count);
+                }
+                else
+                {
+                    switch (sizeof(wchar_t))
+                    {
+                    case 2:
+                        {
+                            auto const utf32_str = to_utf32(reinterpret_cast<char16_t const*>(str), count);
+                            return to_utf8_string(utf32_str.data(), utf32_str.size());
+                        }
+                    case 4:
+                        return to_utf8_string(reinterpret_cast<char32_t const*>(str), count);
+                    default:
+                        return "<?>";
+                    }
+                }
+            }
+        };
+
+        std::function<std::string(char32_t const*, std::size_t)> unicode_transcoder_ {
+            [](char32_t const* str, std::size_t count) -> std::string
+            {
+            #ifdef ICECREAM_CUCHAR_HEADER
+                auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
+                if (c_locale != "C" && c_locale != "POSIX")
+                {
+                    return xrtomb<char32_t, std::c32rtomb>(str, count);
+                }
+                else
+            #endif
+                {
+                    return to_utf8_string(str, count);
+                }
+            }
         };
 
         Prefix prefix_ {[]{return "ic| ";}};
@@ -2123,6 +2367,40 @@ namespace icecream{ namespace detail
         return Icecream::instance().show_c_string_;
     }
 
+    // char -> char
+    inline auto transcoder_dispatcher(char const* str, size_t count) -> std::string
+    {
+        return std::string(str, count);
+    }
+
+    // wchar_t -> char
+    inline auto transcoder_dispatcher(wchar_t const* str, size_t count) -> std::string
+    {
+        return Icecream::instance().wide_string_transcoder_(str, count);
+    }
+
+#if defined(__cpp_char8_t)
+    // char8_t -> char
+    inline auto transcoder_dispatcher(char8_t const* str, size_t count) -> std::string
+    {
+        auto const utf32_str = to_utf32(str, count);
+        return Icecream::instance().unicode_transcoder_(utf32_str.data(), utf32_str.size());
+    }
+#endif
+
+    // char16_t -> char
+    inline auto transcoder_dispatcher(char16_t const* str, size_t count) -> std::string
+    {
+        auto const utf32_str = to_utf32(str, count);
+        return Icecream::instance().unicode_transcoder_(utf32_str.data(), utf32_str.size());
+    }
+
+    // char32_t -> char
+    inline auto transcoder_dispatcher(char32_t const* str, size_t count) -> std::string
+    {
+        return Icecream::instance().unicode_transcoder_(str, count);
+    }
+
 }} // namespace icecream::detail
 
 
@@ -2187,6 +2465,49 @@ namespace icecream
             detail::Icecream::instance().show_c_string(value);
             return *this;
         }
+
+        auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)> value) -> IcecreamAPI&
+        {
+            detail::Icecream::instance().wide_string_transcoder(std::move(value));
+            return *this;
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto wide_string_transcoder(std::function<std::string(std::wstring_view)>&& value) -> IcecreamAPI&
+        {
+            detail::Icecream::instance().wide_string_transcoder(std::move(value));
+            return *this;
+        }
+    #endif
+
+        auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)> value) -> IcecreamAPI&
+        {
+            detail::Icecream::instance().unicode_transcoder(std::move(value));
+            return *this;
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto unicode_transcoder(std::function<std::string(std::u32string_view)>&& value) -> IcecreamAPI&
+        {
+            detail::Icecream::instance().unicode_transcoder(std::move(value));
+            return *this;
+        }
+    #endif
+
+        auto output_transcoder(std::function<std::string(char const*, std::size_t)> value) -> IcecreamAPI&
+        {
+            detail::Icecream::instance().output_transcoder(std::move(value));
+            return *this;
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto output_transcoder(std::function<std::string(std::string_view)> value) ->  IcecreamAPI&
+        {
+            detail::Icecream::instance().output_transcoder(std::move(value));
+            return *this;
+        }
+    #endif
+
 
         auto line_wrap_width() const -> std::size_t
         {
