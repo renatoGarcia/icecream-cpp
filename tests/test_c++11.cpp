@@ -801,9 +801,28 @@ TEST_CASE("std_string")
         auto str = std::string{};
         icecream::ic.output(str);
 
+        auto v0 = std::u16string {u"u16str \U0001D11E"};
+        IC(v0);
+        REQUIRE(str == "ic| v0: \"u16str \xf0\x9d\x84\x9e\"\n");
+    }
+
+    {
+        auto str = std::string{};
+        icecream::ic.output(str);
+
         auto v0 = std::u32string {U"u32str \U0001F427"};
         IC(v0);
         REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
+    }
+
+    {  // Test an invalid unicode string
+        auto str = std::string{};
+        icecream::ic.output(str);
+
+        auto v0 = std::u32string {U"abc"};
+        v0[1] = 0x300000;
+        IC(v0);
+        REQUIRE(str == "ic| v0: \"a\xEF\xBF\xBD" "c\"\n");
     }
 }
 
