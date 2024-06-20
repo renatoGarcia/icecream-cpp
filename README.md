@@ -23,6 +23,7 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
      * [line_wrap_width](#line_wrap_width)
      * [include_context](#include_context)
      * [context_delimiter](#context_delimiter)
+  * [Character Encoding](#character-encoding)
   * [Printing logic](#printing-logic)
      * [C strings](#c-strings)
      * [Pointer like types](#pointer-like-types)
@@ -538,6 +539,32 @@ The string separating the context text from the variables values. Default value 
     ```C++
     auto context_delimiter(std::string const& value) -> IcecreamAPI&;
     ```
+
+### Character Encoding
+
+Character encoding in C++ is complicated. The `std::string` and a `char*` strings don't
+have any requirements or information about what encoding they are using, while a string
+literal, like on:
+
+```C++
+auto* const str = "foo";
+```
+
+will have a well defined, but implementation-defined encoding. Any system and compiler can
+potentially use a distinct encoding.
+
+The `std::wstring` and `wchar_t*` are even a little more complicated. Besides all the
+above consideration, the bit size of their [code
+unit](https://en.cppreference.com/w/cpp/language/charset#Code_unit_and_literal_encoding)
+is implementation-defined. A `wchar_t` has 32 bits on Linux but 16 bits on Windows, for
+example.
+
+The new `char8_t`, `char16_t` and `char32_t` are better specified, they must be Unicode
+encoded with their respective code unit width.
+
+On the other end, to print `std::cout` 
+
+On IceCream-Cpp
 
 ### Printing logic
 

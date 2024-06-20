@@ -26,11 +26,14 @@
 
 #include <cassert>
 #include <cctype>
-#include <codecvt>
+#include <cerrno>
+#include <climits>
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <cwchar>
 #include <exception>
 #include <functional>
 #include <iomanip>
@@ -180,33 +183,6 @@ namespace boost
 
 namespace icecream{ namespace detail
 {
-#if defined(_MSC_VER) && _MSC_VER <= 1916
-    // Bug fix to VisualStudio not implementing char instantiations to std::codecvt<>,
-    // but int instead.
-    template<typename T> struct FIX;
-    template<> struct FIX<char> {using type = int8_t;};
-    template<> struct FIX<signed char> {using type = int8_t;};
-    template<> struct FIX<unsigned char> {using type = uint8_t;};
-    template<> struct FIX<wchar_t> {using type = int16_t;};
-    template<> struct FIX<char16_t> {using type = int16_t;};
-    template<> struct FIX<char32_t> {using type = int32_t;};
-#else
-    template<typename T> struct FIX {using type = T;};
-#endif
-
-    // Utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
-    template<class Facet>
-    struct deletable_facet: Facet
-    {
-        template<typename... Ts>
-        deletable_facet(Ts&& ...args)
-            : Facet(std::forward<Ts>(args)...)
-        {}
-
-        virtual ~deletable_facet() = default;
-    };
-
-
     // -------------------------------------------------- is_instantiation
 
     // Checks if a type T (like std::pair<int, float>) is an instantiation of a template
@@ -573,6 +549,125 @@ namespace icecream{ namespace detail
     {
         return std::move(t);
     };
+
+    // -------------------------------------------------- Char encoding
+
+    inline auto to_utf32(std::u16string const& input) -> std::u32string
+    {
+        auto result = std::u32string{};
+
+        auto it = input.begin();
+        while (it != input.end())
+        {
+            auto const it_next = it + 1;
+            if ((*it - 0xD800u) >= 2048u)  // is not surrogate
+            {
+                result.push_back(*it);
+                ++it;
+            }
+            else if (
+                (*it & 0xFFFFFC00u) == 0xD800u  // is high surrogate
+                && it_next != input.end()
+                && (*it_next & 0xFFFFFC00u) == 0xDC00u  // is low surrogate
+            ){
+                auto const high = uint32_t{*it};
+                auto const low = uint32_t{*it_next};
+                auto const codepoint = char32_t{(high << 10) + low - 0x35FDC00u};
+                result.push_back(codepoint);
+                it += 2;
+            }
+            else
+            {
+                // Encoding error, print the REPLACEMENT CHARACTER
+                result.push_back(0xFFFD);
+                ++it;
+            }
+        }
+
+        return result;
+    }
+
+    inline auto to_utf8_string(std::u32string const& input) -> std::string
+    {
+        auto result = std::string{};
+
+        for (auto code : input)
+        {
+            if (code < 0x80)
+            {
+                result.push_back(code);  // 0xxxxxxx
+            }
+            else if (code < 0x800)  // 00000yyy yyxxxxxx
+            {
+                result.push_back(0xC0 | (code >> 6));    // 110yyyyy
+                result.push_back(0x80 | (code & 0x3F));  // 10xxxxxx
+            }
+            else if (code < 0x10000)   // zzzzyyyy yyxxxxxx
+            {
+                result.push_back(0xE0 | (code >> 12));          // 1110zzzz
+                result.push_back(0x80 | ((code >> 6) & 0x3F));  // 10yyyyyy
+                result.push_back(0x80 | (code & 0x3F));         // 10xxxxxx
+            }
+            else if (code < 0x200000)  // 000uuuuu zzzzyyyy yyxxxxxx
+            {
+                result.push_back(0xF0 | (code >> 18));           // 11110uuu
+                result.push_back(0x80 | ((code >> 12) & 0x3F));  // 10uuzzzz
+                result.push_back(0x80 | ((code >> 6)  & 0x3F));  // 10yyyyyy
+                result.push_back(0x80 | (code & 0x3F));          // 10xxxxxx
+            }
+            else  // Encoding error, print the REPLACEMENT CHARACTER
+            {
+                result.push_back(0xEF);
+                result.push_back(0xBF);
+                result.push_back(0xBD);
+            }
+        }
+        return result;
+    }
+
+    inline auto to_narrow_multibyte(std::string const& str) -> std::string
+    {
+        return str;
+    }
+
+    inline auto to_narrow_multibyte(std::wstring const& str) -> std::string
+    {
+        auto result = std::string{};
+
+        for (auto const wc : str)
+        {
+            auto state = std::mbstate_t{};
+            auto mb = std::string(MB_CUR_MAX, '\0');
+            if (std::wcrtomb(&mb[0], wc, &state) == static_cast<std::size_t>(-1))
+            {
+                result.append("<?>");
+            }
+            else
+            {
+                result.append(mb);
+            }
+        }
+
+        return result;
+    }
+
+    inline auto to_narrow_multibyte(std::u32string const& str) -> std::string
+    {
+        return to_utf8_string(str);
+    }
+
+    inline auto to_narrow_multibyte(std::u16string const& str) -> std::string
+    {
+        return to_narrow_multibyte(to_utf32(str));
+    }
+
+#if defined(__cpp_char8_t)
+    inline auto to_narrow_multibyte(std::u8string const& str) -> std::string
+    {
+        return std::string(reinterpret_cast<char const*>(str.data()));
+    }
+#endif
+
 
     // -------------------------------------------------- Tree
 
@@ -956,41 +1051,18 @@ namespace icecream{ namespace detail
 
                 if (show_c_string())
                 {
-                    using DT = typename std::decay<
+                    using CharT = typename std::remove_const<
                         typename std::remove_pointer<
                             typename std::decay<T>::type
                         >::type
                     >::type;
 
-                    if ICECREAM_IF_CONSTEXPR (
-                        // On MacOS, an identity cv.to_bytes operation (between two identical
-                        // character types) throws an exception. If they are the same, we do not
-                        // make any conversion.
-                        std::is_same<DT, std::ostringstream::char_type>::value
-                    #if defined(__cpp_char8_t)
-                        || std::is_same<DT, char8_t>::value
-                    #endif
-                    )
-                        buf << '"' << reinterpret_cast<std::ostringstream::char_type const*>(value) << '"';
-                    else
-                    {
-                        using FF = typename FIX<DT>::type;
-                        std::wstring_convert<
-                            deletable_facet<std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>>,
-                            FF
-                        > cv {};
-
-                    #if defined(_MSC_VER) && _MSC_VER <= 1916
-                        FF const* e = (FF const*)value;
-                        while (*e != 0) ++e;
-                        buf << '"' << cv.to_bytes((FF const*)value, e) << '"';
-                    #else
-                        buf << '"' << cv.to_bytes(value) << '"';
-                    #endif
-                    }
+                    buf << '"' << to_narrow_multibyte(std::basic_string<CharT>{value}) << '"';
                 }
                 else
+                {
                     buf << reinterpret_cast<void const*>(value);
+                }
 
                 return buf.str();
             }()}
@@ -1005,46 +1077,9 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
-                using VT = typename T::value_type;
-
                 std::ostringstream buf;
                 buf.copyfmt(stream_ref);
-
-                if ICECREAM_IF_CONSTEXPR (
-                    // On MacOS, an identity cv.to_bytes operation (between two identical
-                    // character types) throws an exception. If they are the same, we do not
-                    // make any conversion.
-                    std::is_same<VT, std::ostringstream::char_type>::value
-                #if defined(__cpp_char8_t)
-                    || std::is_same<VT, char8_t>::value
-                #endif
-                )
-                {
-                    // This is an idle reinterpret_cast, since both character types must
-                    // be the same to the program reaches this lines. However, this is
-                    // required because even not being reached, if the character types are
-                    // not the same, a compiling error would happens.
-                    using STR_PTR = std::basic_string<std::ostringstream::char_type> const*;
-                    buf << '"' << *reinterpret_cast<STR_PTR>(&value) << '"';
-                }
-                else
-                {
-                    using FF = typename FIX<VT>::type;
-                    std::wstring_convert<
-                        deletable_facet<std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>>,
-                        FF
-                    > cv {};
-
-                #if defined(_MSC_VER) && _MSC_VER <= 1916
-                    FF const* b = (FF const*)value.data();
-                    FF const* e = (FF const*)value.data();
-                    while (*e != 0) ++e;
-                    buf << '"' << cv.to_bytes(b, e) << '"';
-                #else
-                    buf << '"' << cv.to_bytes(value.data()) << '"';
-                #endif
-                }
-
+                buf << '"' << to_narrow_multibyte(value) << '"';
                 return buf.str();
             }()}
         {}
@@ -1070,9 +1105,6 @@ namespace icecream{ namespace detail
         )
             : Tree {InnerTag{}, [&]
             {
-                using DT = typename std::decay<T>::type;
-                using FF = typename FIX<DT>::type;
-
                 std::ostringstream buf;
                 buf.copyfmt(stream_ref);
 
@@ -1112,27 +1144,7 @@ namespace icecream{ namespace detail
                     break;
 
                 default:
-                    if ICECREAM_IF_CONSTEXPR (
-                        // On MacOS, an identity cv.to_bytes operation (between two identical
-                        // character types) throws an exception. If they are the same, we do not
-                        // make any conversion.
-                        std::is_same<DT, std::ostringstream::char_type>::value
-                    #if defined(__cpp_char8_t)
-                        || std::is_same<DT, char8_t>::value
-                    #endif
-                    )
-                        // Innocuous cast, just to silence a warning with types where this line is not reached.
-                        str = static_cast<std::ostringstream::char_type>(value);
-                    else
-                        {
-                            std::wstring_convert<
-                                deletable_facet<
-                                    std::codecvt<FF, std::ostringstream::char_type, std::mbstate_t>
-                                >,
-                                FF
-                            > cv {};
-                            str = cv.to_bytes(value);
-                        }
+                    str = to_narrow_multibyte(std::basic_string<typename std::decay<T>::type>{value});
                     break;
                 }
 
