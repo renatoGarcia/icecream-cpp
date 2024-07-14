@@ -397,7 +397,7 @@ received by `std::cout` will be ultimately forwarded to the system, that expects
 stream being encoded in an also unspecified "output encoding".
 
 From that three interest points of character encoding, both "execution encoding", and
-"output encoding" have impact in the working flow of Icecream-cpp, and there is no way to
+"output encoding" have impact in the inner working of Icecream-cpp, and there is no way to
 know for sure what is the used encoding in both of them. In face of this uncertainty, the
 adopted strategy is offer a reasonable default transcoding function, that will try convert
 the data to the right encoding, and allow the user to use its own implementation when
@@ -405,7 +405,7 @@ needed.
 
 Except for wide and Unicode string types (discussed below), when printing any other type
 we will have its serialized textual data in "execution encoding". That "execution
-encoding" may or may not be the same as the "output encoding", this one being the encoded
+encoding" may or may not be the same as the "output encoding", this one being the encoding
 expected by the configured [output](#output). Because of that, before we send that data to
 the output, we must transcode it to make sure that we have it in "output encoding". To
 that end, before delivering the text data to the [output](#output), we send it to the
@@ -422,40 +422,89 @@ strings](#unicode-strings) sections.
 
 ### Configuration
 
-The `Icecream` class is internally implemented as a singleton. All the configuration
-changes will be done to a unique object, and shared across all the program and threads.
+The Icecream-cpp configuration system works "layered by scope". At the basis level we have
+the global `IC_CONFIG` object. That global instance is shared by the whole running
+program, as would be expected of a global variable. It is created with all config options
+at its default values, and any change is readily seen by the whole program.
 
-All configurations are done/viewed through accessor methods, using the `icecream::ic`
-object. To allow the method chaining idiom all the set methods return a reference of the
-`ic` object:
+At any point of the code we can create a new config layer at the current scope by
+instantiating a new `IC_CONFIG` variable, calling the `IC_CONFIG_SCOPE()` macro. All the
+config options of this new instance will be in an "unset" state by default, and any
+request to an option value not yet set will be delegated to its parent. That request will
+go up on the parent chain until the first one having that option set answers.
+
+All config options are set by using accessor methods of the `IC_CONFIG` object, and they
+can be chained:
 
 ```C++
-icecream::ic
+IC_CONFIG
     .prefix("ic: ")
     .show_c_string(false)
     .line_wrap_width(70);
 ```
 
-For simplification purposes, on the following examples a `using icecream::ic` statement
-will be presumed.
+`IC_CONFIG` is just a regular variable with a funny name to make a collision extremely
+unlikely. When calling any `IC*(...)` macro, it will pick the `IC_CONFIG` instance at
+scope by doing an [unqualified name
+lookup](https://en.cppreference.com/w/cpp/language/unqualified_lookup), using the same
+rules applied to any other regular variable.
+
+To summarize all the above, in the code:
+
+```C++
+auto my_function() -> void
+{
+    IC_CONFIG.line_wrap_width(20);
+
+    IC_CONFIG_SCOPE();
+    IC_CONFIG.context_delimiter("|");
+    IC_CONFIG.show_c_string(true);
+
+    {
+        IC_CONFIG_SCOPE();
+        IC_CONFIG.show_c_string(false);
+        // A
+    }
+    // B
+}
+```
+
+At line `A`, the value of `IC_CONFIG`'s `line_wrap_width`, `context_delimiter`, and
+`show_c_string` will be respectively: `20`, `"|"`, and `false`.
+
+After the closing of the innermost scope block, at line `B`, the value of `IC_CONFIG`'s
+`line_wrap_width`, `context_delimiter`, and `show_c_string` will be respectively: `20`,
+`"|"`, and `true`.
+
+The reading and writing operations on `IC_CONFIG` objects are thread safe.
+
+> [!NOTE]
+> Any modification in an `IC_CONFIG`, other than to the global instance, will be seen only
+> within the current scope. As consequence, those modifications won't propagate to the
+> scope of any called function.
+
 
 #### enable/disable
 
 Enable or disable the output of `IC(...)` macro, *enabled* default.
 
+- get:
+    ```C++
+    auto is_enabled() const -> bool;
+    ```
 - set:
     ```C++
-    auto enable() -> IcecreamAPI&;
-    auto disable() -> IcecreamAPI&;
+    auto enable() -> Config&;
+    auto disable() -> Config&;
     ```
 
 The code:
 
 ```C++
 IC(1);
-ic.disable();
+IC_CONFIG.disable();
 IC(2);
-ic.enable();
+IC_CONFIG.enable();
 IC(3);
 ```
 
@@ -471,13 +520,17 @@ ic| 3: 3
 Sets where the serialized textual data will be printed. By default that data will be
 printed on the standard error output, the same as `std::cerr`.
 
+- get:
+    ```C++
+    auto output() const -> std::function<void(std::string const&)>;
+    ```
 - set:
     ```C++
     template <typename T>
-    auto output(T&& t) -> IcecreamAPI&;
+    auto output(T&& t) -> Config&;
     ```
 
-The type `T` can be any of:
+Where the type `T` can be any of:
 - A class inheriting from `std::ostream`.
 - A class having a method `push_back(char)`.
 - An output iterator that accepts the operation `*it = 'c'`
@@ -485,34 +538,42 @@ The type `T` can be any of:
 For instance, the code:
 ```C++
 auto str = std::string{};
-icecream::ic.output(str);
+IC_CONFIG.output(str);
 IC(1, 2);
 ```
 Will print the output `"ic| 1: 1, 2: 2\n"` on the `str` string.
 
-*Warning:* The `Icecream` class won't take ownership of the argument `t`, so care must be
-taken by the user to keep it alive.
+> [!WARNING]
+> Icecream-cpp won't take ownership of the argument `t`, so care must be taken by the user
+> to ensure that it is alive.
 
 #### prefix
 
-The text that will be printed before each output. It can be set to a string, a nullary
-callable that returns an object having an overload of `operator<<(ostream&, T)`, or any
-number of instances of those two. The printed prefix will be a concatenation of all those
-elements.
+A function that generate the text that will be printed before each output.
 
+- get:
+    ```C++
+    auto prefix() const -> std::function<std::string()>;
+    ```
 - set:
     ```C++
     template <typename... Ts>
-    auto prefix(Ts&& ...values) -> IcecreamAPI&;
+    auto prefix(Ts&& ...values) -> Config&;
     ```
+
+Where the types `Ts` can be any of:
+- A string,
+- A callable `T() -> U`, where `U` has an overload of `operator<<(ostream&, U)`.
+
+The printed prefix will be a concatenation of all those elements.
 
 The code:
 ```C++
-ic.prefix("icecream| ");
+IC_CONFIG.prefix("icecream| ");
 IC(1);
-ic.prefix([]{return 42;}, "- ");
+IC_CONFIG.prefix([]{return 42;}, "- ");
 IC(2);
-ic.prefix("thread ", std::this_thread::get_id, " | ");
+IC_CONFIG.prefix("thread ", std::this_thread::get_id, " | ");
 IC(3);
 ```
 
@@ -535,7 +596,7 @@ Controls if a `char*` variable should be interpreted as a null-terminated C stri
     ```
 - set:
     ```C++
-    auto show_c_string(bool value) -> IcecreamAPI&;
+    auto show_c_string(bool value) -> Config&;
     ```
 
 The code:
@@ -543,10 +604,10 @@ The code:
 ```C++
 char const* flavor = "mango";
 
-ic.show_c_string(true);
+IC_CONFIG.show_c_string(true);
 IC(flavor);
 
-ic.show_c_string(false);
+IC_CONFIG.show_c_string(false);
 IC(flavor);
 ```
 
@@ -562,10 +623,14 @@ ic| flavor: 0x55587b6f5410
 Function that transcodes a `wchar_t` string, from a system defined encoding to a `char`
 string in the system "execution encoding".
 
+- get:
+    ```C++
+    auto wide_string_transcoder() const -> std::function<std::string(wchar_t const*, std::size_t)>;
+    ```
 - set:
     ```C++
-    auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)> transcoder) -> IcecreamAPI&;
-    auto wide_string_transcoder(std::function<std::string(std::wstring_view)> transcoder) -> IcecreamAPI&;
+    auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)> transcoder) -> Config&;
+    auto wide_string_transcoder(std::function<std::string(std::wstring_view)> transcoder) -> Config&;
     ```
 
 There is no guarantee that the input string will end on a null terminator (this is the
@@ -582,10 +647,14 @@ to the byte size of `wchar_t`), and transcoded it to UTF-8.
 Function that transcodes a `char32_t` string, from a UTF-32 encoding to a `char` string in
 the system "execution encoding".
 
+- get:
+    ```C++
+    auto unicode_transcoder() const -> std::function<std::string(char32_t const*, std::size_t)>;
+    ```
 - set:
     ```C++
-    auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)> transcoder) -> IcecreamAPI&;
-    auto unicode_transcoder(std::function<std::string(std::u32string_view)> transcoder) -> IcecreamAPI&;
+    auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)> transcoder) -> Config&;
+    auto unicode_transcoder(std::function<std::string(std::u32string_view)> transcoder) -> Config&;
     ```
 
 There is no guarantee that the input string will end on a null terminator (this is the
@@ -605,10 +674,14 @@ to a `char32_t` string, before being sent as input to this function.
 Function that transcodes a `char` string, from the system "execution encoding" to a `char`
 string in the system "output encoding", as expected by the configured [output](#output).
 
+- get:
+    ```C++
+    auto output_transcoder() const -> std::function<std::string(char const*, std::size_t)>;
+    ```
 - set:
     ```C++
-    auto output_transcoder(std::function<std::string(char const*, std::size_t)> transcoder) -> IcecreamAPI&;
-    auto output_transcoder(std::function<std::string(std::string_view)> transcoder) -> IcecreamAPI&;
+    auto output_transcoder(std::function<std::string(char const*, std::size_t)> transcoder) -> Config&;
+    auto output_transcoder(std::function<std::string(std::string_view)> transcoder) -> Config&;
     ```
 
 There is no guarantee that the input string will end on a null terminator (this is the
@@ -628,7 +701,7 @@ value of `70`.
     ```
 - set:
     ```C++
-    auto line_wrap_width(std::size_t value) -> IcecreamAPI&;
+    auto line_wrap_width(std::size_t value) -> Config&;
     ```
 
 #### include_context
@@ -642,7 +715,7 @@ printing variables. Default value is `false`.
     ```
 - set:
     ```C++
-    auto include_context(bool value) -> IcecreamAPI&;
+    auto include_context(bool value) -> Config&;
     ```
 
 #### context_delimiter
@@ -655,7 +728,7 @@ The string separating the context text from the variables values. Default value 
     ```
 - set:
     ```C++
-    auto context_delimiter(std::string const& value) -> IcecreamAPI&;
+    auto context_delimiter(std::string const& value) -> Config&;
     ```
 
 ### Printing logic

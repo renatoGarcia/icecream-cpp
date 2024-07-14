@@ -16,6 +16,9 @@ if (
 
     add_executable(test_strings_c++11 test_strings_c++11.cpp)
     add_test(NAME test_strings_c++11 COMMAND test_strings_c++11)
+
+    add_executable(test_config test_config.cpp)
+    add_test(NAME test_config COMMAND test_config)
 endif()
 
 if (CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20)

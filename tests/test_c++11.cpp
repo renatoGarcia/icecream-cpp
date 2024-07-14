@@ -19,8 +19,10 @@
 
 // -------------------------------------------------- Utilities
 
-auto test_empty_ic() -> void
+auto test_empty_ic(std::string& str) -> void
 {
+    IC_CONFIG_SCOPE();
+    IC_CONFIG.output(str);
     IC();
 }
 
@@ -104,22 +106,25 @@ namespace std
 TEST_CASE("output")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
         IC(1, 2);
         REQUIRE(str == "ic| 1: 1, 2: 2\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto sstr = std::ostringstream{};
-        icecream::ic.output(sstr);
+        IC_CONFIG.output(sstr);
         IC(1, 2);
         REQUIRE(sstr.str() == "ic| 1: 1, 2: 2\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(std::inserter(str, str.end()));
+        IC_CONFIG.output(std::inserter(str, str.end()));
         IC(1, 2);
         REQUIRE(str == "ic| 1: 1, 2: 2\n");
     }
@@ -129,8 +134,9 @@ TEST_CASE("output")
 TEST_CASE("apply")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
         auto mc = MyClass{50};
 
         auto r = IC_A(mc.ret_val);
@@ -139,29 +145,33 @@ TEST_CASE("apply")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
         IC_A(id_f, MyClass{42});
         REQUIRE(str == "ic| MyClass{42}: <MyClass 42>\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
         IC_A(sum, 1, 2);
         REQUIRE(str == "ic| 1: 1, 2: 2\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
         IC_A_("#x", sum, 10, 20);
         REQUIRE(str == "ic| 10: 0xa, 20: 0x14\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto mc = MyClass{3};
         auto r = IC_A(mc.multiply, 10);
@@ -170,8 +180,9 @@ TEST_CASE("apply")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto mc = MyClass{3};
         auto r = IC_A(mc.add, MyClass{7});
@@ -189,67 +200,72 @@ TEST_CASE("base")
     MyClass mc {20};
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.disable();
+        IC_CONFIG.disable();
         IC(i0);
         REQUIRE(str == "");
-        icecream::ic.enable();
     }
 
     {
         auto str = std::string{};
-        icecream::ic.output(str);
 
-        test_empty_ic();
-        REQUIRE_THAT(str, Catch::StartsWith("ic| test_c++11.cpp:24 in"));
+        test_empty_ic(str);
+        REQUIRE_THAT(str, Catch::StartsWith("ic| test_c++11.cpp:26 in"));
         REQUIRE_THAT(str, Catch::Contains("test_empty_ic("));
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC(i0);
         REQUIRE(str == "ic| i0: 7\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC(i0, d0);
         REQUIRE(str == "ic| i0: 7, d0: 3.14\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC(i0, d0, 10, 30);
         REQUIRE(str == "ic| i0: 7, d0: 3.14, 10: 10, 30: 30\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC(sum(40, 2), i0   , sum(3, 5));
         REQUIRE(str == "ic| sum(40, 2): 42, i0: 7, sum(3, 5): 8\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC(std::is_same<int, int> :: value);
         REQUIRE(str == "ic| std::is_same<int, int> :: value: 1\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto const result =
             "ic| 7: 7\n"
@@ -277,40 +293,45 @@ TEST_CASE("base")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC(7, ',', 34);
         REQUIRE(str == "ic| 7: 7, ',': ',', 34: 34\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC(v0);
         REQUIRE(str == "ic| v0: [1, 2, 3, 4, 5]\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC(mc);
         REQUIRE(str == "ic| mc: <MyClass 20>\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC("Hi");
         REQUIRE(str == "ic| \"Hi\": ['H', 'i', '\\0']\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         IC('a');
         REQUIRE(str == "ic| 'a': 'a'\n");
@@ -390,8 +411,9 @@ TEST_CASE("base")
 
 TEST_CASE("boost_optional")
 {
+    IC_CONFIG_SCOPE();
     auto str = std::string{};
-    icecream::ic.output(str);
+    IC_CONFIG.output(str);
 
     auto b0 = boost::optional<double> {20.0};
     auto b1 = boost::optional<double> {};
@@ -410,8 +432,9 @@ TEST_CASE("boost_optional")
 
 TEST_CASE("boost_variant2")
 {
+    IC_CONFIG_SCOPE();
     auto str = std::string{};
-    icecream::ic.output(str);
+    IC_CONFIG.output(str);
 
     auto v0 = boost::variant2::variant<int, double, char> {6.28};
     IC(v0);
@@ -422,8 +445,9 @@ TEST_CASE("boost_variant2")
 TEST_CASE("tuples")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto s0 = std::pair<int, char> {5, 'a'};
         IC(s0);
@@ -431,8 +455,9 @@ TEST_CASE("tuples")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto s0 = std::make_pair(std::string{"oi"}, 'b');
         IC(s0);
@@ -440,8 +465,9 @@ TEST_CASE("tuples")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto s0 = std::pair<int, double> {10, 3.14};
         IC(s0);
@@ -449,8 +475,9 @@ TEST_CASE("tuples")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto s0 = std::make_tuple(1, 2.2, 'b', "bla");
         IC(s0);
@@ -458,8 +485,9 @@ TEST_CASE("tuples")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto s0 = std::make_tuple(10, 20);
         IC_("x", s0);
@@ -471,8 +499,9 @@ TEST_CASE("tuples")
 TEST_CASE("arrays")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         int v0[] = {1, 2, 3};
         IC(v0);
@@ -480,8 +509,9 @@ TEST_CASE("arrays")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         char v0[] = {'1', '2', '3'};
         IC(v0);
@@ -489,8 +519,9 @@ TEST_CASE("arrays")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         char v0[] = "abc";
         IC(v0);
@@ -498,8 +529,9 @@ TEST_CASE("arrays")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         int v0[] = {10, 20, 30};
         IC_("#X", v0);
@@ -511,8 +543,9 @@ TEST_CASE("arrays")
 TEST_CASE("iterable")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::list<int> {10, 20, 30};
         IC(v0);
@@ -520,8 +553,9 @@ TEST_CASE("iterable")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::vector<float> {1.1, 1.2};
         IC(v0);
@@ -529,8 +563,9 @@ TEST_CASE("iterable")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         int v0[] = {1, 2, 3};
         IC(v0);
@@ -538,8 +573,9 @@ TEST_CASE("iterable")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = MyIterable<NonPrintable> {};
         IC(v0);
@@ -547,8 +583,9 @@ TEST_CASE("iterable")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::list<int> {10, 20, 30};
         IC_("0v#5x", v0);
@@ -561,8 +598,9 @@ TEST_CASE("iterable")
 TEST_CASE("pointer_like")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::unique_ptr<int> {new int {10}};
         IC(v0);
@@ -570,8 +608,9 @@ TEST_CASE("pointer_like")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::make_shared<int>(7);
         IC(v0);
@@ -579,8 +618,9 @@ TEST_CASE("pointer_like")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = boost::make_shared<int>(33);
         IC(v0);
@@ -588,8 +628,9 @@ TEST_CASE("pointer_like")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         boost::scoped_ptr<int> v0 {new int {33}};
         IC(v0);
@@ -597,8 +638,9 @@ TEST_CASE("pointer_like")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         int* v0 = new int {40};
         IC(v0);
@@ -607,8 +649,9 @@ TEST_CASE("pointer_like")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         float* v0 = nullptr;
         IC(v0);
@@ -616,8 +659,9 @@ TEST_CASE("pointer_like")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::unique_ptr<double> {};
         IC(v0);
@@ -625,8 +669,9 @@ TEST_CASE("pointer_like")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::make_shared<int>(7);
         auto v1 = std::weak_ptr<int> {v0};
@@ -646,46 +691,51 @@ TEST_CASE("pointer_like")
 TEST_CASE("prefix")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.prefix("pref -> ");
+        IC_CONFIG.prefix("pref -> ");
         IC(1, 2);
         REQUIRE(str == "pref -> 1: 1, 2: 2\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.prefix([](){return "icecream -- ";});
+        IC_CONFIG.prefix([](){return "icecream -- ";});
         IC(1, 2);
         REQUIRE(str == "icecream -- 1: 1, 2: 2\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.prefix("ic ", []{return 5;}, "| ");
+        IC_CONFIG.prefix("ic ", []{return 5;}, "| ");
         IC(1, 2);
         REQUIRE(str == "ic 5| 1: 1, 2: 2\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.prefix("id ", return_7, " | ");
+        IC_CONFIG.prefix("id ", return_7, " | ");
         IC(1, 2);
         REQUIRE(str == "id 7 | 1: 1, 2: 2\n");
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.prefix("ic| ");
+        IC_CONFIG.prefix("ic| ");
         IC(1, 2);
         REQUIRE(str == "ic| 1: 1, 2: 2\n");
     }
@@ -694,11 +744,13 @@ TEST_CASE("prefix")
 
 TEST_CASE("line_wrap")
 {
-    icecream::ic.line_wrap_width(20);
+    IC_CONFIG_SCOPE();
+    IC_CONFIG.line_wrap_width(20);
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::vector<float> {1.1, 1.2};
         IC(v0);
@@ -707,7 +759,7 @@ TEST_CASE("line_wrap")
 
     {
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::list<int> {10, 20, 30, 40, 50, 60};
         auto const result =
@@ -724,8 +776,9 @@ TEST_CASE("line_wrap")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::vector<std::vector<int>> {{1, 2}, {10, 20, 30, 40, 50, 60}, {3, 4}};
         auto const result =
@@ -746,10 +799,11 @@ TEST_CASE("line_wrap")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.prefix("pref -> ");
+        IC_CONFIG.prefix("pref -> ");
         auto v0 = std::vector<float> {1.1, 1.2};
         auto v1 = std::vector<int> {11, 12};
         auto const result =
@@ -761,17 +815,15 @@ TEST_CASE("line_wrap")
         IC(v0, v1);
         REQUIRE(str == result);
     }
-
-    icecream::ic.prefix("ic| ");
-    icecream::ic.line_wrap_width(70);
 }
 
 
 TEST_CASE("exception")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::runtime_error("ble");
         IC(v0);
@@ -779,8 +831,9 @@ TEST_CASE("exception")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         try
         {
@@ -805,8 +858,9 @@ TEST_CASE("exception")
 TEST_CASE("formatting")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = int{42};
         IC_("#o", v0, 7);
@@ -814,8 +868,9 @@ TEST_CASE("formatting")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = float{12.3456789};
         IC_("#A", v0);
@@ -826,8 +881,9 @@ TEST_CASE("formatting")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = int{42};
         IC_("oA", v0);
@@ -841,42 +897,42 @@ TEST_CASE("Tree char count")
     {
         auto v0 = std::string {"str"};
         auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::Tree{v0, ostream};
+        auto tree = icecream::detail::Tree{v0, IC_CONFIG, ostream};
         REQUIRE(tree.count_chars() == 5); // 3 chars (str) plus 2 char (quotes)
     }
 
     {
         auto v0 = std::string {"\xce\xb1"}; // Greek small letter alpha
         auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::Tree{v0, ostream};
+        auto tree = icecream::detail::Tree{v0, IC_CONFIG, ostream};
         REQUIRE(tree.count_chars() == 3); // 1 chars plus 2 char (quotes)
     }
 
     {
         auto v0 = std::string {"\xF0\x9F\x90\xA7"}; // Penguin
         auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::Tree{v0, ostream};
+        auto tree = icecream::detail::Tree{v0, IC_CONFIG, ostream};
         REQUIRE(tree.count_chars() == 3); // 1 chars plus 2 char (quotes)
     }
 
     {
         auto v0 = std::wstring {L"wstr"};
         auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::Tree{v0, ostream};
+        auto tree = icecream::detail::Tree{v0, IC_CONFIG, ostream};
         REQUIRE(tree.count_chars() == 6);
     }
 
     {
         auto v0 = std::u16string {u"u16\u03B1"}; // Greek small letter alpha
         auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::Tree{v0, ostream};
+        auto tree = icecream::detail::Tree{v0, IC_CONFIG, ostream};
         REQUIRE(tree.count_chars() == 6);
     }
 
     {
         auto v0 = std::u32string {U"abcd\U0001F427"}; // Penguin
         auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::Tree{v0, ostream};
+        auto tree = icecream::detail::Tree{v0, IC_CONFIG, ostream};
         REQUIRE(tree.count_chars() == 7);
     }
 }
@@ -884,10 +940,11 @@ TEST_CASE("Tree char count")
 TEST_CASE("output transcoding")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.output_transcoder(
+        IC_CONFIG.output_transcoder(
             [](char const* str, std::size_t count) -> std::string
             {
                 return std::string(str, count) + "|";

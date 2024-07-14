@@ -29,8 +29,9 @@ auto operator<<(std::ostream& os, std::optional<MyClass> const& value) -> std::o
 TEST_CASE("std_optional")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto s0 = std::optional<int> {10};
         IC(s0);
@@ -38,8 +39,9 @@ TEST_CASE("std_optional")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto s1 = std::optional<int> {};
         IC(s1);
@@ -47,8 +49,9 @@ TEST_CASE("std_optional")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto s2 = std::optional<MyClass> {1};
         IC(s2);
@@ -59,8 +62,9 @@ TEST_CASE("std_optional")
 
 TEST_CASE("std_variant")
 {
+    IC_CONFIG_SCOPE();
     auto str = std::string{};
-    icecream::ic.output(str);
+    IC_CONFIG.output(str);
 
     auto v0 = std::variant<int, double, char> {3.14};
     IC(v0);
@@ -72,8 +76,9 @@ TEST_CASE("std_variant")
 #include <filesystem>
 TEST_CASE("std_filesystem")
 {
+    IC_CONFIG_SCOPE();
     auto str = std::string{};
-    icecream::ic.output(str);
+    IC_CONFIG.output(str);
 
     {
         auto v0 = std::filesystem::path{"/one/two/three"};
@@ -88,10 +93,11 @@ TEST_CASE("std_filesystem")
 TEST_CASE("output transcoding")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.output_transcoder(
+        IC_CONFIG.output_transcoder(
             [](std::string_view str) -> std::string
             {
                 return std::string(str) + ";";
