@@ -29,7 +29,6 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
      * [context_delimiter](#context_delimiter)
   * [Printing logic](#printing-logic)
      * [C strings](#c-strings)
-     * [Ordinary narrow strings](#ordinary-narrow-strings)
      * [Wide strings](#wide-strings)
      * [Unicode strings](#unicode-strings)
      * [Pointer like types](#pointer-like-types)
@@ -38,9 +37,8 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
      * [Optional types](#optional-types)
      * [Variant types](#variant-types)
      * [Exception types](#exception-types)
-     * [Standard layout types](#standard-layout-types-clang-only)
+     * [Not streamable types](#not-streamable-types-clang-only)
 * [Pitfalls](#pitfalls)
-* [Similar projects](#similar-projects)
 
 With IceCream-Cpp, an execution inspection:
 
@@ -92,13 +90,12 @@ and will print:
 
     ic| a: 7, b: 2, sum(a, b): 9
 
-This library is inspired by and aims to behave the most identical as possible to the
-original [Python IceCream](https://github.com/gruns/icecream) library.
+This library is inspired by the original [Python IceCream](https://github.com/gruns/icecream) library.
 
 ## Install
 
 The IceCream-Cpp is a one file, header only library, having the STL as its only
-dependency. The most immediate way to use it, is just copy the `icecream.hpp` header into
+dependency. The most immediate way to use it is just copy the `icecream.hpp` header into
 your project.
 
 To properly install it system wide, together with the CMake project files, run these
@@ -117,7 +114,7 @@ If using [Nix](https://nixos.org), IceCream-Cpp can be included as a flakes inpu
 inputs.icecream-cpp.url = "github:renatoGarcia/icecream-cpp";
 ```
 
-The IceCream-Cpp flake defines an overlay so that it can be used when importing `nixpkgs`:
+The IceCream-Cpp flake defines an overlay, so that it can be used when importing `nixpkgs`:
 ```Nix
 import nixpkgs {
   system = "x86_64-linux";
@@ -145,9 +142,9 @@ If using CMake:
 find_package(IcecreamCpp)
 include_directories(${IcecreamCpp_INCLUDE_DIRS})
 ```
-will add the installed directory on include paths list.
+will add the installed directory within the include paths list.
 
-After including the `icecream.hpp` header on a source file, here named `test.cpp`:
+After including the `icecream.hpp` header in a source file, here named `test.cpp`:
 
 ```C++
 #include <icecream.hpp>
@@ -174,8 +171,8 @@ If called with arguments it will print the prefix, those arguments names, and it
 The code:
 
 ```C++
-auto v0 = std::vector<int> {1, 2, 3};
-auto s0 = std::string {"bla"};
+auto v0 = std::vector<int>{1, 2, 3};
+auto s0 = std::string{"bla"};
 IC(v0, s0, 3.14);
 ```
 
@@ -219,7 +216,7 @@ Unfortunately, just wrapping all the four arguments in a single `IC` call will n
 too. The returned value will be a `std:::tuple` with `(a, b, c, d)` and the `my_function`
 expects four arguments.
 
-To work around that, there are the `IC_A` macro. `IC_A` behaves exactly as the `IC` macro,
+To work around that, there is the `IC_A` macro. `IC_A` behaves exactly like the `IC` macro,
 but receives a function (any callable actually) as its first argument, and will call that
 function with all the following arguments, printing all of them before. That last code can
 be rewritten as:
@@ -493,7 +490,7 @@ IC(1, 2);
 ```
 Will print the output `"ic| 1: 1, 2: 2\n"` on the `str` string.
 
-*Warning:* The `Icecream` class won't take property of the argument `t`, so care must be
+*Warning:* The `Icecream` class won't take ownership of the argument `t`, so care must be
 taken by the user to keep it alive.
 
 #### prefix
@@ -605,9 +602,8 @@ to a `char32_t` string, before being sent as input to this function.
 
 #### output_transcoder
 
-Function that transcodes a `char` string, from in the system "execution encoding" to a
-`char` string in the system "output encoding", as expected by the configured
-[output](#output).
+Function that transcodes a `char` string, from the system "execution encoding" to a `char`
+string in the system "output encoding", as expected by the configured [output](#output).
 
 - set:
     ```C++
@@ -864,7 +860,7 @@ will print:
 ic| v0: error description
 ```
 
-#### Standard layout types (Clang only)
+#### Not streamable types (Clang only)
 
 If using Clang >= 15, a class will be printable even without an `operator<<(ostream&, T)` overload.
 
@@ -885,28 +881,9 @@ will print:
 ic| s: {f: 3.14, ii: [1, 2, 3]}
 ```
 
-
 ## Pitfalls
 
-The `IC(...)` is a preprocessor macro, then care must be taken when using arguments with
-commas. Any argument having commas must be enclosed by parenthesis. The code:
-
-```C++
-auto sum(int i0, int i1) -> int
-{
-    return i0 + i1;
-}
-
-// ...
-
-IC((sum(40, 2)));
-```
-
-will work and print something like:
-
-    ic| (sum(40, 2)): 42
-
-Also, since `IC(...)` is a preprocessor macro, it can cause conflicts if there is some
+`IC(...)` is a preprocessor macro, it can cause conflicts if there is some
 other `IC` identifier on code. To change the `IC(...)` macro to a longer `ICECREAM(...)`
 one, just define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` header:
 
@@ -918,12 +895,6 @@ one, just define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` hea
 While most compilers will work just fine, until the C++20 the standard requires at least
 one argument when calling a variadic macro. To handle this the nullary macros `IC0()` and
 `ICECREAM0()` are defined alongside `IC(...)` and `ICECREAM(...)`.
-
-## Similar projects
-
-The [CleanType](https://github.com/pthom/cleantype) library has a focus on printing
-readable types names, but there is support to print variables names and values alongside
-its types.
 
 
 [CI.badge]: https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg
