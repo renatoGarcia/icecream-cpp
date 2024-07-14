@@ -10,8 +10,9 @@
 TEST_CASE("std_string_view")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::string_view {"str 1"};
         IC(v0);
@@ -19,8 +20,9 @@ TEST_CASE("std_string_view")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::string {"ABCDE"};
         auto v1 = std::string_view {v0.data() + 1, 3};
@@ -29,8 +31,9 @@ TEST_CASE("std_string_view")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::wstring_view {L"wstr 1"};
         IC(v0);
@@ -38,8 +41,9 @@ TEST_CASE("std_string_view")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::u16string_view {u"u16str \u03B1"};
         IC(v0);
@@ -47,8 +51,9 @@ TEST_CASE("std_string_view")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::u32string_view {U"u32str \U0001F427"};
         IC(v0);
@@ -60,10 +65,11 @@ TEST_CASE("std_string_view")
 TEST_CASE("transcode functions")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.unicode_transcoder(
+        IC_CONFIG.unicode_transcoder(
             [](std::u32string_view str) -> std::string
             {
                 REQUIRE(str == U"char16_t test \u03B1");
@@ -77,10 +83,11 @@ TEST_CASE("transcode functions")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.wide_string_transcoder(
+        IC_CONFIG.wide_string_transcoder(
             [](std::wstring_view str) -> std::string
             {
                 REQUIRE(str == L"wide string test");

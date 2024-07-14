@@ -10,8 +10,9 @@
 TEST_CASE("char8_t")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = char8_t {u8'a'};
         IC(v0);
@@ -19,8 +20,9 @@ TEST_CASE("char8_t")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::u8string {u8"u8str \uAB8C"}; // Cherokee Small Letter MO
         IC(v0);
@@ -28,8 +30,9 @@ TEST_CASE("char8_t")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         char8_t const* const v0 = u8"char8_t test \uAB8C";
         IC(v0);
@@ -37,8 +40,9 @@ TEST_CASE("char8_t")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         auto v0 = std::u8string_view {u8"u8str \uAB8C"}; // Cherokee Small Letter MO
         IC(v0);
@@ -50,10 +54,11 @@ TEST_CASE("char8_t")
 TEST_CASE("transcode functions")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.unicode_transcoder(
+        IC_CONFIG.unicode_transcoder(
             [](char32_t const* str, std::size_t count) -> std::string
             {
                 REQUIRE(count == 14);
@@ -68,10 +73,11 @@ TEST_CASE("transcode functions")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
-        icecream::ic.unicode_transcoder(
+        IC_CONFIG.unicode_transcoder(
             [](std::u32string_view str) -> std::string
             {
                 REQUIRE(str == U"string B");

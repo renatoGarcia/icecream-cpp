@@ -24,8 +24,9 @@ enum EN : std::uint64_t
 TEST_CASE("dump_string")
 {
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         int i0 = 7;
         struct
@@ -42,8 +43,9 @@ TEST_CASE("dump_string")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         struct
         {
@@ -77,8 +79,9 @@ TEST_CASE("dump_string")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         struct
             : Point
@@ -95,8 +98,9 @@ TEST_CASE("dump_string")
     }
 
     {
+        IC_CONFIG_SCOPE();
         auto str = std::string{};
-        icecream::ic.output(str);
+        IC_CONFIG.output(str);
 
         struct
         {

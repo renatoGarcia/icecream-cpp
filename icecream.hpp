@@ -137,16 +137,24 @@
 
 #if defined(ICECREAM_LONG_NAME)
     #define ICECREAM(...) ICECREAM_("", __VA_ARGS__)
-    #define ICECREAM0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, "", ""}.ret()
-    #define ICECREAM_(S, ...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, S, #__VA_ARGS__}.ret(__VA_ARGS__)
+    #define ICECREAM0() ::icecream::detail::Dispatcher{ICECREAM_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, "", ""}.ret()
+    #define ICECREAM_(S, ...) ::icecream::detail::Dispatcher{ICECREAM_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, S, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define ICECREAM_A(...) ICECREAM_EXPAND(ICECREAM_APPLY(ICECREAM, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
     #define ICECREAM_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY(ICECREAM_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
+    #define ICECREAM_CONFIG_SCOPE()                                                                  \
+        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
+        ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4)
+    #define ICECREAM_CONFIG icecream_config_5f803a3bcdb4
 #else
     #define IC(...) IC_("", __VA_ARGS__)
-    #define IC0() ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, "",  ""}.ret()
-    #define IC_(S, ...) ::icecream::detail::Dispatcher{__FILE__, __LINE__, ICECREAM_FUNCTION, S, #__VA_ARGS__}.ret(__VA_ARGS__)
+    #define IC0() ::icecream::detail::Dispatcher{IC_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, "",  ""}.ret()
+    #define IC_(S, ...) ::icecream::detail::Dispatcher{IC_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, S, #__VA_ARGS__}.ret(__VA_ARGS__)
     #define IC_A(...) ICECREAM_EXPAND(ICECREAM_APPLY(IC, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
     #define IC_A_(S, ...) ICECREAM_EXPAND(ICECREAM_APPLY_S(IC_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
+    #define IC_CONFIG_SCOPE()                                                                  \
+        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
+        ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
+    #define IC_CONFIG icecream_config_5f803a3bcdb4
 #endif
 
 
@@ -768,29 +776,589 @@ namespace icecream{ namespace detail
         return result;
     }
 
+
+    // -------------------------------------------------- Prefix
+
+    class Prefix
+    {
+    private:
+        template <typename T>
+        struct Function
+        {
+            static_assert(is_invocable<T>::value, "");
+
+            Function (T const& func_)
+                : func{func_}
+            {}
+
+            auto operator()() -> std::string
+            {
+                auto buf = std::ostringstream {};
+                buf << this->func();
+                return buf.str();
+            }
+
+            T func;
+        };
+
+        std::vector<std::function<std::string()>> functions;
+
+    public:
+        Prefix() = delete;
+        Prefix(Prefix const&) = delete;
+        Prefix(Prefix&&) = default;
+        Prefix& operator=(Prefix const&) = delete;
+        Prefix& operator=(Prefix&&) = default;
+
+        template <typename... Ts>
+        Prefix(Ts&& ...funcs)
+            : functions {}
+        {
+            // Hack to call this->functions.emplace_back to all funcs
+            (void) std::initializer_list<int> {
+                (
+                    (void) this->functions.push_back(
+                        Function<typename std::decay<Ts>::type> {
+                            std::forward<Ts>(funcs)
+                        }
+                    ),
+                    0
+                 )...
+            };
+        }
+
+        auto operator()() const -> std::string
+        {
+            auto result = std::string {};
+            for (auto const& func : this->functions)
+                result.append(func());
+
+            return result;
+        }
+    };
+
+
+    // -------------------------------------------------- to_invocable
+
+    // If value is a string returns an function that returns it.
+    template <typename T>
+    auto to_invocable(T&& value,
+        typename std::enable_if <
+            is_std_string<T>::value
+            || is_c_string<typename std::decay<T>::type>::value
+        >::type* = nullptr
+    ) -> std::function<std::string()>
+    {
+        auto const str = std::string {value};
+        return [str]{return str;};
+    }
+
+    // If value is already invocable do nothing.
+    template <typename T>
+    auto to_invocable(T&& value,
+        typename std::enable_if<
+            is_invocable<T>::value
+        >::type* = nullptr
+    ) -> T&&
+    {
+        return std::forward<T>(value);
+    }
+
+
+    // -------------------------------------------------- Output
+
+    template <typename T>
+    class Output
+    {
+    public:
+        Output(T it_)
+            : it{it_}
+        {}
+
+        // Expects `str` in "output encoding".
+        auto operator()(std::string const& str) -> void
+        {
+            for (auto const& c : str)
+            {
+                *this->it = c;
+                ++this->it;
+            }
+        }
+
+    private:
+        T it;
+    };
+
+    // -------------------------------------------------- Hereditary
+
+    // A hereditary object can optionally hold a value, but will always produce a value
+    // when requested, by delegating the request to its parent if needed.
+    template <typename T>
+    class Hereditary
+    {
+    public:
+        // A child constructed without a value will delegate the value requests to its
+        // parent.
+        Hereditary(Hereditary<T> const& parent)
+            : init(false)
+            , parent(&parent)
+        {}
+
+        // A root object (without a parent) must always have a value.
+        Hereditary(T const& value)
+            : storage(value)
+            , init(true)
+            , parent(nullptr)
+        {}
+
+        // A root object (without a parent) must always have a value.
+        Hereditary(T&& value)
+            : storage(std::move(value))
+            , init(true)
+            , parent(nullptr)
+        {}
+
+        ~Hereditary()
+        {
+            if (this->init)
+            {
+                this->storage.value.~T();
+            }
+        }
+
+        auto operator=(T const& value) -> Hereditary&
+        {
+            if (this->init)
+            {
+                this->storage.value = value;
+            }
+            else
+            {
+                new (&this->storage.value) T(value);
+                this->init = true;
+            }
+
+            return *this;
+        }
+
+        auto operator=(T&& value) -> Hereditary&
+        {
+            if (this->init)
+            {
+                this->storage.value = std::move(value);
+            }
+            else
+            {
+                new (&this->storage.value) T(std::move(value));
+                this->init = true;
+            }
+
+            return *this;
+        }
+
+        auto value() const -> T const&
+        {
+            if (this->init)
+            {
+                return this->storage.value;
+            }
+            else if (this->parent)
+            {
+                return this->parent->value();
+            }
+            else
+            {
+                ICECREAM_ASSERT(false, "Should never reach here");
+            }
+        }
+
+    private:
+        union U
+        {
+            char dummy;
+            T value;
+
+            U() {}
+
+            U(T const& v)
+                : value{v}
+            {}
+
+            U(T&& v)
+                : value{std::move(v)}
+            {}
+
+            ~U() {}
+
+        } storage;
+
+        bool init;
+
+        Hereditary<T> const* parent;
+    };
+
+} // namespace detail
+
+    // -------------------------------------------------- Config
+
+    // Forward declared so that s_global can be friend of Config class
+    class Config;
+    namespace detail {
+        auto global_config() -> Config&;
+    }
+
+    class Config
+    {
+    public:
+
+        constexpr static std::size_t INDENT_BASE = 4;
+
+        Config(Config const* parent)
+            : enabled_(parent->enabled_)
+            , output_(parent->output_)
+            , prefix_(parent->prefix_)
+            , show_c_string_(parent->show_c_string_)
+            , wide_string_transcoder_(parent->wide_string_transcoder_)
+            , unicode_transcoder_(parent->unicode_transcoder_)
+            , output_transcoder_(parent->output_transcoder_)
+            , line_wrap_width_(parent->line_wrap_width_)
+            , include_context_(parent->include_context_)
+            , context_delimiter_(parent->context_delimiter_)
+        {}
+
+        auto is_enabled() const -> bool
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->enabled_.value();
+        }
+
+        auto enable() -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->enabled_ = true;
+            return *this;
+        }
+
+        auto disable() -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->enabled_ = false;
+            return *this;
+        }
+
+        auto output() const -> std::function<void(std::string const&)>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            auto const& output = this->output_.value();
+            return [&output](std::string const& str) -> void
+            {
+                return output(str);
+            };
+        }
+
+        // Gatekeeper function to emmit better error messages in invalid input.
+        template <typename T>
+        auto output(T&& t) ->
+            typename std::enable_if<
+                detail::disjunction<
+                    std::is_base_of<std::ostream, typename std::decay<T>::type>,
+                    detail::has_push_back_T<T, char>,
+                    detail::is_T_output_iterator<T, char>
+                >::value,
+                Config&
+            >::type
+        {
+            this->set_output(std::forward<T>(t));
+            return *this;
+        }
+
+        auto prefix() const -> std::function<std::string()>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            auto const& prefix = this->prefix_.value();
+            return [&prefix]() -> std::string
+            {
+                return prefix();
+            };
+        }
+
+        template <typename... Ts>
+        auto prefix(Ts&& ...value) ->
+            typename std::enable_if<
+                sizeof...(Ts) >= 1 && detail::conjunction<detail::is_valid_prefix<Ts>...>::value,
+                Config&
+            >::type
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->prefix_ = detail::Prefix(detail::to_invocable(std::forward<Ts>(value))...);
+            return *this;
+        }
+
+        auto show_c_string() const -> bool
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->show_c_string_.value();
+        }
+
+        auto show_c_string(bool value) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->show_c_string_ = value;
+            return *this;
+        }
+
+        auto wide_string_transcoder() const -> std::function<std::string(wchar_t const*, std::size_t)>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->wide_string_transcoder_.value();
+        }
+
+        auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)>&& transcoder) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->wide_string_transcoder_ = std::move(transcoder);
+            return *this;
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto wide_string_transcoder(std::function<std::string(std::wstring_view)>&& transcoder) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->wide_string_transcoder_ =
+                [transcoder](wchar_t const* str, std::size_t count) -> std::string
+                {
+                    return transcoder({str, count});
+                };
+            return *this;
+        }
+    #endif
+
+        auto unicode_transcoder() const -> std::function<std::string(char32_t const*, std::size_t)>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->unicode_transcoder_.value();
+        }
+
+        auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)>&& transcoder) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->unicode_transcoder_ = std::move(transcoder);
+            return *this;
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto unicode_transcoder(std::function<std::string(std::u32string_view)>&& transcoder) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->unicode_transcoder_ =
+                [transcoder](char32_t const* str, std::size_t count) -> std::string
+                {
+                    return transcoder({str, count});
+                };
+            return *this;
+        }
+    #endif
+
+        auto output_transcoder() const -> std::function<std::string(char const*, std::size_t)>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->output_transcoder_.value();
+        }
+
+        auto output_transcoder(std::function<std::string(char const*, std::size_t)>&& transcoder) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->output_transcoder_ = std::move(transcoder);
+            return *this;
+        }
+
+    #if defined(ICECREAM_STRING_VIEW_HEADER)
+        auto output_transcoder(std::function<std::string(std::string_view)>&& transcoder) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->output_transcoder_ =
+                [transcoder](char const* str, std::size_t count) -> std::string
+                {
+                    return transcoder({str, count});
+                };
+            return *this;
+        }
+    #endif
+
+        auto line_wrap_width() const -> std::size_t
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->line_wrap_width_.value();
+        }
+
+        auto line_wrap_width(std::size_t value) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->line_wrap_width_ = value;
+            return *this;
+        }
+
+        auto include_context() const -> bool
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->include_context_.value();
+        }
+
+        auto include_context(bool value) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->include_context_ = value;
+            return *this;
+        }
+
+        auto context_delimiter() const -> std::string
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->context_delimiter_.value();
+        }
+
+        auto context_delimiter(std::string value) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->context_delimiter_ = value;
+            return *this;
+        }
+
+    private:
+
+        friend auto detail::global_config() -> Config&;
+
+        static Config& global()
+        {
+            static Config global_{};
+            return global_;
+        }
+
+        Config() = default;
+
+        auto set_output(std::ostream& stream) -> void
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+
+            using OSIt = std::ostreambuf_iterator<char>;
+            this->output_ = detail::Output<OSIt>{OSIt{stream}};
+        }
+
+        template <typename T>
+        auto set_output(T& container) ->
+            typename std::enable_if<
+                detail::has_push_back_T<T, char>::value
+            >::type
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+
+            using OSIt = std::back_insert_iterator<T>;
+            this->output_ = detail::Output<OSIt>{OSIt{container}};
+        }
+
+        template <typename T>
+        auto set_output(T iterator) ->
+            typename std::enable_if<
+            detail::is_T_output_iterator<T, char>::value
+            >::type
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->output_ = detail::Output<T>{iterator};
+        }
+
+        mutable std::mutex attribute_mutex;
+
+        detail::Hereditary<bool> enabled_{true};
+
+        detail::Hereditary<std::function<void(std::string const&)>> output_{
+            detail::Output<std::ostreambuf_iterator<char>>{std::ostreambuf_iterator<char>{std::cerr}}
+        };
+
+        detail::Hereditary<detail::Prefix> prefix_{
+            detail::Prefix(
+                []() -> std::string
+                {
+                    return "ic| ";
+                }
+            )
+        };
+
+        detail::Hereditary<bool> show_c_string_{true};
+
+        detail::Hereditary<std::function<std::string(wchar_t const*, std::size_t)>> wide_string_transcoder_{
+            [](wchar_t const* str, std::size_t count) -> std::string
+            {
+                auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
+                if (c_locale != "C" && c_locale != "POSIX")
+                {
+                    return detail::xrtomb<wchar_t, std::wcrtomb>(str, count);
+                }
+                else
+                {
+                    switch (sizeof(wchar_t))
+                    {
+                    case 2:
+                        {
+                            auto const utf32_str =
+                                detail::to_utf32(reinterpret_cast<char16_t const*>(str), count);
+                            return detail::to_utf8_string(utf32_str.data(), utf32_str.size());
+                        }
+                    case 4:
+                        return detail::to_utf8_string(reinterpret_cast<char32_t const*>(str), count);
+                    default:
+                        return "<?>";
+                    }
+                }
+            }
+        };
+
+        detail::Hereditary<std::function<std::string(char32_t const*, std::size_t)>> unicode_transcoder_{
+            [](char32_t const* str, std::size_t count) -> std::string
+            {
+            #ifdef ICECREAM_CUCHAR_HEADER
+                auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
+                if (c_locale != "C" && c_locale != "POSIX")
+                {
+                    return detail::xrtomb<char32_t, std::c32rtomb>(str, count);
+                }
+                else
+            #endif
+                {
+                    return detail::to_utf8_string(str, count);
+                }
+            }
+        };
+
+        // Function to convert a string in "execution encoding" to "output encoding"
+        detail::Hereditary<std::function<std::string(char const*, std::size_t)>> output_transcoder_{
+            [](char const* str, std::size_t count) -> std::string
+            {
+                return std::string(str, count);
+            }
+        };
+
+        detail::Hereditary<std::size_t> line_wrap_width_{70};
+
+        detail::Hereditary<bool> include_context_{false};
+
+        detail::Hereditary<std::string> context_delimiter_{"- "};
+    };
+
+namespace detail {
+
+    inline auto global_config() -> Config&
+    {
+        return Config::global();
+    }
+
     // -------------------------------------------------- Tree
-
-    // Needed to access the Icecream::show_c_string() method before the Icecream class
-    // declaration.
-    auto show_c_string() -> bool;
-
-    auto transcoder_dispatcher(char const* str, size_t count) -> std::string;
-
-    auto transcoder_dispatcher(wchar_t const* str, size_t count) -> std::string;
-
-#if defined(__cpp_char8_t)
-    auto transcoder_dispatcher(char8_t const* str, size_t count) -> std::string;
-#endif
-
-    auto transcoder_dispatcher(char16_t const* str, size_t count) -> std::string;
-
-    auto transcoder_dispatcher(char32_t const* str, size_t count) -> std::string;
 
 #if defined(ICECREAM_DUMP_STRUCT_CLANG)
     class Tree;
     static auto ds_this = static_cast<Tree*>(nullptr);
     static auto ds_delayed_structs = std::vector<std::pair<std::string, std::function<void()>>>{};
     static auto ds_stream_ref = static_cast<std::basic_ostream<char> const*>(nullptr);
+    static auto ds_config_ref = static_cast<Config const*>(nullptr);
     static auto ds_call_count = int{0};
     template<typename... T> auto parse_dump_struct(char const* format, T&& ...args) -> int;
 #endif
@@ -948,6 +1516,41 @@ namespace icecream{ namespace detail
 
         return std::make_tuple((it == end_it), std::move(os));
     }
+
+    // char -> char
+    inline auto transcoder_dispatcher(Config const&, char const* str, size_t count) -> std::string
+    {
+        return std::string(str, count);
+    }
+
+    // wchar_t -> char
+    inline auto transcoder_dispatcher(Config const& config, wchar_t const* str, size_t count) -> std::string
+    {
+        return config.wide_string_transcoder()(str, count);
+    }
+
+#if defined(__cpp_char8_t)
+    // char8_t -> char
+    inline auto transcoder_dispatcher(Config const& config, char8_t const* str, size_t count) -> std::string
+    {
+        auto const utf32_str = to_utf32(str, count);
+        return config.unicode_transcoder()(utf32_str.data(), utf32_str.size());
+    }
+#endif
+
+    // char16_t -> char
+    inline auto transcoder_dispatcher(Config const& config, char16_t const* str, size_t count) -> std::string
+    {
+        auto const utf32_str = to_utf32(str, count);
+        return config.unicode_transcoder()(utf32_str.data(), utf32_str.size());
+    }
+
+    // char32_t -> char
+    inline auto transcoder_dispatcher(Config const& config, char32_t const* str, size_t count) -> std::string
+    {
+        return config.unicode_transcoder()(str, count);
+    }
+
 
     class Tree
     {
@@ -1128,7 +1731,7 @@ namespace icecream{ namespace detail
 
         // Print any class that overloads operator<<(std::ostream&, T)
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const&, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 has_insertion<T>::value
                 && !is_c_string<T>::value
@@ -1150,7 +1753,7 @@ namespace icecream{ namespace detail
 
         // Print C string
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_c_string<T>::value
             >::type* = nullptr
@@ -1160,7 +1763,7 @@ namespace icecream{ namespace detail
                 std::ostringstream buf;
                 buf.copyfmt(stream_ref);
 
-                if (show_c_string())
+                if (config.show_c_string())
                 {
                     using CharT = typename std::remove_const<
                         typename std::remove_pointer<
@@ -1168,7 +1771,7 @@ namespace icecream{ namespace detail
                         >::type
                     >::type;
 
-                    buf << '"' << transcoder_dispatcher(value, std::char_traits<CharT>::length(value)) << '"';
+                    buf << '"' << transcoder_dispatcher(config, value, std::char_traits<CharT>::length(value)) << '"';
                 }
                 else
                 {
@@ -1181,7 +1784,7 @@ namespace icecream{ namespace detail
 
         // Print std::string
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_std_string<T>::value
             >::type* = nullptr
@@ -1190,7 +1793,7 @@ namespace icecream{ namespace detail
             {
                 std::ostringstream buf;
                 buf.copyfmt(stream_ref);
-                buf << '"' << transcoder_dispatcher(value.data(), value.size()) << '"';
+                buf << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
                 return buf.str();
             }()}
         {}
@@ -1198,18 +1801,18 @@ namespace icecream{ namespace detail
     #if defined(ICECREAM_STRING_VIEW_HEADER)
         // Print std::string_view
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_string_view<T>::value
             >::type* = nullptr
         )
-            : Tree {std::basic_string<typename T::value_type>{value}, stream_ref}
+            : Tree {std::basic_string<typename T::value_type>{value}, config, stream_ref}
         {}
     #endif
 
         // Print character
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_character<T>::value
             >::type* = nullptr
@@ -1255,7 +1858,7 @@ namespace icecream{ namespace detail
                     break;
 
                 default:
-                    str = transcoder_dispatcher(&value, 1);
+                    str = transcoder_dispatcher(config, &value, 1);
                     break;
                 }
 
@@ -1267,7 +1870,7 @@ namespace icecream{ namespace detail
 
         // Print signed and unsigned char
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const&, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_xsig_char<T>::value
             >::type* = nullptr
@@ -1287,7 +1890,7 @@ namespace icecream{ namespace detail
 
         // Print smart pointers without an operator<<(ostream&) overload.
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const&, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_unstreamable_ptr<T>::value
                 && !has_insertion<T>::value // On C++20 unique_ptr will have a << overload.
@@ -1304,79 +1907,82 @@ namespace icecream{ namespace detail
 
         // Print weak pointer classes
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_weak_ptr<T>::value
             >::type* = nullptr
         )
-            : Tree {value.expired() ? Tree{InnerTag{}, "expired"} : Tree {value.lock(), stream_ref}}
+            : Tree {value.expired() ? Tree{InnerTag{}, "expired"} : Tree {value.lock(), config, stream_ref}}
         {}
 
     #if defined(ICECREAM_OPTIONAL_HEADER)
         // Print std::optional<> classes
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_optional<T>::value
                 && !has_insertion<T>::value
             >::type* = nullptr
         )
-            : Tree {value.has_value() ? Tree{*value, stream_ref} : Tree{InnerTag{}, "nullopt"}}
+            : Tree {value.has_value() ? Tree{*value, config, stream_ref} : Tree{InnerTag{}, "nullopt"}}
         {}
     #endif
 
         struct Visitor
         {
-            Visitor(std::basic_ostream<char> const& stream_ref_)
-                : stream_ref{stream_ref_}
+            Visitor(Config const& config_, std::basic_ostream<char> const& stream_ref_)
+                : config{config_}
+                , stream_ref{stream_ref_}
             {}
 
             template <typename T>
             auto operator()(T const& arg) -> Tree
             {
-                return Tree {arg, this->stream_ref};
+                return Tree {arg, config, this->stream_ref};
             }
+
+            Config const& config;
             std::basic_ostream<char> const& stream_ref;
         };
 
         // Print *::variant<Ts...> classes
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_variant<T>::value
                 && !has_insertion<T>::value
             >::type* = nullptr
         )
-            : Tree {visit(Tree::Visitor{stream_ref}, value)}
+            : Tree {visit(Tree::Visitor{config, stream_ref}, value)}
         {}
 
         // Fill this->content.stem.children with all the tuple elements
         template<typename T, std::size_t N = std::tuple_size<T>::value-1>
         static auto tuple_traverser(
-            T const& t, std::basic_ostream<char> const& stream_ref
+            T const& t, Config const& config, std::basic_ostream<char> const& stream_ref
         ) -> std::vector<Tree>
         {
             auto result = N > 0 ?
-                tuple_traverser<T, (N > 0) ? N-1 : 0>(t, stream_ref) : std::vector<Tree> {};
+                tuple_traverser<T, (N > 0) ? N-1 : 0>(t, config, stream_ref) : std::vector<Tree> {};
 
-            result.emplace_back(std::get<N>(t), stream_ref);
+            result.emplace_back(std::get<N>(t), config, stream_ref);
             return result;
         }
 
         // Print tuple like classes
         template <typename T>
-        Tree(T&& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T&& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 is_tuple<T>::value
                 && !has_insertion<T>::value
             >::type* = nullptr
         )
-            : Tree {InnerTag{}, U::Stem{"(", ", ", ")", Tree::tuple_traverser(value, stream_ref)}}
+            : Tree {InnerTag{}, U::Stem{"(", ", ", ")", Tree::tuple_traverser(value, config, stream_ref)}}
         {}
 
         // Print all items of any iterable class
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 (
                     is_iterable<T>::value
@@ -1394,7 +2000,7 @@ namespace icecream{ namespace detail
                     auto result = std::vector<Tree> {};
                     for (auto const& i : value)
                     {
-                        result.emplace_back(i, stream_ref);
+                        result.emplace_back(i, config, stream_ref);
                     }
                     return result;
                 }()}}
@@ -1402,7 +2008,7 @@ namespace icecream{ namespace detail
 
         // Print classes deriving from only std::exception and not from boost::exception
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const&,
+        Tree(T const& value, Config const&, std::basic_ostream<char> const&,
             typename std::enable_if<
                 std::is_base_of<std::exception, T>::value
                 && !std::is_base_of<boost::exception, T>::value
@@ -1414,7 +2020,7 @@ namespace icecream{ namespace detail
 
         // Print classes deriving from both std::exception and boost::exception
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const&,
+        Tree(T const& value, Config const&, std::basic_ostream<char> const&,
             typename std::enable_if<
                 std::is_base_of<std::exception, T>::value
                 && std::is_base_of<boost::exception, T>::value
@@ -1436,7 +2042,7 @@ namespace icecream{ namespace detail
     #if defined(ICECREAM_DUMP_STRUCT_CLANG)
         // Print classes using clang's __builtin_dump_struct (clang >= 15).
         template <typename T>
-        Tree(T const& value, std::basic_ostream<char> const& stream_ref,
+        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
             typename std::enable_if<
                 !is_collection<T>::value
                 && !is_tuple<T>::value
@@ -1485,6 +2091,7 @@ namespace icecream{ namespace detail
             {
                 ds_this = this;  // Put `this` on scope to be assigned inside `parse_dump_struct`
                 ds_stream_ref = &stream_ref;
+                ds_config_ref = &config;
                 __builtin_dump_struct(&value, &parse_dump_struct);  // Print the outermost class
 
                 // Loop on each class that is an internal attribute of the outermost class
@@ -1547,16 +2154,16 @@ namespace icecream{ namespace detail
     auto build_tree(bool deref, T* const& t) -> Tree
     {
         if (deref)
-            return Tree {*t, *ds_stream_ref};
+            return Tree {*t, *ds_config_ref, *ds_stream_ref};
         else
-            return Tree {t, *ds_stream_ref};
+            return Tree {t, *ds_config_ref, *ds_stream_ref};
     }
 
     // Receives an argument from parse_dump_struct and builds a Tree using it.
     template<typename T>
     auto build_tree(bool, T const& t) -> Tree
     {
-        return Tree {t, *ds_stream_ref};
+        return Tree {t, *ds_config_ref, *ds_stream_ref};
     }
 
     // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
@@ -1717,7 +2324,11 @@ namespace icecream{ namespace detail
 
     template <typename T>
     auto is_tree_argument_impl(int) -> decltype (
-        Tree {std::declval<T&>(), std::declval<std::basic_ostream<char> const&>()},
+        Tree {
+            std::declval<T&>(),
+            std::declval<Config const&>(),
+            std::declval<std::basic_ostream<char> const&>()
+        },
         std::true_type {}
     );
 
@@ -1736,836 +2347,302 @@ namespace icecream{ namespace detail
     struct is_printable: is_tree_argument<T> {};
 
 
-    // -------------------------------------------------- to_invocable
-
-    // If value is a string returns an function that returns it.
-    template <typename T>
-    auto to_invocable(T&& value,
-        typename std::enable_if <
-            is_std_string<T>::value
-            || is_c_string<typename std::decay<T>::type>::value
-        >::type* = nullptr
-    ) -> std::function<std::string()>
-    {
-        auto const str = std::string {value};
-        return [str]{return str;};
-    }
-
-    // If value is already invocable do nothing.
-    template <typename T>
-    auto to_invocable(T&& value,
-        typename std::enable_if<
-            is_invocable<T>::value
-        >::type* = nullptr
-    ) -> T&&
-    {
-        return std::forward<T>(value);
-    }
-
-
-    // -------------------------------------------------- Prefix
-    class Prefix
-    {
-    private:
-        template <typename T>
-        struct Function
-        {
-            static_assert(is_invocable<T>::value, "");
-
-            Function (T const& func_)
-                : func{func_}
-            {}
-
-            auto operator()() -> std::string
-            {
-                auto buf = std::ostringstream {};
-                buf << this->func();
-                return buf.str();
-            }
-
-            T func;
-        };
-
-        std::vector<std::function<std::string()>> functions;
-
-    public:
-        Prefix() = delete;
-        Prefix(Prefix const&) = delete;
-        Prefix(Prefix&&) = default;
-        Prefix& operator=(Prefix const&) = delete;
-        Prefix& operator=(Prefix&&) = default;
-
-        template <typename... Ts>
-        Prefix(Ts&& ...funcs)
-            : functions {}
-        {
-            // Hack to call this->functions.emplace_back to all funcs
-            (void) std::initializer_list<int> {
-                (
-                    (void) this->functions.push_back(
-                        Function<typename std::decay<Ts>::type> {
-                            std::forward<Ts>(funcs)
-                        }
-                    ),
-                    0
-                 )...
-            };
-        }
-
-        auto operator()() -> std::string
-        {
-            auto result = std::string {};
-            for (auto const& func : this->functions)
-                result.append(func());
-
-            return result;
-        }
-    };
-
-
     // -------------------------------------------------- Icecream
 
-    class Icecream
+    inline auto print_tree(
+        Tree const& node, size_t const indent_level, bool const is_tree_multiline, Config const& config
+    ) -> void
     {
-    public:
-        using size_type = std::size_t;
-
-        Icecream(Icecream const&) = delete;
-        Icecream(Icecream&&) = delete;
-        Icecream& operator=(Icecream const&) = delete;
-        Icecream& operator=(Icecream&&) = delete;
-
-        static auto instance() -> Icecream&
-        {
-            static Icecream ic;
-            return ic;
-        }
-
-        auto enable() -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->enabled_ = true;
-        }
-
-        auto disable() -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->enabled_ = false;
-        }
-
-        auto output(std::ostream& stream) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-
-            using OSIt = std::ostreambuf_iterator<char>;
-            this->output_ = Output<OSIt>{OSIt{stream}};
-        }
-
-        template <typename T>
-        auto output(T& container) ->
-            typename std::enable_if<
-                has_push_back_T<T, char>::value
-            >::type
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-
-            using OSIt = std::back_insert_iterator<T>;
-            this->output_ = Output<OSIt>{OSIt{container}};
-        }
-
-        template <typename T>
-        auto output(T iterator) ->
-            typename std::enable_if<
-                is_T_output_iterator<T, char>::value
-            >::type
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->output_ = Output<T>{iterator};
-        }
-
-        template <typename... Ts>
-        auto prefix(Ts&& ...value) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->prefix_ = Prefix {to_invocable(std::forward<Ts>(value))...};
-        }
-
-        auto show_c_string() const -> bool
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            return this->show_c_string_;
-        }
-
-        auto show_c_string(bool value) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->show_c_string_ = value;
-        }
-
-        auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)>&& transcoder) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->wide_string_transcoder_ = std::move(transcoder);
-        }
-
-    #if defined(ICECREAM_STRING_VIEW_HEADER)
-        auto wide_string_transcoder(std::function<std::string(std::wstring_view)>&& transcoder) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->wide_string_transcoder_ =
-                [transcoder](wchar_t const* str, std::size_t count) -> std::string
-                {
-                    return transcoder({str, count});
-                };
-        }
-    #endif
-
-        auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)>&& transcoder) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->unicode_transcoder_ = std::move(transcoder);
-        }
-
-    #if defined(ICECREAM_STRING_VIEW_HEADER)
-        auto unicode_transcoder(std::function<std::string(std::u32string_view)>&& transcoder) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->unicode_transcoder_ =
-                [transcoder](char32_t const* str, std::size_t count) -> std::string
-                {
-                    return transcoder({str, count});
-                };
-        }
-    #endif
-
-        auto output_transcoder(std::function<std::string(char const*, std::size_t)>&& transcoder) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->output_transcoder_ = std::move(transcoder);
-        }
-
-    #if defined(ICECREAM_STRING_VIEW_HEADER)
-        auto output_transcoder(std::function<std::string(std::string_view)>&& transcoder) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->output_transcoder_ =
-                [transcoder](char const* str, std::size_t count) -> std::string
-                {
-                    return transcoder({str, count});
-                };
-        }
-    #endif
-
-        auto line_wrap_width() const -> std::size_t
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            return this->line_wrap_width_;
-        }
-
-        auto line_wrap_width(std::size_t value) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->line_wrap_width_ = value;
-        }
-
-        auto include_context() const -> bool
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            return this->include_context_;
-        }
-
-        auto include_context(bool value) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->include_context_ = value;
-        }
-
-        auto context_delimiter() const -> std::string
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            return this->context_delimiter_;
-        }
-
-        auto context_delimiter(std::string value) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-            this->context_delimiter_ = value;
-        }
-
-        template <typename... Ts>
-        auto print(
-            std::string const& file,
-            int line,
-            std::string const& function,
-            std::string const& format,
-            std::vector<std::string> const& arg_names,
-            Ts&&... args
-        ) -> void
-        {
-            std::lock_guard<std::mutex> guard(this->mutex);
-
-            if (!this->enabled_)
-                return;
-
-            auto const prefix = this->prefix_();
-            auto context = std::string {};
-
-            // If used an empty IC macro, i.e.: IC().
-            if (sizeof...(Ts) == 0 || this->include_context_)
+        auto const output_transcoder =
+            [&config](std::string const& str) -> std::string
             {
-             #if defined(_MSC_VER)
-                auto const n = file.rfind('\\');
-             #else
-                auto const n = file.rfind('/');
-             #endif
-                context = file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
-            }
-
-            if (sizeof...(Ts) == 0)
-            {
-                this->output_(prefix);
-                this->output_(context);
-            }
-            else
-            {
-                auto const forest = Icecream::build_forest(
-                    format, std::begin(arg_names), std::forward<Ts>(args)...
-                );
-                this->print_forest(prefix, context, forest);
-            }
-
-            this->output_("\n");
-        }
-
-    private:
-
-        // Function to convert a string in "execution encoding" to "output encoding"
-        std::function<std::string(char const*, std::size_t)> output_transcoder_ {
-            [](char const* str, std::size_t count) -> std::string
-            {
-                return std::string(str, count);
-            }
-        };
-
-        template <typename T>
-        struct Output
-        {
-            Output(T it_)
-                : it{it_}
-            {}
-
-            auto operator()(std::string const& str) -> void
-            {
-                auto const out_str = Icecream::instance().output_transcoder_(str.data(), str.size());
-
-                for (auto const& c : out_str)
-                {
-                    *this->it = c;
-                    ++this->it;
-                }
-            }
-
-            T it;
-        };
-
-
-        friend auto show_c_string() -> bool;
-
-        friend auto transcoder_dispatcher(char const* str, size_t count) -> std::string;
-
-        friend auto transcoder_dispatcher(wchar_t const* str, size_t count) -> std::string;
-
-    #if defined(__cpp_char8_t)
-        friend auto transcoder_dispatcher(char8_t const* str, size_t count) -> std::string;
-    #endif
-
-        friend auto transcoder_dispatcher(char16_t const* str, size_t count) -> std::string;
-
-        friend auto transcoder_dispatcher(char32_t const* str, size_t count) -> std::string;
-
-        constexpr static size_type INDENT_BASE = 4;
-
-        mutable std::mutex mutex;
-
-        bool enabled_ = true;
-
-        std::function<void(std::string const&)> output_ {
-            Output<std::ostreambuf_iterator<char>>{std::ostreambuf_iterator<char>{std::cerr}}
-        };
-
-        std::function<std::string(wchar_t const*, std::size_t)> wide_string_transcoder_ {
-            [](wchar_t const* str, std::size_t count) -> std::string
-            {
-                auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
-                if (c_locale != "C" && c_locale != "POSIX")
-                {
-                    return xrtomb<wchar_t, std::wcrtomb>(str, count);
-                }
-                else
-                {
-                    switch (sizeof(wchar_t))
-                    {
-                    case 2:
-                        {
-                            auto const utf32_str = to_utf32(reinterpret_cast<char16_t const*>(str), count);
-                            return to_utf8_string(utf32_str.data(), utf32_str.size());
-                        }
-                    case 4:
-                        return to_utf8_string(reinterpret_cast<char32_t const*>(str), count);
-                    default:
-                        return "<?>";
-                    }
-                }
-            }
-        };
-
-        std::function<std::string(char32_t const*, std::size_t)> unicode_transcoder_ {
-            [](char32_t const* str, std::size_t count) -> std::string
-            {
-            #ifdef ICECREAM_CUCHAR_HEADER
-                auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
-                if (c_locale != "C" && c_locale != "POSIX")
-                {
-                    return xrtomb<char32_t, std::c32rtomb>(str, count);
-                }
-                else
-            #endif
-                {
-                    return to_utf8_string(str, count);
-                }
-            }
-        };
-
-        Prefix prefix_ {[]{return "ic| ";}};
-
-        std::string context_delimiter_ = "- ";
-
-        std::size_t line_wrap_width_ = 70;
-
-        bool show_c_string_ = true;
-
-        bool include_context_ = false;
-
-
-        Icecream() = default;
-
-        auto print_tree(
-            Tree const& node, size_type const indent_level, bool const is_tree_multiline
-        ) -> void
-        {
-            auto const break_line = [&](size_type indent)
-            {
-                this->output_("\n");
-                this->output_(std::string(indent * Icecream::INDENT_BASE, ' '));
+                return config.output_transcoder()(str.data(), str.size());
             };
 
-            if (node.is_leaf())
-                this->output_(node.leaf());
-            else
+        auto const break_line =
+            [&](size_t indent)
             {
-                this->output_(node.stem().open);
+                auto const indentation = std::string(indent * Config::INDENT_BASE, ' ');
+                config.output()(output_transcoder("\n"));
+                config.output()(output_transcoder(indentation));
+            };
 
-                if (is_tree_multiline)
-                    break_line(indent_level+1);
-
-                for (
-                    auto it = node.stem().children.cbegin();
-                    it != node.stem().children.cend();
-                ){
-                    auto const is_child_multiline = bool {[&]
-                    {
-                        // If the whole tree is a single line all children are too.
-                        if (!is_tree_multiline)
-                        {
-                            return false;
-                        }
-                        // Else check this particular child.
-                        else
-                        {
-                            auto const child_line_width =
-                                (indent_level+1)*Icecream::INDENT_BASE + it->count_chars();
-                            return child_line_width > this->line_wrap_width_;
-                        }
-                    }()};
-
-                    // Print the child.
-                    this->print_tree(*it, indent_level+1, is_child_multiline);
-
-                    ++it;
-
-                    // Print the separators between children.
-                    if (it != node.stem().children.cend())
-                    {
-                        if (is_tree_multiline)
-                        {
-                            // Trim any right white space.
-                            auto idx = node.stem().separator.find_last_not_of(" \t");
-                            if (idx != std::string::npos)
-                                idx += 1;
-                            else
-                                idx = node.stem().separator.size();
-
-                            this->output_(node.stem().separator.substr(0, idx));
-                            break_line(indent_level+1);
-                        }
-                        else
-                            this->output_(node.stem().separator);
-                    }
-                    else
-                        if (is_tree_multiline)
-                            break_line(indent_level);
-                }
-
-                this->output_(node.stem().close);
-            }
-        }
-
-        auto print_forest(
-            std::string const& prefix,
-            std::string const& context,
-            std::vector<std::tuple<std::string, Tree>> const& forest
-        ) -> void
+        if (node.is_leaf())
         {
-            auto const is_forest_multiline = bool {[&]
+            config.output()(output_transcoder(node.leaf()));
+        }
+        else
+        {
+            config.output()(output_transcoder(node.stem().open));
+
+            if (is_tree_multiline)
             {
-                auto r = prefix.size();
-
-                if (!context.empty())
-                    r += context.size() + this->context_delimiter_.size();
-
-                // The variables name, the separator ": ", and content
-                for (auto const& t : forest)
-                    r += std::get<0>(t).size() + 2 + std::get<1>(t).count_chars();
-
-                // The ", " separators between variables.
-                if (forest.size() > 1)
-                    r += (forest.size() - 1) * 2;
-
-                return r > this->line_wrap_width_;
-            }()};
-
-            // Print prefix and context
-            this->output_(prefix);
-            if (!context.empty())
-            {
-                this->output_(context);
-                if (is_forest_multiline)
-                {
-                    this->output_("\n");
-                    this->output_(std::string(Icecream::INDENT_BASE, ' '));
-                }
-                else
-                    this->output_(this->context_delimiter_);
+                break_line(indent_level+1);
             }
 
-            // The forest is built with trees in reverse order.
-            for (auto it = forest.crbegin(); it != forest.crend(); ++it)
-            {
-                auto const& arg_name = std::get<0>(*it);
-                auto const& tree = std::get<1>(*it);
-
-                auto const is_tree_multiline = bool {[&]
+            for (
+                auto it = node.stem().children.cbegin();
+                it != node.stem().children.cend();
+            ){
+                auto const is_child_multiline = bool {[&]
                 {
-                    // If the whole forest is a single line all trees will be too.
-                    if (!is_forest_multiline)
+                    // If the whole tree is a single line all children are too.
+                    if (!is_tree_multiline)
                     {
                         return false;
                     }
+                    // Else check this particular child.
                     else
                     {
-                        auto const tree_line_width = [&]
-                        {
-                            if (it == forest.rbegin() && context.empty())
-                                return
-                                    prefix.size()
-                                    + arg_name.size()
-                                    + 2
-                                    + tree.count_chars();
-                            else
-                                return
-                                    Icecream::INDENT_BASE
-                                    + arg_name.size()
-                                    + 2
-                                    + tree.count_chars();
-                        }();
-
-                        return tree_line_width > this->line_wrap_width_;
+                        auto const child_line_width =
+                            (indent_level+1) * Config::INDENT_BASE + it->count_chars();
+                        return child_line_width > config.line_wrap_width();
                     }
                 }()};
 
-                this->output_(arg_name);
-                this->output_(": ");
-                this->print_tree(tree, 1, is_tree_multiline);
+                // Print the child.
+                print_tree(*it, indent_level+1, is_child_multiline, config);
 
-                if (it+1 != forest.crend())
+                ++it;
+
+                // Print the separators between children.
+                if (it != node.stem().children.cend())
                 {
-                    if (is_forest_multiline)
+                    if (is_tree_multiline)
                     {
-                        this->output_("\n");
-                        this->output_(std::string(Icecream::INDENT_BASE, ' '));
+                        // Trim any right white space.
+                        auto idx = node.stem().separator.find_last_not_of(" \t");
+                        if (idx != std::string::npos)
+                            idx += 1;
+                        else
+                            idx = node.stem().separator.size();
+
+                        config.output()(output_transcoder(node.stem().separator.substr(0, idx)));
+                        break_line(indent_level+1);
                     }
                     else
-                        this->output_(", ");
+                    {
+                        config.output()(output_transcoder(node.stem().separator));
+                    }
+                }
+                else if (is_tree_multiline)
+                {
+                    break_line(indent_level);
                 }
             }
+
+            config.output()(output_transcoder(node.stem().close));
         }
+    }
 
-
-        auto build_forest(
-            std::string const& format,
-            std::vector<std::string>::const_iterator
-        ) -> std::vector<std::tuple<std::string, Tree>>
-        {
-            return std::vector<std::tuple<std::string, Tree>> {};
-        }
-
-        template<typename T, std::size_t N = std::tuple_size<T>::value-1>
-        static auto fill_forest_from_tuple(
-           std::vector<std::string> const& arg_names,
-           T const& t,
-           std::vector<std::tuple<std::string, Tree>>& forest
-        ) -> void
-        {
-            forest.emplace_back(arg_names.at(N), std::get<N>(t));
-            if (N > 0) fill_forest_from_tuple<T, (N > 0) ? N-1 : 0>(arg_names, t, forest);
-        }
-
-        template <typename T, typename... Ts>
-        auto build_forest(
-            std::string const& format,
-            std::vector<std::string>::const_iterator arg_name,
-            T&& arg_value,
-            Ts&&... args_tail
-        ) -> std::vector<std::tuple<std::string, Tree>>
-        {
-            auto forest = Icecream::build_forest(
-                format, arg_name+1, std::forward<Ts>(args_tail)...
-            );
-
-            auto result_os = build_ostream(format);
-            if (std::get<0>(result_os))
+    inline auto print_forest(
+        std::vector<std::tuple<std::string, Tree>> const& forest,
+        std::string const& prefix,
+        std::string const& context,
+        Config const& config
+    ) -> void
+    {
+        auto const output_transcoder =
+            [&config](std::string const& str) -> std::string
             {
-                forest.emplace_back(
-                    *arg_name,
-                    Tree{std::move(arg_value), std::get<1>(result_os)}
-                );
+                return config.output_transcoder()(str.data(), str.size());
+            };
+
+        auto const is_forest_multiline = bool {[&]
+        {
+            auto r = prefix.size();
+
+            if (!context.empty())
+                r += context.size() + config.context_delimiter().size();
+
+            // The variables name, the separator ": ", and content
+            for (auto const& t : forest)
+                r += std::get<0>(t).size() + 2 + std::get<1>(t).count_chars();
+
+            // The ", " separators between variables.
+            if (forest.size() > 1)
+                r += (forest.size() - 1) * 2;
+
+            return r > config.line_wrap_width();
+        }()};
+
+        // Print prefix and context
+        config.output()(output_transcoder(prefix));
+        if (!context.empty())
+        {
+            config.output()(output_transcoder(context));
+            if (is_forest_multiline)
+            {
+                config.output()(output_transcoder("\n"));
+                config.output()(output_transcoder(std::string(Config::INDENT_BASE, ' ')));
             }
             else
             {
-                forest.emplace_back(
-                    *arg_name,
-                    Tree::literal("*Error* on formatting string")
-                );
+                config.output()(output_transcoder(config.context_delimiter()));
             }
-
-            return forest;
         }
-    };
 
-    inline auto show_c_string() -> bool
-    {
-        return Icecream::instance().show_c_string_;
+        // The forest is built with trees in reverse order.
+        for (auto it = forest.crbegin(); it != forest.crend(); ++it)
+        {
+            auto const& arg_name = std::get<0>(*it);
+            auto const& tree = std::get<1>(*it);
+
+            auto const is_tree_multiline = bool {[&]
+            {
+                // If the whole forest is a single line all trees will be too.
+                if (!is_forest_multiline)
+                {
+                    return false;
+                }
+                else
+                {
+                    auto const tree_line_width = [&]
+                    {
+                        if (it == forest.rbegin() && context.empty())
+                            return
+                                prefix.size()
+                                + arg_name.size()
+                                + 2
+                                + tree.count_chars();
+                        else
+                            return
+                                Config::INDENT_BASE
+                                + arg_name.size()
+                                + 2
+                                + tree.count_chars();
+                    }();
+
+                    return tree_line_width > config.line_wrap_width();
+                }
+            }()};
+
+            config.output()(output_transcoder(arg_name));
+            config.output()(output_transcoder(": "));
+            print_tree(tree, 1, is_tree_multiline, config);
+
+            if (it+1 != forest.crend())
+            {
+                if (is_forest_multiline)
+                {
+                    config.output()(output_transcoder("\n"));
+                    config.output()(output_transcoder(std::string(Config::INDENT_BASE, ' ')));
+                }
+                else
+                {
+                    config.output()(output_transcoder(", "));
+                }
+            }
+        }
     }
 
-    // char -> char
-    inline auto transcoder_dispatcher(char const* str, size_t count) -> std::string
+    inline auto build_forest(
+        Config const&,
+        std::string const&,
+        std::vector<std::string>::const_iterator
+    ) -> std::vector<std::tuple<std::string, Tree>>
     {
-        return std::string(str, count);
+        return std::vector<std::tuple<std::string, Tree>> {};
     }
 
-    // wchar_t -> char
-    inline auto transcoder_dispatcher(wchar_t const* str, size_t count) -> std::string
+    template<typename T, std::size_t N = std::tuple_size<T>::value-1>
+    static auto fill_forest_from_tuple(
+       std::vector<std::string> const& arg_names,
+       T const& t,
+       std::vector<std::tuple<std::string, Tree>>& forest
+    ) -> void
     {
-        return Icecream::instance().wide_string_transcoder_(str, count);
+        forest.emplace_back(arg_names.at(N), std::get<N>(t));
+        if (N > 0) fill_forest_from_tuple<T, (N > 0) ? N-1 : 0>(arg_names, t, forest);
     }
 
-#if defined(__cpp_char8_t)
-    // char8_t -> char
-    inline auto transcoder_dispatcher(char8_t const* str, size_t count) -> std::string
+
+    template <typename T, typename... Ts>
+    auto build_forest(
+        Config const& config,
+        std::string const& format,
+        std::vector<std::string>::const_iterator arg_name,
+        T&& arg_value,
+        Ts&&... args_tail
+    ) -> std::vector<std::tuple<std::string, Tree>>
     {
-        auto const utf32_str = to_utf32(str, count);
-        return Icecream::instance().unicode_transcoder_(utf32_str.data(), utf32_str.size());
-    }
-#endif
+        auto forest = build_forest(
+            config, format, arg_name+1, std::forward<Ts>(args_tail)...
+        );
 
-    // char16_t -> char
-    inline auto transcoder_dispatcher(char16_t const* str, size_t count) -> std::string
-    {
-        auto const utf32_str = to_utf32(str, count);
-        return Icecream::instance().unicode_transcoder_(utf32_str.data(), utf32_str.size());
-    }
-
-    // char32_t -> char
-    inline auto transcoder_dispatcher(char32_t const* str, size_t count) -> std::string
-    {
-        return Icecream::instance().unicode_transcoder_(str, count);
-    }
-
-}} // namespace icecream::detail
-
-
-namespace icecream
-{
-    // The Icecream class is a singleton. This IcecreamAPI class only task is be a
-    // syntactic sugar to make possible call ic.disable() instead of
-    // Icecream::instance().disable().
-    class IcecreamAPI
-    {
-    public:
-
-        IcecreamAPI() = default;
-        IcecreamAPI(IcecreamAPI const&) = delete;
-        IcecreamAPI(IcecreamAPI&&) = delete;
-        IcecreamAPI& operator=(IcecreamAPI const&) = delete;
-        IcecreamAPI& operator=(IcecreamAPI&&) = delete;
-
-        auto enable() -> IcecreamAPI&
+        auto result_os = build_ostream(format);
+        if (std::get<0>(result_os))
         {
-            detail::Icecream::instance().enable();
-            return *this;
-        }
-
-        auto disable() -> IcecreamAPI&
-        {
-            detail::Icecream::instance().disable();
-            return *this;
-        }
-
-        template <typename T>
-        auto output(T&& t) ->
-            typename std::enable_if<
-                detail::disjunction<
-                    std::is_base_of<std::ostream, typename std::decay<T>::type>,
-                    detail::has_push_back_T<T, char>,
-                    detail::is_T_output_iterator<T, char>
-                >::value,
-            IcecreamAPI&>::type
-        {
-            detail::Icecream::instance().output(std::forward<T>(t));
-            return *this;
-        }
-
-        template <typename... Ts>
-        auto prefix(Ts&& ...value) ->
-            typename std::enable_if<
-                detail::conjunction<detail::is_valid_prefix<Ts>...>::value,
-            IcecreamAPI&>::type
-        {
-            detail::Icecream::instance().prefix(std::forward<Ts>(value)...);
-            return *this;
-        }
-
-        auto show_c_string() const -> bool
-        {
-            return detail::Icecream::instance().show_c_string();
-        }
-
-        auto show_c_string(bool value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().show_c_string(value);
-            return *this;
-        }
-
-        auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)> value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().wide_string_transcoder(std::move(value));
-            return *this;
-        }
-
-    #if defined(ICECREAM_STRING_VIEW_HEADER)
-        auto wide_string_transcoder(std::function<std::string(std::wstring_view)>&& value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().wide_string_transcoder(std::move(value));
-            return *this;
-        }
-    #endif
-
-        auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)> value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().unicode_transcoder(std::move(value));
-            return *this;
-        }
-
-    #if defined(ICECREAM_STRING_VIEW_HEADER)
-        auto unicode_transcoder(std::function<std::string(std::u32string_view)>&& value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().unicode_transcoder(std::move(value));
-            return *this;
-        }
-    #endif
-
-        auto output_transcoder(std::function<std::string(char const*, std::size_t)> value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().output_transcoder(std::move(value));
-            return *this;
-        }
-
-    #if defined(ICECREAM_STRING_VIEW_HEADER)
-        auto output_transcoder(std::function<std::string(std::string_view)> value) ->  IcecreamAPI&
-        {
-            detail::Icecream::instance().output_transcoder(std::move(value));
-            return *this;
-        }
-    #endif
-
-
-        auto line_wrap_width() const -> std::size_t
-        {
-            return detail::Icecream::instance().line_wrap_width();
-        }
-
-        auto line_wrap_width(std::size_t value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().line_wrap_width(value);
-            return *this;
-        }
-
-        auto include_context() const -> bool
-        {
-            return detail::Icecream::instance().include_context();
-        }
-
-        auto include_context(bool value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().include_context(value);
-            return *this;
-        }
-
-        auto context_delimiter() const -> std::string
-        {
-            return detail::Icecream::instance().context_delimiter();
-        }
-
-        auto context_delimiter(std::string const& value) -> IcecreamAPI&
-        {
-            detail::Icecream::instance().context_delimiter(value);
-            return *this;
-        }
-
-        template <typename... Ts>
-        auto print(
-            std::string const& file,
-            int line,
-            std::string const& function,
-            std::string const& format,
-            std::vector<std::string> const& arg_names,
-            Ts&&... args
-        ) -> typename std::enable_if<
-                detail::conjunction<detail::is_printable<Ts>...>::value
-            >::type
-        {
-            detail::Icecream::instance().print(
-                file, line, function, format, arg_names, std::forward<Ts>(args)...
+            forest.emplace_back(
+                *arg_name,
+                Tree{std::move(arg_value), config, std::get<1>(result_os)}
             );
         }
-    };
+        else
+        {
+            forest.emplace_back(
+                *arg_name,
+                Tree::literal("*Error* on formatting string")
+            );
+        }
 
-    static IcecreamAPI ic {};
+        return forest;
+    }
 
-} // namespace icecream
 
-namespace icecream{ namespace detail
-{
+    template <typename... Ts>
+    auto print(
+        Config const& config,
+        std::string const& file,
+        int line,
+        std::string const& function,
+        std::string const& format,
+        std::vector<std::string> const& arg_names,
+        Ts&&... args
+    ) -> typename std::enable_if<
+            detail::conjunction<detail::is_printable<Ts>...>::value
+        >::type
+    {
+        if (!config.is_enabled())
+            return;
+
+        auto const output_transcoder =
+            [&config](std::string const& str) -> std::string
+            {
+                return config.output_transcoder()(str.data(), str.size());
+            };
+
+        auto const prefix = config.prefix()();
+        auto context = std::string {};
+
+        // If used an empty IC macro, i.e.: IC().
+        if (sizeof...(Ts) == 0 || config.include_context())
+        {
+         #if defined(_MSC_VER)
+            auto const n = file.rfind('\\');
+         #else
+            auto const n = file.rfind('/');
+         #endif
+            context = file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
+        }
+
+        if (sizeof...(Ts) == 0)
+        {
+            config.output()(output_transcoder(prefix));
+            config.output()(output_transcoder(context));
+        }
+        else
+        {
+            auto const forest = build_forest(
+                config, format, std::begin(arg_names), std::forward<Ts>(args)...
+            );
+            print_forest(forest, prefix, context, config);
+        }
+
+        config.output()(output_transcoder("\n"));
+    }
+
+
     /** This function will receive a string as "foo, bar, baz" and return a vector with
      * all the arguments split, such as ["foo", "bar", "baz"].
      */
@@ -2707,6 +2784,7 @@ namespace icecream{ namespace detail
     // print("foo.cpp", 42, "void bar()", ,)
     struct Dispatcher
     {
+        Config const& config_;
         std::string const file;
         int line;
         std::string const function;
@@ -2716,13 +2794,15 @@ namespace icecream{ namespace detail
         // Used by compilers that expand an empyt __VA_ARGS__ in
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, ""}
         Dispatcher(
+            Config const& config,
             std::string const& file_,
             int line_,
             std::string const& function_,
             std::string const& format_,
             std::string const& arg_names_
         )
-            : file {file_}
+            : config_{config}
+            , file {file_}
             , line {line_}
             , function {function_}
             , format {format_}
@@ -2732,12 +2812,14 @@ namespace icecream{ namespace detail
         // Used by compilers that expand an empyt __VA_ARGS__ in
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, }
         Dispatcher(
+            Config const& config,
             std::string const& file_,
             int line_,
             std::string const& function_,
             std::string const& format_
         )
-            : file {file_}
+            : config_{config}
+            , file {file_}
             , line {line_}
             , function {function_}
             , format {format_}
@@ -2748,7 +2830,7 @@ namespace icecream{ namespace detail
         auto print(Ts&&... args) -> void
         {
             auto arg_names = split_arguments(this->arg_names);
-            ::icecream::ic.print(file, line, function, format, arg_names, std::forward<Ts>(args)...);
+            ::icecream::detail::print(config_, file, line, function, format, arg_names, std::forward<Ts>(args)...);
         }
 
         // Return a std::tuple with all the args
@@ -2775,5 +2857,9 @@ namespace icecream{ namespace detail
 
 }} // namespace icecream::detail
 
+
+namespace {
+    auto& icecream_config_5f803a3bcdb4 = icecream::detail::global_config();
+}
 
 #endif // ICECREAM_HPP_INCLUDED
