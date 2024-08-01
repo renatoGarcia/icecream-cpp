@@ -5,7 +5,7 @@
 
 IceCream-Cpp is a little (single header) library to help with the print debugging on C++11 and forward.
 
-[Try it at godbolt!](https://godbolt.org/z/4133d1Kxq)
+[Try it at Compiler Explorer!](https://godbolt.org/z/88x5MzosW)
 
 **Contents**
 * [Install](#install)
@@ -271,8 +271,8 @@ will print:
 #### Format string syntax
 
 The adopted formatting string is strongly based on
-[{fmt}](https://fmt.dev/latest/syntax.html#format-specification-mini-language) and [STL
-Formatting](https://en.cppreference.com/w/cpp/utility/format/formatter#Standard_format_specification)
+[{fmt}](https://fmt.dev/11.0/syntax/#format-specification-mini-language) and [STL
+Formatting](https://en.cppreference.com/w/cpp/utility/format/spec)
 has the following syntax:
 
 ```
