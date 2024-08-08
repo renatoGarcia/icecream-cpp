@@ -25,7 +25,6 @@
 #define ICECREAM_HPP_INCLUDED
 
 #include <cassert>
-#include <cctype>
 #include <clocale>
 #include <cstddef>
 #include <cstdint>
@@ -45,7 +44,6 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <valarray>
 #include <vector>
 
 #if !(defined(__APPLE__) && defined(__clang__))
@@ -72,12 +70,6 @@
     #if __has_builtin(__builtin_dump_struct) && __clang_major__ >= 15
         #define ICECREAM_DUMP_STRUCT_CLANG
     #endif
-#endif
-
-#if defined(__cpp_if_constexpr)
-    #define ICECREAM_IF_CONSTEXPR constexpr
-#else
-    #define ICECREAM_IF_CONSTEXPR
 #endif
 
 #define ICECREAM_DEV_HASH "$Format:%H$"
@@ -237,29 +229,6 @@ namespace icecream{ namespace detail
     template <typename T>
     using negation = typename std::conditional<
         T::value, std::false_type, std::true_type
-    >::type;
-
-
-    // -------------------------------------------------- sequence
-
-    template<int... Is>
-    struct sequence {};
-
-    template<int N, int... Is>
-    struct gen_sequence : gen_sequence<N - 1, N - 1, Is...> {};
-
-    template<int... Is>
-    struct gen_sequence<0, Is...>
-    {
-        using type = sequence<Is...>;
-    };
-
-
-    // -------------------------------------------------- is_one_of
-
-    template <typename T, typename... Us>
-    using is_one_of = typename disjunction<
-        std::is_same<T, Us>...
     >::type;
 
 
@@ -478,21 +447,6 @@ namespace icecream{ namespace detail
     >;
 
 
-    // -------------------------------------------------- elements_type
-
-    // Returns the elements type of a collection.
-    template <typename T>
-    auto elements_type_impl(int) -> decltype(
-        *begin(std::declval<T&>())
-    );
-
-    template <typename T>
-    auto elements_type_impl(...) -> void;
-
-    template <typename T>
-    using elements_type = decltype(elements_type_impl<T>(0));
-
-
     // -------------------------------------------------- is_not_streamable_ptr
 
     // Checks if T is either std::unique_ptr<typename U> instantiation (Until C++20), or a
@@ -545,7 +499,7 @@ namespace icecream{ namespace detail
     using is_T_output_iterator = decltype(is_T_output_iterator_impl<Iterator, Item>(0));
 
 
-    // // -------------------------------------------------- ensure_tuple
+    // -------------------------------------------------- ensure_tuple
 
     template <typename T>
     auto ensure_tuple(T&& t) -> std::tuple<decltype(std::forward<T>(t))>
@@ -2545,29 +2499,17 @@ namespace detail {
         return std::vector<std::tuple<std::string, Tree>> {};
     }
 
-    template<typename T, std::size_t N = std::tuple_size<T>::value-1>
-    static auto fill_forest_from_tuple(
-       std::vector<std::string> const& arg_names,
-       T const& t,
-       std::vector<std::tuple<std::string, Tree>>& forest
-    ) -> void
-    {
-        forest.emplace_back(arg_names.at(N), std::get<N>(t));
-        if (N > 0) fill_forest_from_tuple<T, (N > 0) ? N-1 : 0>(arg_names, t, forest);
-    }
-
-
     template <typename T, typename... Ts>
     auto build_forest(
         Config const& config,
         std::string const& format,
         std::vector<std::string>::const_iterator arg_name,
-        T&& arg_value,
-        Ts&&... args_tail
+        T const& arg_value,
+        Ts const&... args_tail
     ) -> std::vector<std::tuple<std::string, Tree>>
     {
         auto forest = build_forest(
-            config, format, arg_name+1, std::forward<Ts>(args_tail)...
+            config, format, arg_name+1, args_tail...
         );
 
         auto result_os = build_ostream(format);
@@ -2575,7 +2517,7 @@ namespace detail {
         {
             forest.emplace_back(
                 *arg_name,
-                Tree{std::move(arg_value), config, std::get<1>(result_os)}
+                Tree{arg_value, config, std::get<1>(result_os)}
             );
         }
         else
@@ -2598,7 +2540,7 @@ namespace detail {
         std::string const& function,
         std::string const& format,
         std::vector<std::string> const& arg_names,
-        Ts&&... args
+        Ts const&... args
     ) -> typename std::enable_if<
             detail::conjunction<detail::is_printable<Ts>...>::value
         >::type
@@ -2634,7 +2576,7 @@ namespace detail {
         else
         {
             auto const forest = build_forest(
-                config, format, std::begin(arg_names), std::forward<Ts>(args)...
+                config, format, std::begin(arg_names), args...
             );
             print_forest(forest, prefix, context, config);
         }
@@ -2827,10 +2769,10 @@ namespace detail {
         {}
 
         template <typename... Ts>
-        auto print(Ts&&... args) -> void
+        auto print(Ts const&... args) -> void
         {
             auto arg_names = split_arguments(this->arg_names);
-            ::icecream::detail::print(config_, file, line, function, format, arg_names, std::forward<Ts>(args)...);
+            ::icecream::detail::print(config_, file, line, function, format, arg_names, args...);
         }
 
         // Return a std::tuple with all the args
