@@ -2562,12 +2562,12 @@ namespace detail {
         Config const& config,
         std::string const& format,
         std::vector<std::string>::const_iterator arg_name,
-        T&& arg_value,
-        Ts&&... args_tail
+        T const& arg_value,
+        Ts const&... args_tail
     ) -> std::vector<std::tuple<std::string, Tree>>
     {
         auto forest = build_forest(
-            config, format, arg_name+1, std::forward<Ts>(args_tail)...
+            config, format, arg_name+1, args_tail...
         );
 
         auto result_os = build_ostream(format);
@@ -2575,7 +2575,7 @@ namespace detail {
         {
             forest.emplace_back(
                 *arg_name,
-                Tree{std::move(arg_value), config, std::get<1>(result_os)}
+                Tree{arg_value, config, std::get<1>(result_os)}
             );
         }
         else
@@ -2598,7 +2598,7 @@ namespace detail {
         std::string const& function,
         std::string const& format,
         std::vector<std::string> const& arg_names,
-        Ts&&... args
+        Ts const&... args
     ) -> typename std::enable_if<
             detail::conjunction<detail::is_printable<Ts>...>::value
         >::type
@@ -2634,7 +2634,7 @@ namespace detail {
         else
         {
             auto const forest = build_forest(
-                config, format, std::begin(arg_names), std::forward<Ts>(args)...
+                config, format, std::begin(arg_names), args...
             );
             print_forest(forest, prefix, context, config);
         }
@@ -2827,10 +2827,10 @@ namespace detail {
         {}
 
         template <typename... Ts>
-        auto print(Ts&&... args) -> void
+        auto print(Ts const&... args) -> void
         {
             auto arg_names = split_arguments(this->arg_names);
-            ::icecream::detail::print(config_, file, line, function, format, arg_names, std::forward<Ts>(args)...);
+            ::icecream::detail::print(config_, file, line, function, format, arg_names, args...);
         }
 
         // Return a std::tuple with all the args

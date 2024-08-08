@@ -339,74 +339,72 @@ TEST_CASE("base")
 }
 
 
-// TODO Fix return tests
-// TEST_CASE("return")
-// {
-//     {
-//         REQUIRE(std::is_same<decltype(IC(7)), int&&>::value);
-//         REQUIRE(IC(7) == 7);
-//     }
+TEST_CASE("return")
+{
+    {
+        REQUIRE(std::is_same<decltype(IC(7)), int&&>::value);
+        REQUIRE(IC(7) == 7);
+    }
 
-//     {
-//         auto v0 = 'r';
-//         REQUIRE(std::is_same<decltype(IC(v0)), char&>::value);
+    {
+        auto v0 = 'r';
+        REQUIRE(std::is_same<decltype(IC(v0)), char&>::value);
 
-//         auto& v1 = IC(v0);
-//         REQUIRE(v1 == 'r');
-//         REQUIRE(&v1 == &v0);
-//     }
+        auto& v1 = IC(v0);
+        REQUIRE(v1 == 'r');
+        REQUIRE(&v1 == &v0);
+    }
 
-//     {
-//         auto const v0 = double{3.14};
+    {
+        auto const v0 = double{3.14};
 
-//         REQUIRE(std::is_same<decltype(IC_("A", v0)), double const&>::value);
+        REQUIRE(std::is_same<decltype(IC_("A", v0)), double const&>::value);
 
-//         auto&& v1 = IC_("A", v0);
-//         REQUIRE(v1 == 3.14);
-//         REQUIRE(&v1 == &v0);
-//     }
+        auto&& v1 = IC_("A", v0);
+        REQUIRE(v1 == 3.14);
+        REQUIRE(&v1 == &v0);
+    }
 
-//     {
-//         REQUIRE(std::is_same<decltype(IC_("#o", 7)), int&&>::value);
-//         REQUIRE(IC_("#o", 7) == 7);
-//     }
+    {
+        REQUIRE(std::is_same<decltype(IC_("#o", 7)), int&&>::value);
+        REQUIRE(IC_("#o", 7) == 7);
+    }
 
-//     {
-//         auto const a = int{20};
+    {
+        auto const a = int{20};
 
-//         REQUIRE(
-//             std::is_same<
-//                 decltype(IC(7, 3.14, a)),
-//                 std::tuple<int&&, double&&, int const&>
-//             >::value
-//         );
+        REQUIRE(
+            std::is_same<
+                decltype(IC(7, 3.14, a)),
+                std::tuple<int&&, double&&, int const&>
+            >::value
+        );
 
-//         // !v0 has a dangling reference to 7 and 3.14!
-//         auto v0 = IC(7, 3.14, a);
-//         REQUIRE(&std::get<2>(std::move(v0)) == &a);
-//         REQUIRE((IC(7, 3.14, a) == std::make_tuple(7, 3.14, 20)));
-//     }
+        // !v0 has a dangling reference to 7 and 3.14!
+        auto v0 = IC(7, 3.14, a);
+        REQUIRE(&std::get<2>(std::move(v0)) == &a);
+        REQUIRE((IC(7, 3.14, a) == std::make_tuple(7, 3.14, 20)));
+    }
 
-//     {
-//         auto a = int{30};
+    {
+        auto a = int{30};
 
-//         REQUIRE(
-//             std::is_same<
-//                 decltype(IC_("#", 7, a, 3.14)),
-//                 std::tuple<int&&, int&, double&&>
-//             >::value
-//         );
+        REQUIRE(
+            std::is_same<
+                decltype(IC_("#", 7, a, 3.14)),
+                std::tuple<int&&, int&, double&&>
+            >::value
+        );
 
-//         // !v0 has a dangling reference to 7 and 3.14!
-//         auto v0 = IC_("#", 7, a, 3.14);
-//         REQUIRE(&std::get<1>(std::move(v0)) == &a);
-//         REQUIRE(IC_("#", 7, a, 3.14) == std::make_tuple(7, 30, 3.14));
-//     }
+        auto v0 = IC_("#", 7, a, 3.14);
+        REQUIRE(&std::get<1>(std::move(v0)) == &a);
+        REQUIRE(IC_("#", 7, a, 3.14) == std::make_tuple(7, 30, 3.14));
+    }
 
-//     {
-//         REQUIRE(std::is_same<decltype(IC()), void>::value);
-//     }
-// }
+    {
+        REQUIRE(std::is_same<decltype(IC()), void>::value);
+    }
+}
 
 
 TEST_CASE("boost_optional")
