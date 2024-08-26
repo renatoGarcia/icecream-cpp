@@ -787,6 +787,21 @@ namespace icecream{ namespace detail
         return result;
     }
 
+    inline auto count_utf8_char(std::string const& str) -> size_t
+    {
+        auto result = size_t{0};
+        auto const n_bytes = str.length();
+        for (size_t idx = 0; idx < n_bytes; ++idx, ++result)
+        {
+            auto const c = static_cast<uint8_t>(str[idx]);
+            if (c<=127) idx+=0;
+            else if ((c & 0xE0) == 0xC0) idx+=1;
+            else if ((c & 0xF0) == 0xE0) idx+=2;
+            else if ((c & 0xF8) == 0xF0) idx+=3;
+            else continue; //invalid utf8, silently move on
+        }
+        return result;
+    };
 
     // -------------------------------------------------- Prefix
 
@@ -1582,7 +1597,7 @@ namespace detail {
     class PrintingNode
     {
     private:
-        bool is_leaf_;
+        bool is_leaf;
 
         union U
         {
@@ -1631,82 +1646,19 @@ namespace detail {
 
             ~U() {}
 
-        } content_;
+        } content;
+
+        size_t chars_lenght_;
 
     public:
-        auto is_leaf() const -> bool
-        {
-            return this->is_leaf_;
-        }
-
-        auto leaf() const -> std::string const&
-        {
-            ICECREAM_ASSERT(this->is_leaf_, "Expecting a leaf tree.");
-            return this->content_.leaf;
-        }
-
-        auto stem() const -> U::Stem const&
-        {
-            ICECREAM_ASSERT(!this->is_leaf_, "Expecting a stem tree.");
-            return this->content_.stem;
-        }
-
-        // Returns the sum of characters of the whole tree.
-        auto count_chars() const -> size_t
-        {
-            auto const count_utf8_char = [&](std::string const& str) -> size_t
-            {
-                auto result = size_t{0};
-                auto const n_bytes = str.length();
-                for (size_t idx = 0; idx < n_bytes; ++idx, ++result)
-                {
-                    auto const c = static_cast<uint8_t>(str[idx]);
-                    if (c<=127) idx+=0;
-                    else if ((c & 0xE0) == 0xC0) idx+=1;
-                    else if ((c & 0xF0) == 0xE0) idx+=2;
-                    else if ((c & 0xF8) == 0xF0) idx+=3;
-                    else continue; //invalid utf8, silently move on
-                }
-
-                return result;
-            };
-
-            if (this->is_leaf_)
-            {
-                return count_utf8_char(this->content_.leaf);
-            }
-            else
-            {
-                // The enclosing chars.
-                auto result =
-                    count_utf8_char(this->content_.stem.open)
-                    + count_utf8_char(this->content_.stem.close);
-
-                // count the size of each child
-                for (auto const& child : this->content_.stem.children)
-                {
-                    result += child.count_chars();
-                }
-
-                // The separators.
-                if (this->content_.stem.children.size() > 1)
-                {
-                    result +=
-                        (this->content_.stem.children.size() - 1)
-                        * count_utf8_char(this->content_.stem.separator);
-                }
-
-                return result;
-            }
-        }
-
         PrintingNode() = delete;
         PrintingNode(PrintingNode const&) = delete;
         PrintingNode& operator=(PrintingNode const&) = delete;
 
         PrintingNode(PrintingNode&& other)
-            : is_leaf_{other.is_leaf_}
-            , content_(std::move(other.content_), other.is_leaf_)
+            : is_leaf{other.is_leaf}
+            , content(std::move(other.content), other.is_leaf)
+            , chars_lenght_(other.chars_lenght_)
         {}
 
         PrintingNode& operator=(PrintingNode&& other)
@@ -1722,19 +1674,20 @@ namespace detail {
 
         ~PrintingNode()
         {
-            if (this->is_leaf_)
+            if (this->is_leaf)
             {
-                this->content_.leaf.~basic_string();
+                this->content.leaf.~basic_string();
             }
             else
             {
-                this->content_.stem.~Stem();
+                this->content.stem.~Stem();
             }
         }
 
         explicit PrintingNode(std::string leaf)
-            : is_leaf_{true}
-            , content_(std::move(leaf))
+            : is_leaf{true}
+            , content(std::move(leaf))
+            , chars_lenght_(count_utf8_char(this->content.leaf))
         {}
 
         PrintingNode(
@@ -1743,8 +1696,8 @@ namespace detail {
             std::string close,
             std::vector<PrintingNode> children
         )
-            : is_leaf_{false}
-            , content_(
+            : is_leaf{false}
+            , content(
                 U::Stem(
                     std::move(open),
                     std::move(separator),
@@ -1752,7 +1705,37 @@ namespace detail {
                     std::move(children)
                 )
             )
+            , chars_lenght_(
+                [this]()
+                {
+                    // The enclosing chars.
+                    auto result =
+                        count_utf8_char(this->content.stem.open)
+                        + count_utf8_char(this->content.stem.close);
+
+                    // count the size of each child
+                    for (auto const& child : this->content.stem.children)
+                    {
+                        result += child.chars_lenght_;
+                    }
+
+                    // The separators.
+                    if (this->content.stem.children.size() > 1)
+                    {
+                        result +=
+                            (this->content.stem.children.size() - 1)
+                            * count_utf8_char(this->content.stem.separator);
+                    }
+
+                    return result;
+                }()
+            )
         {}
+
+        auto chars_lenght() const -> size_t
+        {
+            return this->chars_lenght_;
+        }
 
         // Search among the children of `this` Tree, by a Tree having `key` as its
         // content. Returns `nullptr` if no child has been found.
@@ -1764,20 +1747,108 @@ namespace detail {
                 auto current = to_visit.back();
                 to_visit.pop_back();
 
-                if (!current->is_leaf_)
+                if (!current->is_leaf)
                 {
-                    for (auto& child : current->content_.stem.children)
+                    for (auto& child : current->content.stem.children)
                     {
                         to_visit.push_back(&child);
                     }
                 }
-                else if (current->content_.leaf == key)
+                else if (current->content.leaf == key)
                 {
                     return current;
                 }
             }
 
             return nullptr;
+        }
+
+        auto print(
+            size_t const indent_level, bool const is_tree_multiline, Config const& config
+        ) const -> std::string
+        {
+            auto result = std::string{};
+
+            auto const break_line =
+                [&](size_t indent)
+                {
+                    auto const indentation = std::string(indent * Config::INDENT_BASE, ' ');
+                    result += "\n" + indentation;
+                };
+
+            if (this->is_leaf)
+            {
+                result += this->content.leaf;
+            }
+            else
+            {
+                result += this->content.stem.open;
+
+                if (is_tree_multiline)
+                {
+                    break_line(indent_level+1);
+                }
+
+                for (
+                     auto it = this->content.stem.children.cbegin();
+                     it != this->content.stem.children.cend();
+                ){
+                    auto const is_child_multiline =
+                        [&]() -> bool
+                        {
+                            // If the whole tree is a single line all children are too.
+                            if (!is_tree_multiline)
+                            {
+                                return false;
+                            }
+                            // Else check this particular child.
+                            else
+                            {
+                                auto const child_line_width =
+                                    (indent_level+1) * Config::INDENT_BASE + it->chars_lenght_;
+                                return child_line_width > config.line_wrap_width();
+                            }
+                        }();
+
+                    // Print the child.
+                    result += it->print(indent_level+1, is_child_multiline, config);
+
+                    ++it;
+
+                    // Print the separators between children.
+                    if (it != this->content.stem.children.cend())
+                    {
+                        if (is_tree_multiline)
+                        {
+                            // Trim any right white space.
+                            auto idx = this->content.stem.separator.find_last_not_of(" \t");
+                            if (idx != std::string::npos)
+                            {
+                                idx += 1;
+                            }
+                            else
+                            {
+                                idx = this->content.stem.separator.size();
+                            }
+
+                            result += this->content.stem.separator.substr(0, idx);
+                            break_line(indent_level+1);
+                        }
+                        else
+                        {
+                            result += this->content.stem.separator;
+                        }
+                    }
+                    else if (is_tree_multiline)
+                    {
+                        break_line(indent_level);
+                    }
+                }
+
+                result += this->content.stem.close;
+            }
+
+            return result;
         }
     };
 
@@ -2369,100 +2440,6 @@ namespace detail {
 
     // -------------------------------------------------- Icecream
 
-    inline auto print_tree(
-        PrintingNode const& node,
-        size_t const indent_level,
-        bool const is_tree_multiline,
-        Config const& config
-    ) -> void
-    {
-        auto const output_transcoder =
-            [&config](std::string const& str) -> std::string
-            {
-                return config.output_transcoder()(str.data(), str.size());
-            };
-
-        auto const break_line =
-            [&](size_t indent)
-            {
-                auto const indentation = std::string(indent * Config::INDENT_BASE, ' ');
-                config.output()(output_transcoder("\n"));
-                config.output()(output_transcoder(indentation));
-            };
-
-        if (node.is_leaf())
-        {
-            config.output()(output_transcoder(node.leaf()));
-        }
-        else
-        {
-            config.output()(output_transcoder(node.stem().open));
-
-            if (is_tree_multiline)
-            {
-                break_line(indent_level+1);
-            }
-
-            for (
-                auto it = node.stem().children.cbegin();
-                it != node.stem().children.cend();
-            ){
-                auto const is_child_multiline =
-                    [&]() -> bool
-                    {
-                        // If the whole tree is a single line all children are too.
-                        if (!is_tree_multiline)
-                        {
-                            return false;
-                        }
-                        // Else check this particular child.
-                        else
-                        {
-                            auto const child_line_width =
-                                (indent_level+1) * Config::INDENT_BASE + it->count_chars();
-                            return child_line_width > config.line_wrap_width();
-                        }
-                    }();
-
-                // Print the child.
-                print_tree(*it, indent_level+1, is_child_multiline, config);
-
-                ++it;
-
-                // Print the separators between children.
-                if (it != node.stem().children.cend())
-                {
-                    if (is_tree_multiline)
-                    {
-                        // Trim any right white space.
-                        auto idx = node.stem().separator.find_last_not_of(" \t");
-                        if (idx != std::string::npos)
-                        {
-                            idx += 1;
-                        }
-                        else
-                        {
-                            idx = node.stem().separator.size();
-                        }
-
-                        config.output()(output_transcoder(node.stem().separator.substr(0, idx)));
-                        break_line(indent_level+1);
-                    }
-                    else
-                    {
-                        config.output()(output_transcoder(node.stem().separator));
-                    }
-                }
-                else if (is_tree_multiline)
-                {
-                    break_line(indent_level);
-                }
-            }
-
-            config.output()(output_transcoder(node.stem().close));
-        }
-    }
-
     inline auto print_forest(
         std::vector<std::tuple<std::string, PrintingNode>> const& forest,
         std::string const& prefix,
@@ -2486,7 +2463,7 @@ namespace detail {
 
                 // The variables name, the separator ": ", and content
                 for (auto const& t : forest)
-                    r += std::get<0>(t).size() + 2 + std::get<1>(t).count_chars();
+                    r += std::get<0>(t).size() + 2 + std::get<1>(t).chars_lenght();
 
                 // The ", " separators between variables.
                 if (forest.size() > 1)
@@ -2535,7 +2512,7 @@ namespace detail {
                                     prefix.size()
                                     + arg_name.size()
                                     + 2
-                                    + tree.count_chars();
+                                    + tree.chars_lenght();
                             }
                             else
                             {
@@ -2543,7 +2520,7 @@ namespace detail {
                                     Config::INDENT_BASE
                                     + arg_name.size()
                                     + 2
-                                    + tree.count_chars();
+                                    + tree.chars_lenght();
                             }
                         }();
 
@@ -2553,7 +2530,7 @@ namespace detail {
 
             config.output()(output_transcoder(arg_name));
             config.output()(output_transcoder(": "));
-            print_tree(tree, 1, is_tree_multiline, config);
+            config.output()(output_transcoder(tree.print(1, is_tree_multiline, config)));
 
             if (it+1 != forest.crend())
             {
