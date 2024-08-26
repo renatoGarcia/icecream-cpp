@@ -364,10 +364,10 @@ namespace icecream{ namespace detail
     // std::pair<typename U0, typename U1> or std::tuple<typename... Us>.
     template <typename T>
     using is_tuple =
-        disjunction<
+        typename disjunction<
             is_instantiation<std::pair, typename std::decay<T>::type>,
             is_instantiation<std::tuple, typename std::decay<T>::type>
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_character
@@ -375,7 +375,7 @@ namespace icecream{ namespace detail
     // Checks if T is character type (char, char16_t, etc).
     template <typename T>
     using is_character =
-        disjunction<
+        typename disjunction<
             std::is_same<typename std::decay<T>::type, char>,
             std::is_same<typename std::decay<T>::type, wchar_t>,
           #if defined(__cpp_char8_t)
@@ -383,17 +383,17 @@ namespace icecream{ namespace detail
           #endif
             std::is_same<typename std::decay<T>::type, char16_t>,
             std::is_same<typename std::decay<T>::type, char32_t>
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_xsig_char
 
     template <typename T>
     using is_xsig_char =
-        disjunction<
+        typename disjunction<
             std::is_same<typename std::decay<T>::type, signed char>,
             std::is_same<typename std::decay<T>::type, unsigned char>
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_c_string
@@ -402,7 +402,7 @@ namespace icecream{ namespace detail
     // considered a C string.
     template <typename T>
     using is_c_string =
-        conjunction<
+        typename conjunction<
             negation<is_bounded_array<T>>,
             disjunction<
                 std::is_same<typename std::decay<T>::type, char*>,
@@ -422,34 +422,35 @@ namespace icecream{ namespace detail
                 std::is_same<typename std::decay<T>::type, char32_t*>,
                 std::is_same<typename std::decay<T>::type, char32_t const*>
             >
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_std_string
 
     // Checks if T is a std::basic_string<typename U>
     template <typename T>
-    using is_std_string = is_instantiation<std::basic_string, T>;
+    using is_std_string = typename is_instantiation<std::basic_string, T>::type;
 
 
     // -------------------------------------------------- is_string_view
 
     // Checks if T is a std::basic_string_view<typename U>
-  #if defined(ICECREAM_STRING_VIEW_HEADER)
     template <typename T>
-    using is_string_view = is_instantiation<std::basic_string_view, T>;
-  #else
-    template <typename>
-    using is_string_view = std::false_type;
-  #endif
-
+    using is_string_view =
+        typename disjunction<
+          #if defined(ICECREAM_STRING_VIEW_HEADER)
+            is_instantiation<std::basic_string_view, T>
+          #endif
+        >::type;
 
     // -------------------------------------------------- is_collection
 
     // Checks if T is a collection, i.e.: an iterable type that is not a std::string.
     template <typename T>
     using is_collection =
-        conjunction<is_iterable<T>, negation<is_std_string<T>>, negation<is_string_view<T>>>;
+        typename conjunction<
+            is_iterable<T>, negation<is_std_string<T>>, negation<is_string_view<T>>
+        >::type;
 
 
     // -------------------------------------------------- is_variant
@@ -457,12 +458,12 @@ namespace icecream{ namespace detail
     // Checks if T is a variant type.
     template <typename T>
     using is_variant =
-        disjunction<
+        typename disjunction<
             is_instantiation<boost::variant2::variant, T>
           #if defined(ICECREAM_VARIANT_HEADER)
             , is_instantiation<std::variant, T>
           #endif
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_optional
@@ -470,11 +471,11 @@ namespace icecream{ namespace detail
     // Checks if T is an optional type.
     template <typename T>
     using is_optional =
-        disjunction<
+        typename disjunction<
           #if defined(ICECREAM_OPTIONAL_HEADER)
             is_instantiation<std::optional, T>
           #endif
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_not_streamable_ptr
@@ -483,9 +484,9 @@ namespace icecream{ namespace detail
     // boost::scoped_ptr<typename U>. Both are without an operator<<(ostream&) overload.
     template <typename T>
     using is_unstreamable_ptr =
-        disjunction<
+        typename disjunction<
             is_instantiation<std::unique_ptr, T>, is_instantiation<boost::scoped_ptr, T>
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_weak_ptr
@@ -494,9 +495,9 @@ namespace icecream{ namespace detail
     // boost::weak_ptr<typename U>.
     template <typename T>
     using is_weak_ptr =
-        disjunction<
+        typename disjunction<
             is_instantiation<std::weak_ptr, T>, is_instantiation<boost::weak_ptr, T>
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_valid_prefix
@@ -505,7 +506,7 @@ namespace icecream{ namespace detail
     // returning a type that has a "ostream <<" overload.
     template <typename T>
     using is_valid_prefix =
-        disjunction<
+        typename disjunction<
             is_std_string<T>,
             is_string_view<T>,
             is_c_string<typename std::decay<T>::type>,
@@ -513,7 +514,7 @@ namespace icecream{ namespace detail
                 is_invocable<T>,
                 has_insertion<returned_type<T>>
             >
-        >;
+        >::type;
 
 
     // -------------------------------------------------- is_T_output_iterator
