@@ -533,6 +533,28 @@ namespace icecream{ namespace detail
     using is_T_output_iterator = decltype(is_T_output_iterator_impl<Iterator, Item>(0));
 
 
+    // -------------------------------------------------- is_handled_by_clang_dump_struct
+
+    template <typename T>
+    using is_handled_by_clang_dump_struct =
+        typename negation<
+            disjunction<
+                is_collection<T>,
+                is_tuple<T>,
+                is_unstreamable_ptr<T>,
+                is_weak_ptr<T>,
+                is_std_string<T>,
+                is_string_view<T>,
+                is_variant<T>,
+                is_optional<T>,
+                has_insertion<T>,
+                is_character<T>,
+                is_c_string<T>,
+                std::is_base_of<std::exception, T>,
+                std::is_base_of<boost::exception, T>
+            >
+        >::type;
+
     // -------------------------------------------------- ensure_tuple
 
     template <typename T>
@@ -1357,16 +1379,6 @@ namespace detail {
 
     // -------------------------------------------------- Tree
 
-  #if defined(ICECREAM_DUMP_STRUCT_CLANG)
-    class Tree;
-    static auto ds_this = static_cast<Tree*>(nullptr);
-    static auto ds_delayed_structs = std::vector<std::pair<std::string, std::function<void()>>>{};
-    static auto ds_stream_ref = static_cast<std::basic_ostream<char> const*>(nullptr);
-    static auto ds_config_ref = static_cast<Config const*>(nullptr);
-    static auto ds_call_count = int{0};
-    template<typename... T> auto parse_dump_struct(char const* format, T&& ...args) -> int;
-  #endif
-
     // Builds an ostringstream and sets its state accordingly to `fmt` string
     inline auto build_ostream(std::string const& fmt) -> std::tuple<bool, std::ostringstream>
     {
@@ -1566,10 +1578,9 @@ namespace detail {
     }
 
 
-    class Tree
+    class PrintingNode
     {
     private:
-
         bool is_leaf_;
 
         union U
@@ -1581,18 +1592,18 @@ namespace detail {
                 std::string open;
                 std::string separator;
                 std::string close;
-                std::vector<Tree> children;
+                std::vector<PrintingNode> children;
 
                 Stem(
                     std::string&& open_,
                     std::string&& separator_,
                     std::string&& close_,
-                    std::vector<Tree>&& children_
+                    std::vector<PrintingNode>&& children_
                 )
-                    : open {std::move(open_)}
-                    , separator {std::move(separator_)}
-                    , close {std::move(close_)}
-                    , children {std::move(children_)}
+                    : open(std::move(open_))
+                    , separator(std::move(separator_))
+                    , close(std::move(close_))
+                    , children(std::move(children_))
                 {}
 
             } stem;
@@ -1600,37 +1611,28 @@ namespace detail {
             U(U&& other, bool is_leaf)
             {
                 if (is_leaf)
-                    new (&leaf) std::string{std::move(other.leaf)};
+                {
+                    new (&leaf) std::string(std::move(other.leaf));
+                }
                 else
-                    new (&stem) Stem{std::move(other.stem)};
+                {
+                    new (&stem) Stem(std::move(other.stem));
+                }
             }
 
             U(std::string&& leaf_)
-                : leaf {std::move(leaf_)}
+                : leaf(std::move(leaf_))
             {}
 
             U(Stem&& stem_)
-                : stem {std::move(stem_)}
+                : stem(std::move(stem_))
             {}
 
             ~U() {}
 
         } content_;
 
-        struct InnerTag {};
-
-        Tree(InnerTag, std::string leaf)
-            : is_leaf_ {true}
-            , content_ {std::move(leaf)}
-        {}
-
-        Tree(InnerTag, U::Stem&& stem)
-            : is_leaf_ {false}
-            , content_ {std::move(stem)}
-        {}
-
     public:
-
         auto is_leaf() const -> bool
         {
             return this->is_leaf_;
@@ -1676,7 +1678,8 @@ namespace detail {
             {
                 // The enclosing chars.
                 auto result =
-                    count_utf8_char(this->content_.stem.open) + count_utf8_char(this->content_.stem.close);
+                    count_utf8_char(this->content_.stem.open)
+                    + count_utf8_char(this->content_.stem.close);
 
                 // count the size of each child
                 for (auto const& child : this->content_.stem.children)
@@ -1696,28 +1699,27 @@ namespace detail {
             }
         }
 
+        PrintingNode() = delete;
+        PrintingNode(PrintingNode const&) = delete;
+        PrintingNode& operator=(PrintingNode const&) = delete;
 
-        Tree() = delete;
-        Tree(Tree const&) = delete;
-        Tree& operator=(Tree const&) = delete;
-
-        Tree(Tree&& other)
+        PrintingNode(PrintingNode&& other)
             : is_leaf_{other.is_leaf_}
             , content_(std::move(other.content_), other.is_leaf_)
         {}
 
-        Tree& operator=(Tree&& other)
+        PrintingNode& operator=(PrintingNode&& other)
         {
             if (this != &other)
             {
-                this->~Tree();
-                new (this) Tree(std::move(other));
+                this->~PrintingNode();
+                new (this) PrintingNode(std::move(other));
             }
 
             return *this;
         }
 
-        ~Tree()
+        ~PrintingNode()
         {
             if (this->is_leaf_)
             {
@@ -1729,19 +1731,19 @@ namespace detail {
             }
         }
 
-        static auto literal(std::string text) -> Tree
-        {
-            return Tree(InnerTag{}, std::move(text));
-        }
+        explicit PrintingNode(std::string leaf)
+            : is_leaf_{true}
+            , content_(std::move(leaf))
+        {}
 
-        Tree(
-            std::string&& open,
-            std::string&& separator,
-            std::string&& close,
-            std::vector<Tree>&& children
+        PrintingNode(
+            std::string open,
+            std::string separator,
+            std::string close,
+            std::vector<PrintingNode> children
         )
-            : Tree(
-                InnerTag{},
+            : is_leaf_{false}
+            , content_(
                 U::Stem(
                     std::move(open),
                     std::move(separator),
@@ -1751,455 +1753,416 @@ namespace detail {
             )
         {}
 
-        // Print any class that overloads operator<<(std::ostream&, T)
-        template <typename T>
-        Tree(T const& value, Config const&, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                has_insertion<T>::value
-                && !is_c_string<T>::value
-                && !is_character<T>::value
-                && !is_xsig_char<T>::value
-                && !is_std_string<T>::value
-                && !is_string_view<T>::value
-                && !std::is_array<T>::value
-            >::type* = nullptr
-        )
-            : Tree(InnerTag{}, [&]
-            {
-                std::ostringstream buf;
-                buf.copyfmt(stream_ref);
-                buf << value;
-                return buf.str();
-            }())
-        {}
-
-        // Print C string
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_c_string<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                InnerTag{},
-                [&]
-                {
-                    std::ostringstream buf;
-                    buf.copyfmt(stream_ref);
-
-                    if (config.show_c_string())
-                    {
-                        using CharT =
-                            typename std::remove_const<
-                                typename std::remove_pointer<
-                                    typename std::decay<T>::type
-                                >::type
-                            >::type;
-
-                        buf << '"'
-                            << transcoder_dispatcher(
-                                config, value, std::char_traits<CharT>::length(value)
-                            )
-                            << '"';
-                    }
-                    else
-                    {
-                        buf << reinterpret_cast<void const*>(value);
-                    }
-
-                    return buf.str();
-                }()
-            )
-        {}
-
-        // Print std::string
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_std_string<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                InnerTag{},
-                [&]
-                {
-                    std::ostringstream buf;
-                    buf.copyfmt(stream_ref);
-                    buf << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
-                    return buf.str();
-                }()
-            )
-        {}
-
-      #if defined(ICECREAM_STRING_VIEW_HEADER)
-        // Print std::string_view
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_string_view<T>::value
-            >::type* = nullptr
-        )
-            : Tree(std::basic_string<typename T::value_type>{value}, config, stream_ref)
-        {}
-      #endif
-
-        // Print character
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_character<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                InnerTag{},
-                [&]
-                {
-                    std::ostringstream buf;
-                    buf.copyfmt(stream_ref);
-
-                    auto str = std::string {};
-                    switch (value)
-                    {
-                    case T{'\0'}:
-                        str = "\\0";
-                        break;
-
-                    case T{'\a'}:
-                        str = "\\a";
-                        break;
-
-                    case T{'\b'}:
-                        str = "\\b";
-                        break;
-
-                    case T{'\f'}:
-                        str = "\\f";
-                        break;
-
-                    case T{'\n'}:
-                        str = "\\n";
-                        break;
-
-                    case T{'\r'}:
-                        str = "\\r";
-                        break;
-
-                    case T{'\t'}:
-                        str = "\\t";
-                        break;
-
-                    case T{'\v'}:
-                        str = "\\v";
-                        break;
-
-                    default:
-                        str = transcoder_dispatcher(config, &value, 1);
-                        break;
-                    }
-
-                    buf << '\'' << str << '\'';
-
-                    return buf.str();
-                }()
-            )
-        {}
-
-        // Print signed and unsigned char
-        template <typename T>
-        Tree(T const& value, Config const&, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_xsig_char<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                InnerTag{},
-                [&]
-                {
-                    using T0 =
-                        typename std::conditional<
-                            std::is_signed<T>::value, int, unsigned int
-                        >::type;
-
-                    std::ostringstream buf;
-                    buf.copyfmt(stream_ref);
-                    buf << static_cast<T0>(value);
-                    return buf.str();
-                }()
-            )
-        {}
-
-        // Print smart pointers without an operator<<(ostream&) overload.
-        template <typename T>
-        Tree(T const& value, Config const&, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_unstreamable_ptr<T>::value
-                && !has_insertion<T>::value // On C++20 unique_ptr will have a << overload.
-            >::type* = nullptr
-        )
-            : Tree(
-                InnerTag{},
-                [&]
-                {
-                    std::ostringstream buf;
-                    buf.copyfmt(stream_ref);
-                    buf << reinterpret_cast<void const*>(value.get());
-                    return buf.str();
-                }()
-            )
-        {}
-
-        // Print weak pointer classes
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_weak_ptr<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                value.expired() ?
-                    Tree(InnerTag{}, "expired") : Tree(value.lock(), config, stream_ref)
-            )
-        {}
-
-      #if defined(ICECREAM_OPTIONAL_HEADER)
-        // Print std::optional<> classes
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_optional<T>::value
-                && !has_insertion<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                value.has_value() ? Tree{*value, config, stream_ref} : Tree{InnerTag{}, "nullopt"}
-            )
-        {}
-      #endif
-
-        struct Visitor
+        // Search among the children of `this` Tree, by a Tree having `key` as its
+        // content. Returns `nullptr` if no child has been found.
+        auto find_leaf(std::string const& key) -> PrintingNode*
         {
-            Visitor(Config const& config, std::basic_ostream<char> const& stream_ref)
-                : config_(config)
-                , stream_ref_(stream_ref)
-            {}
-
-            template <typename T>
-            auto operator()(T const& arg) -> Tree
+            auto to_visit = std::vector<PrintingNode*>{this};
+            while (!to_visit.empty())
             {
-                return Tree(arg, this->config_, this->stream_ref_);
-            }
+                auto current = to_visit.back();
+                to_visit.pop_back();
 
-            Config const& config_;
-            std::basic_ostream<char> const& stream_ref_;
-        };
-
-        // Print *::variant<Ts...> classes
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_variant<T>::value
-                && !has_insertion<T>::value
-            >::type* = nullptr
-        )
-            : Tree(visit(Tree::Visitor(config, stream_ref), value))
-        {}
-
-        // Fill this->content.stem.children with all the tuple elements
-        template<typename T, size_t N = std::tuple_size<T>::value-1>
-        static auto tuple_traverser(
-            T const& t, Config const& config, std::basic_ostream<char> const& stream_ref
-        ) -> std::vector<Tree>
-        {
-            auto result = N > 0 ?
-                tuple_traverser<T, (N > 0) ? N-1 : 0>(t, config, stream_ref) : std::vector<Tree>{};
-
-            result.emplace_back(std::get<N>(t), config, stream_ref);
-            return result;
-        }
-
-        // Print tuple like classes
-        template <typename T>
-        Tree(T&& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                is_tuple<T>::value
-                && !has_insertion<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                InnerTag{},
-                U::Stem("(", ", ", ")", Tree::tuple_traverser(value, config, stream_ref))
-            )
-        {}
-
-        // Print all items of any iterable class
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                (
-                    is_iterable<T>::value
-                    && !has_insertion<T>::value
-                    && !is_std_string<T>::value
-                    && !is_string_view<T>::value
-                )
-                || std::is_array<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                InnerTag{},
-                U::Stem(
-                    "[",
-                    ", ",
-                    "]",
-                    [&]
-                    {
-                        auto result = std::vector<Tree>{};
-                        for (auto const& i : value)
-                        {
-                            result.emplace_back(i, config, stream_ref);
-                        }
-                        return result;
-                    }()
-                )
-            )
-        {}
-
-        // Print classes deriving from only std::exception and not from boost::exception
-        template <typename T>
-        Tree(T const& value, Config const&, std::basic_ostream<char> const&,
-            typename std::enable_if<
-                std::is_base_of<std::exception, T>::value
-                && !std::is_base_of<boost::exception, T>::value
-                && !has_insertion<T>::value
-             >::type* = nullptr
-        )
-            : Tree(InnerTag{}, value.what())
-        {}
-
-        // Print classes deriving from both std::exception and boost::exception
-        template <typename T>
-        Tree(T const& value, Config const&, std::basic_ostream<char> const&,
-            typename std::enable_if<
-                std::is_base_of<std::exception, T>::value
-                && std::is_base_of<boost::exception, T>::value
-                && !has_insertion<T>::value
-            >::type* = nullptr
-        )
-            : Tree(
-                InnerTag{},
-                (
-                    value.what()
-                    + std::string {"\n"}
-                    + boost::exception_detail::diagnostic_information_impl(
-                          &value, &value, true, true
-                    )
-                )
-            )
-        {}
-
-      #if defined(ICECREAM_DUMP_STRUCT_CLANG)
-        // Print classes using clang's __builtin_dump_struct (clang >= 15).
-        template <typename T>
-        Tree(T const& value, Config const& config, std::basic_ostream<char> const& stream_ref,
-            typename std::enable_if<
-                !is_collection<T>::value
-                && !is_tuple<T>::value
-                && !is_unstreamable_ptr<T>::value
-                && !is_weak_ptr<T>::value
-                && !is_std_string<T>::value
-                && !is_string_view<T>::value
-                && !is_variant<T>::value
-                && !is_optional<T>::value
-                && !has_insertion<T>::value
-                && !is_character<T>::value
-                && !is_c_string<T>::value
-                && !std::is_base_of<std::exception, T>::value
-                && !std::is_base_of<boost::exception, T>::value
-            >::type* = nullptr
-        )
-            : Tree(InnerTag{}, "")
-        {
-            // Search among the children of `this` Tree, by a Tree having `key` as its
-            // content. Returns `nullptr` if no child has been found.
-            auto find_tree =
-                [this](std::string const& key) -> Tree*
+                if (!current->is_leaf_)
                 {
-                    auto to_visit = std::vector<Tree*>{this};
-                    while (!to_visit.empty())
+                    for (auto& child : current->content_.stem.children)
                     {
-                        auto current = to_visit.back();
-                        to_visit.pop_back();
-
-                        if (!current->is_leaf_)
-                        {
-                            for (auto& child : current->content_.stem.children)
-                            {
-                                to_visit.push_back(&child);
-                            }
-                        }
-                        else if (current->content_.leaf == key)
-                        {
-                            return current;
-                        }
+                        to_visit.push_back(&child);
                     }
-
-                    return nullptr;
-                };
-
-            if (!ds_this)  // If this is the outermost class being printed
-            {
-                ds_this = this;  // Put `this` on scope to be assigned inside `parse_dump_struct`
-                ds_stream_ref = &stream_ref;
-                ds_config_ref = &config;
-                __builtin_dump_struct(&value, &parse_dump_struct);  // Print the outermost class
-
-                // Loop on each class that is an internal attribute of the outermost class
-                while (!ds_delayed_structs.empty())
-                {
-                    auto const delayed_struct = ds_delayed_structs.back();
-                    ds_delayed_structs.pop_back();
-
-                    // Put that attribute class on scope to `parse_struct_dump`
-                    ds_this = find_tree(delayed_struct.first);
-
-                    if (ds_this == nullptr)
-                    {
-                        std::cerr
-                            << "ICECREAM: Failure finding a child Tree, this should not have happened. "
-                            "Please report a bug on https://github.com/renatoGarcia/icecream-cpp/issues\n";
-                    }
-
-                    delayed_struct.second();  // Print the class
                 }
-
-                ds_this = nullptr;
-                ds_call_count = 0;
+                else if (current->content_.leaf == key)
+                {
+                    return current;
+                }
             }
 
-            // Otherwise, the class at hand is an internal attribute from the outermost
-            // class. If this is the case, this present calling of Tree constructor is
-            // being made from inside a __builtin_dump_struct calling. So here we delay
-            // the calling of __builtin_dump_struct to avoid a reentrant function call.
-            else
-            {
-                auto const unique_id =
-                    "icecream_415a8a88-aa51-44d5-8ccb-377d953413ef_" + std::to_string(ds_call_count);
-
-                this->content_.leaf = unique_id;
-                ds_delayed_structs.emplace_back(
-                    unique_id,
-                    [&value]()
-                    {
-                        __builtin_dump_struct(&value, &parse_dump_struct);
-                    }
-                );
-                ds_call_count += 1;
-            }
+            return nullptr;
         }
-      #endif
-
     };
 
   #if defined(ICECREAM_DUMP_STRUCT_CLANG)
+    // Forward declare so that it can be called by the overload printing a collection for instance,
+    // when the elements type shoud be printed using clang dump_struct.
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type;
+  #endif
+
+    // Print any class that overloads operator<<(std::ostream&, T)
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const&, std::basic_ostream<char> const& stream_ref
+    ) ->
+        typename std::enable_if<
+            has_insertion<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<T>::value,
+            PrintingNode
+        >::type
+    {
+        std::ostringstream buf;
+        buf.copyfmt(stream_ref);
+        buf << value;
+        return PrintingNode(buf.str());
+    }
+
+    // Print C string
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
+    {
+        std::ostringstream buf;
+        buf.copyfmt(stream_ref);
+
+        if (config.show_c_string())
+        {
+            using CharT =
+                typename std::remove_const<
+                    typename std::remove_pointer<
+                        typename std::decay<T>::type
+                    >::type
+                >::type;
+
+            buf << '"'
+                << transcoder_dispatcher(
+                    config, value, std::char_traits<CharT>::length(value)
+                )
+                << '"';
+        }
+        else
+        {
+            buf << reinterpret_cast<void const*>(value);
+        }
+
+        return PrintingNode(buf.str());
+    }
+
+    // Print std::string
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type
+    {
+        std::ostringstream buf;
+        buf.copyfmt(stream_ref);
+        buf << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
+        return PrintingNode(buf.str());
+    }
+
+  #if defined(ICECREAM_STRING_VIEW_HEADER)
+    // Print std::string_view
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type
+    {
+        return make_printing_branch(
+            std::basic_string<typename T::value_type>{value}, config, stream_ref
+        );
+    }
+  #endif
+
+    // Print character
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
+    {
+        std::ostringstream buf;
+        buf.copyfmt(stream_ref);
+
+        auto str = std::string {};
+        switch (value)
+        {
+        case T{'\0'}:
+            str = "\\0";
+            break;
+
+        case T{'\a'}:
+            str = "\\a";
+            break;
+
+        case T{'\b'}:
+            str = "\\b";
+            break;
+
+        case T{'\f'}:
+            str = "\\f";
+            break;
+
+        case T{'\n'}:
+            str = "\\n";
+            break;
+
+        case T{'\r'}:
+            str = "\\r";
+            break;
+
+        case T{'\t'}:
+            str = "\\t";
+            break;
+
+        case T{'\v'}:
+            str = "\\v";
+            break;
+
+        default:
+            str = transcoder_dispatcher(config, &value, 1);
+            break;
+        }
+
+        buf << '\'' << str << '\'';
+
+        return PrintingNode(buf.str());
+    }
+
+    // Print signed and unsigned char
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const&, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type
+    {
+        using T0 =
+            typename std::conditional<
+                std::is_signed<T>::value, int, unsigned int
+            >::type;
+
+        std::ostringstream buf;
+        buf.copyfmt(stream_ref);
+        buf << static_cast<T0>(value);
+        return PrintingNode(buf.str());
+    }
+
+    // Print smart pointers without an operator<<(ostream&) overload.
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const&, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<
+        // On C++20 unique_ptr will have a << overload.
+        is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
+        PrintingNode
+    >::type
+    {
+        std::ostringstream buf;
+        buf.copyfmt(stream_ref);
+        buf << reinterpret_cast<void const*>(value.get());
+        return PrintingNode(buf.str());
+    }
+
+    // Print weak pointer classes
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type
+    {
+        return value.expired() ?
+            PrintingNode("expired") : make_printing_branch(value.lock(), config, stream_ref);
+    }
+
+  #if defined(ICECREAM_OPTIONAL_HEADER)
+    // Print std::optional<> classes
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<
+        is_optional<T>::value && !has_insertion<T>::value,
+        PrintingNode
+    >::type
+    {
+        return value.has_value() ?
+            make_printing_branch(*value, config, stream_ref) : PrintingNode("nullopt");
+    }
+  #endif
+
+    struct Visitor
+    {
+        Visitor(Config const& config, std::basic_ostream<char> const& stream_ref)
+            : config_(config)
+            , stream_ref_(stream_ref)
+        {}
+
+        template <typename T>
+        auto operator()(T const& arg) -> PrintingNode
+        {
+            return make_printing_branch(arg, this->config_, this->stream_ref_);
+        }
+
+        Config const& config_;
+        std::basic_ostream<char> const& stream_ref_;
+    };
+
+    // Print *::variant<Ts...> classes
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<
+        is_variant<T>::value && !has_insertion<T>::value,
+        PrintingNode
+    >::type
+    {
+        return visit(Visitor(config, stream_ref), value);
+    }
+
+    template<typename T, size_t N = std::tuple_size<T>::value-1>
+    static auto tuple_traverser(
+        T const& t, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> std::vector<PrintingNode>
+    {
+        auto result = N > 0 ?
+            tuple_traverser<T, (N > 0) ? N-1 : 0>(t, config, stream_ref)
+            : std::vector<PrintingNode>{};
+
+        result.push_back(make_printing_branch(std::get<N>(t), config, stream_ref));
+        return result;
+    }
+
+    // Print tuple like classes
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<
+        is_tuple<T>::value && !has_insertion<T>::value,
+        PrintingNode
+    >::type
+    {
+        return PrintingNode("(", ", ", ")", tuple_traverser(value, config, stream_ref));
+    }
+
+    // Print all items of any iterable class
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<
+        (
+            is_iterable<T>::value
+            && !has_insertion<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+        )
+        || std::is_array<T>::value,
+        PrintingNode
+    >::type
+    {
+        auto children = std::vector<PrintingNode>{};
+        for (auto const& i : value)
+        {
+            children.push_back(make_printing_branch(i, config, stream_ref));
+        }
+
+        return PrintingNode("[", ", ", "]", std::move(children));
+    }
+
+    // Print classes deriving from only std::exception and not from boost::exception
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const&, std::basic_ostream<char> const&
+    ) -> typename std::enable_if<
+        std::is_base_of<std::exception, T>::value
+        && !std::is_base_of<boost::exception, T>::value
+        && !has_insertion<T>::value,
+        PrintingNode
+    >::type
+    {
+        return PrintingNode(value.what());
+    }
+
+    // Print classes deriving from both std::exception and boost::exception
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const&, std::basic_ostream<char> const&
+    ) -> typename std::enable_if<
+        std::is_base_of<std::exception, T>::value
+        && std::is_base_of<boost::exception, T>::value
+        && !has_insertion<T>::value,
+        PrintingNode
+    >::type
+    {
+        return PrintingNode(
+            value.what()
+            + std::string {"\n"}
+            + boost::exception_detail::diagnostic_information_impl(
+                  &value, &value, true, true
+            )
+        );
+    }
+
+  #if defined(ICECREAM_DUMP_STRUCT_CLANG)
+    static auto ds_this = static_cast<PrintingNode*>(nullptr);
+    static auto ds_delayed_structs = std::vector<std::pair<std::string, std::function<void()>>>{};
+    static auto ds_stream_ref = static_cast<std::basic_ostream<char> const*>(nullptr);
+    static auto ds_config_ref = static_cast<Config const*>(nullptr);
+    static auto ds_call_count = int{0};
+    template<typename... T> auto parse_dump_struct(char const* format, T&& ...args) -> int;
+
+    // Print classes using clang's __builtin_dump_struct (clang >= 15).
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+    ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type
+    {
+        // If this is the outermost class being printed
+        if (!ds_this)
+        {
+            auto branch_node = PrintingNode("");
+
+            ds_this = &branch_node;  // Put `this` on scope to be assigned inside `parse_dump_struct`
+            ds_stream_ref = &stream_ref;
+            ds_config_ref = &config;
+            __builtin_dump_struct(&value, &parse_dump_struct);  // Print the outermost class
+
+            // Loop on each class that is an internal attribute of the outermost class
+            while (!ds_delayed_structs.empty())
+            {
+                auto const delayed_struct = ds_delayed_structs.back();
+                ds_delayed_structs.pop_back();
+
+                // Put that attribute class on scope to `parse_struct_dump`
+                ds_this = branch_node.find_leaf(delayed_struct.first);
+
+                if (ds_this == nullptr)
+                {
+                    std::cerr
+                        << "ICECREAM: Failure finding a child Tree, this should not have happened. "
+                        "Please report a bug on https://github.com/renatoGarcia/icecream-cpp/issues\n";
+                }
+
+                delayed_struct.second();  // Print the class
+            }
+
+            ds_this = nullptr;
+            ds_call_count = 0;
+
+            return branch_node;
+        }
+
+        // Otherwise, the class at hand is an internal attribute from the outermost
+        // class. If this is the case, this present calling of Tree constructor is
+        // being made from inside a __builtin_dump_struct calling. So here we delay
+        // the calling of __builtin_dump_struct to avoid a reentrant function call.
+        else
+        {
+            auto const unique_id =
+                "icecream_415a8a88-aa51-44d5-8ccb-377d953413ef_" + std::to_string(ds_call_count);
+
+            ds_delayed_structs.emplace_back(
+                unique_id,
+                [&value]()
+                {
+                    __builtin_dump_struct(&value, &parse_dump_struct);
+                }
+            );
+            ds_call_count += 1;
+
+            // Return a placeholder node that will be replaced by the `if` above at the right time.
+            return PrintingNode(unique_id);
+        }
+    }
 
     // Receives an argument from parse_dump_struct and builds a Tree using it.
     //
@@ -2209,23 +2172,23 @@ namespace detail {
     // between actual pointer values and a "don't know how to format" value, the `deref`
     // boolean is used.
     template<typename T>
-    auto build_tree(bool deref, T* const& t) -> Tree
+    auto build_tree(bool deref, T* const& t) -> PrintingNode
     {
         if (deref)
         {
-            return Tree(*t, *ds_config_ref, *ds_stream_ref);
+            return make_printing_branch(*t, *ds_config_ref, *ds_stream_ref);
         }
         else
         {
-            return Tree(t, *ds_config_ref, *ds_stream_ref);
+            return make_printing_branch(t, *ds_config_ref, *ds_stream_ref);
         }
     }
 
     // Receives an argument from parse_dump_struct and builds a Tree using it.
     template<typename T>
-    auto build_tree(bool, T const& t) -> Tree
+    auto build_tree(bool, T const& t) -> PrintingNode
     {
-        return Tree(t, *ds_config_ref, *ds_stream_ref);
+        return make_printing_branch(t, *ds_config_ref, *ds_stream_ref);
     }
 
     // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
@@ -2235,10 +2198,10 @@ namespace detail {
     // number of inputs an argument to be printed will never be among them.
     inline auto build_name_tree_pair(
         bool, std::string const& = "", std::string const& = ""
-    ) -> std::pair<std::string, Tree>
+    ) -> std::pair<std::string, PrintingNode>
     {
         ICECREAM_ASSERT(false, "Shoud not reach here.");
-        return std::pair<std::string, Tree>("", Tree::literal(""));
+        return std::pair<std::string, PrintingNode>("", PrintingNode(""));
     }
 
     // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
@@ -2248,9 +2211,9 @@ namespace detail {
     // be replaced when the actual tree is built.
     inline auto build_name_tree_pair(
         bool, std::string const&, std::string const&, std::string const& arg_name
-    ) -> std::pair<std::string, Tree>
+    ) -> std::pair<std::string, PrintingNode>
     {
-        return std::pair<std::string, Tree>(arg_name, Tree::literal(""));
+        return std::pair<std::string, PrintingNode>(arg_name, PrintingNode(""));
     }
 
     // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
@@ -2262,15 +2225,15 @@ namespace detail {
         std::string const&,
         std::string const& arg_name,
         T const& value
-    ) -> std::pair<std::string, Tree>
+    ) -> std::pair<std::string, PrintingNode>
     {
-        return std::pair<std::string, Tree>(arg_name, build_tree(deref, value));
+        return std::pair<std::string, PrintingNode>(arg_name, build_tree(deref, value));
     }
 
     // Each call to `parse_dump_struct` will deal with at most one attribute from the
     // struct being printed. This `attributes_stack` will hold the pairs (argument name,
     // Tree) constructed to each attribute until all of them are processed.
-    static auto attributes_stack = std::vector<std::vector<std::pair<std::string, Tree>>>{};
+    static auto attributes_stack = std::vector<std::vector<std::pair<std::string, PrintingNode>>>{};
 
     // When printing the attributes of a base class (inheritance), Clang will open and
     // close braces, similarly to when printing an attribute that is a struct
@@ -2348,17 +2311,17 @@ namespace detail {
             auto top_atrributes = std::move(attributes_stack.back());
             attributes_stack.pop_back();
 
-            auto children = std::vector<Tree>{};
+            auto children = std::vector<PrintingNode>{};
             for (auto& att : top_atrributes)
             {
-                auto t_pair = std::vector<Tree>{};
-                t_pair.push_back(Tree::literal(std::get<0>(att)));
+                auto t_pair = std::vector<PrintingNode>{};
+                t_pair.push_back(PrintingNode(std::get<0>(att)));
                 t_pair.push_back(std::move(std::get<1>(att)));
 
                 children.emplace_back("", ": ", "", std::move(t_pair));
             }
 
-            auto built_tree = Tree("{", ", ", "}", std::move(children));
+            auto built_tree = PrintingNode("{", ", ", "}", std::move(children));
 
             if (attributes_stack.empty())
             {
@@ -2382,13 +2345,13 @@ namespace detail {
   #endif  // ICECREAM_DUMP_STRUCT_CLANG
 
 
-    // -------------------------------------------------- is_tree_argument
+    // -------------------------------------------------- is_printable
 
     template <typename T>
-    auto is_tree_argument_impl(int) ->
+    auto is_printable_impl(int) ->
         decltype(
-            Tree(
-                std::declval<T&>(),
+            make_printing_branch(
+                std::declval<T const&>(),
                 std::declval<Config const&>(),
                 std::declval<std::basic_ostream<char> const&>()
             ),
@@ -2396,24 +2359,17 @@ namespace detail {
         );
 
     template <typename T>
-    auto is_tree_argument_impl(...) -> std::false_type;
-
-    // If there exist a constructor of Tree accepting a T argument.
-    template <typename T>
-    using is_tree_argument = decltype(is_tree_argument_impl<T>(0));
-
-
-    // -------------------------------------------------- is_printable
+    auto is_printable_impl(...) -> std::false_type;
 
     // Check if IceCream can print the type T.
     template <typename T>
-    struct is_printable: is_tree_argument<T>{};
+    using is_printable = decltype(is_printable_impl<T>(0));
 
 
     // -------------------------------------------------- Icecream
 
     inline auto print_tree(
-        Tree const& node,
+        PrintingNode const& node,
         size_t const indent_level,
         bool const is_tree_multiline,
         Config const& config
@@ -2507,7 +2463,7 @@ namespace detail {
     }
 
     inline auto print_forest(
-        std::vector<std::tuple<std::string, Tree>> const& forest,
+        std::vector<std::tuple<std::string, PrintingNode>> const& forest,
         std::string const& prefix,
         std::string const& context,
         Config const& config
@@ -2617,9 +2573,9 @@ namespace detail {
         Config const&,
         std::string const&,
         std::vector<std::string>::const_iterator
-    ) -> std::vector<std::tuple<std::string, Tree>>
+    ) -> std::vector<std::tuple<std::string, PrintingNode>>
     {
-        return std::vector<std::tuple<std::string, Tree>>{};
+        return std::vector<std::tuple<std::string, PrintingNode>>{};
     }
 
     template <typename T, typename... Ts>
@@ -2629,7 +2585,7 @@ namespace detail {
         std::vector<std::string>::const_iterator arg_name,
         T const& arg_value,
         Ts const&... args_tail
-    ) -> std::vector<std::tuple<std::string, Tree>>
+    ) -> std::vector<std::tuple<std::string, PrintingNode>>
     {
         auto forest = build_forest(config, format, arg_name+1, args_tail...);
 
@@ -2638,14 +2594,14 @@ namespace detail {
         {
             forest.emplace_back(
                 *arg_name,
-                Tree{arg_value, config, std::get<1>(result_os)}
+                make_printing_branch(arg_value, config, std::get<1>(result_os))
             );
         }
         else
         {
             forest.emplace_back(
                 *arg_name,
-                Tree::literal("*Error* on formatting string")
+                PrintingNode("*Error* on formatting string")
             );
         }
 
