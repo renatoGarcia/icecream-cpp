@@ -787,7 +787,7 @@ namespace icecream{ namespace detail
         return result;
     }
 
-    inline auto count_utf8_char(std::string const& str) -> size_t
+    inline auto count_utf8_code_point(std::string const& str) -> size_t
     {
         auto result = size_t{0};
         auto const n_bytes = str.length();
@@ -1593,6 +1593,20 @@ namespace detail {
         return config.unicode_transcoder()(str, count);
     }
 
+    // inline auto join(
+    //     std::vector<std::string> const& vec, std::string const& separator
+    // ) -> std::string
+    // {
+    //     auto result = std::string{};
+
+    //     for (
+    //         auto it = vec.begin();
+    //         it != vec.end();
+    //     ){
+    //     }
+
+    //     return result;
+    // }
 
     class PrintingNode
     {
@@ -1648,7 +1662,8 @@ namespace detail {
 
         } content;
 
-        size_t chars_lenght_;
+        size_t n_code_unit;
+        size_t n_code_point;
 
     public:
         PrintingNode() = delete;
@@ -1658,7 +1673,8 @@ namespace detail {
         PrintingNode(PrintingNode&& other)
             : is_leaf{other.is_leaf}
             , content(std::move(other.content), other.is_leaf)
-            , chars_lenght_(other.chars_lenght_)
+            , n_code_unit(other.n_code_unit)
+            , n_code_point(other.n_code_point)
         {}
 
         PrintingNode& operator=(PrintingNode&& other)
@@ -1687,7 +1703,8 @@ namespace detail {
         explicit PrintingNode(std::string leaf)
             : is_leaf{true}
             , content(std::move(leaf))
-            , chars_lenght_(count_utf8_char(this->content.leaf))
+            , n_code_unit(this->content.leaf.size())
+            , n_code_point(count_utf8_code_point(this->content.leaf))
         {}
 
         PrintingNode(
@@ -1705,18 +1722,16 @@ namespace detail {
                     std::move(children)
                 )
             )
-            , chars_lenght_(
+            , n_code_unit{
                 [this]()
                 {
                     // The enclosing chars.
-                    auto result =
-                        count_utf8_char(this->content.stem.open)
-                        + count_utf8_char(this->content.stem.close);
+                    auto result = this->content.stem.open.size() + this->content.stem.close.size();
 
                     // count the size of each child
                     for (auto const& child : this->content.stem.children)
                     {
-                        result += child.chars_lenght_;
+                        result += child.n_code_unit;
                     }
 
                     // The separators.
@@ -1724,17 +1739,42 @@ namespace detail {
                     {
                         result +=
                             (this->content.stem.children.size() - 1)
-                            * count_utf8_char(this->content.stem.separator);
+                            * this->content.stem.separator.size();
                     }
 
                     return result;
                 }()
-            )
+            }
+            , n_code_point{
+                [this]()
+                {
+                    // The enclosing chars.
+                    auto result =
+                        count_utf8_code_point(this->content.stem.open)
+                        + count_utf8_code_point(this->content.stem.close);
+
+                    // count the size of each child
+                    for (auto const& child : this->content.stem.children)
+                    {
+                        result += child.n_code_point;
+                    }
+
+                    // The separators.
+                    if (this->content.stem.children.size() > 1)
+                    {
+                        result +=
+                            (this->content.stem.children.size() - 1)
+                            * count_utf8_code_point(this->content.stem.separator);
+                    }
+
+                    return result;
+                }()
+            }
         {}
 
-        auto chars_lenght() const -> size_t
+        auto code_point_length() const -> size_t
         {
-            return this->chars_lenght_;
+            return this->n_code_point;
         }
 
         // Search among the children of `this` Tree, by a Tree having `key` as its
@@ -1763,89 +1803,88 @@ namespace detail {
             return nullptr;
         }
 
-        auto print(
-            size_t const indent_level, bool const is_tree_multiline, Config const& config
-        ) const -> std::string
+        // Print the branch content, in a unique line
+        auto print() const -> std::string
         {
             auto result = std::string{};
-
-            auto const break_line =
-                [&](size_t indent)
-                {
-                    auto const indentation = std::string(indent * Config::INDENT_BASE, ' ');
-                    result += "\n" + indentation;
-                };
+            result.reserve(this->n_code_unit);
 
             if (this->is_leaf)
             {
-                result += this->content.leaf;
+                result = this->content.leaf;
             }
             else
             {
-                result += this->content.stem.open;
-
-                if (is_tree_multiline)
-                {
-                    break_line(indent_level+1);
-                }
+                result = this->content.stem.open;
 
                 for (
-                     auto it = this->content.stem.children.cbegin();
-                     it != this->content.stem.children.cend();
+                    auto it = this->content.stem.children.cbegin();
+                    it != this->content.stem.children.cend();
                 ){
-                    auto const is_child_multiline =
-                        [&]() -> bool
-                        {
-                            // If the whole tree is a single line all children are too.
-                            if (!is_tree_multiline)
-                            {
-                                return false;
-                            }
-                            // Else check this particular child.
-                            else
-                            {
-                                auto const child_line_width =
-                                    (indent_level+1) * Config::INDENT_BASE + it->chars_lenght_;
-                                return child_line_width > config.line_wrap_width();
-                            }
-                        }();
-
-                    // Print the child.
-                    result += it->print(indent_level+1, is_child_multiline, config);
+                    result += it->print();
 
                     ++it;
 
-                    // Print the separators between children.
                     if (it != this->content.stem.children.cend())
                     {
-                        if (is_tree_multiline)
-                        {
-                            // Trim any right white space.
-                            auto idx = this->content.stem.separator.find_last_not_of(" \t");
-                            if (idx != std::string::npos)
-                            {
-                                idx += 1;
-                            }
-                            else
-                            {
-                                idx = this->content.stem.separator.size();
-                            }
-
-                            result += this->content.stem.separator.substr(0, idx);
-                            break_line(indent_level+1);
-                        }
-                        else
-                        {
-                            result += this->content.stem.separator;
-                        }
-                    }
-                    else if (is_tree_multiline)
-                    {
-                        break_line(indent_level);
+                        result += this->content.stem.separator;
                     }
                 }
 
                 result += this->content.stem.close;
+            }
+
+            return result;
+        }
+
+        auto print(size_t const indent_level, size_t const line_wrap_width) const -> std::string
+        {
+            auto result = std::string{};
+            result.reserve(this->n_code_unit);
+
+            // Leaf nodes will print its content regardless of being longer than the maximum line
+            // length, since there is no children to be split.
+            if (this->is_leaf)
+            {
+                result = this->content.leaf;
+            }
+            else
+            {
+                result = this->content.stem.open;
+                result += "\n";
+
+                auto const indent_lenght = indent_level * Config::INDENT_BASE ;
+                for (
+                    auto it = this->content.stem.children.cbegin();
+                    it != this->content.stem.children.cend();
+                ){
+                    result += std::string(indent_level * Config::INDENT_BASE, ' ');
+
+                    if (indent_lenght + it->n_code_point <= line_wrap_width)
+                    {
+                        result += it->print();
+                    }
+                    else
+                    {
+                        result += it->print(indent_level+1, line_wrap_width);
+                    }
+
+                    ++it;
+
+                    if (it != this->content.stem.children.cend())
+                    {
+                        result += this->content.stem.separator;
+                        result += "\n";
+                    }
+                    else
+                    {
+                        result += "\n";
+                    }
+                }
+
+                result +=
+                    std::string((indent_level-1) * Config::INDENT_BASE, ' ')
+                    + this->content.stem.close;
             }
 
             return result;
@@ -2440,52 +2479,18 @@ namespace detail {
 
     // -------------------------------------------------- Icecream
 
-    inline auto print_forest(
-        std::vector<std::tuple<std::string, PrintingNode>> const& forest,
+    // Print a forest that will fit in an only line.
+    inline auto print_one_line_forest(
         std::string const& prefix,
         std::string const& context,
-        Config const& config
-    ) -> void
+        std::string const& delimiter,
+        std::vector<std::tuple<std::string, PrintingNode>> const& forest
+    ) -> std::string
     {
-        auto const output_transcoder =
-            [&config](std::string const& str) -> std::string
-            {
-                return config.output_transcoder()(str.data(), str.size());
-            };
-
-        auto const is_forest_multiline =
-            [&]() -> bool
-            {
-                auto r = prefix.size();
-
-                if (!context.empty())
-                    r += context.size() + config.context_delimiter().size();
-
-                // The variables name, the separator ": ", and content
-                for (auto const& t : forest)
-                    r += std::get<0>(t).size() + 2 + std::get<1>(t).chars_lenght();
-
-                // The ", " separators between variables.
-                if (forest.size() > 1)
-                    r += (forest.size() - 1) * 2;
-
-                return r > config.line_wrap_width();
-            }();
-
-        // Print prefix and context
-        config.output()(output_transcoder(prefix));
+        auto result = prefix;
         if (!context.empty())
         {
-            config.output()(output_transcoder(context));
-            if (is_forest_multiline)
-            {
-                config.output()(output_transcoder("\n"));
-                config.output()(output_transcoder(std::string(Config::INDENT_BASE, ' ')));
-            }
-            else
-            {
-                config.output()(output_transcoder(config.context_delimiter()));
-            }
+            result += context + delimiter;
         }
 
         // The forest is built with trees in reverse order.
@@ -2494,57 +2499,55 @@ namespace detail {
             auto const& arg_name = std::get<0>(*it);
             auto const& tree = std::get<1>(*it);
 
-            auto const is_tree_multiline =
-                [&]() -> bool
-                {
-                    // If the whole forest is a single line all trees will be too.
-                    if (!is_forest_multiline)
-                    {
-                        return false;
-                    }
-                    else
-                    {
-                        auto const tree_line_width = [&]
-                        {
-                            if (it == forest.rbegin() && context.empty())
-                            {
-                                return
-                                    prefix.size()
-                                    + arg_name.size()
-                                    + 2
-                                    + tree.chars_lenght();
-                            }
-                            else
-                            {
-                                return
-                                    Config::INDENT_BASE
-                                    + arg_name.size()
-                                    + 2
-                                    + tree.chars_lenght();
-                            }
-                        }();
-
-                        return tree_line_width > config.line_wrap_width();
-                    }
-                }();
-
-            config.output()(output_transcoder(arg_name));
-            config.output()(output_transcoder(": "));
-            config.output()(output_transcoder(tree.print(1, is_tree_multiline, config)));
+            result += arg_name + ": " + tree.print();
 
             if (it+1 != forest.crend())
             {
-                if (is_forest_multiline)
-                {
-                    config.output()(output_transcoder("\n"));
-                    config.output()(output_transcoder(std::string(Config::INDENT_BASE, ' ')));
-                }
-                else
-                {
-                    config.output()(output_transcoder(", "));
-                }
+                    result += ", ";
             }
         }
+
+        return result;
+    }
+
+    // Print a forest that will be broken on multiple lines.
+    inline auto print_multi_line_forest(
+        std::string const& prefix,
+        std::string const& context,
+        std::vector<std::tuple<std::string, PrintingNode>> const& forest,
+        size_t const line_wrap_width
+    ) -> std::string
+    {
+        auto result = prefix;
+        if (!context.empty())
+        {
+            result += context;
+        }
+        result +=  + "\n";
+
+        // The forest is built with trees in reverse order.
+        for (auto it = forest.crbegin(); it != forest.crend(); ++it)
+        {
+            auto const& arg_name = std::get<0>(*it);
+            auto const& tree = std::get<1>(*it);
+
+            result += std::string(Config::INDENT_BASE, ' ') + arg_name + ": ";
+            if (count_utf8_code_point(result) + tree.code_point_length() < line_wrap_width)
+            {
+                result += tree.print();
+            }
+            else
+            {
+                result += tree.print(2, line_wrap_width);
+            }
+
+            if (it+1 != forest.crend())
+            {
+                result += ",\n";
+            }
+        }
+
+        return result;
     }
 
     inline auto build_forest(
@@ -2609,28 +2612,72 @@ namespace detail {
             };
 
         auto const prefix = config.prefix()();
-        auto context = std::string{};
-
-        // If used an empty IC macro, i.e.: IC().
-        if (sizeof...(Ts) == 0 || config.include_context())
-        {
-           #if defined(_MSC_VER)
-            auto const n = file.rfind('\\');
-           #else
-            auto const n = file.rfind('/');
-           #endif
-            context = file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
-        }
+        auto const context =
+            [&]() -> std::string
+            {
+                // If used an empty IC macro, i.e.: IC().
+                if (sizeof...(Ts) == 0 || config.include_context())
+                {
+                  #if defined(_MSC_VER)
+                    auto const n = file.rfind('\\');
+                  #else
+                    auto const n = file.rfind('/');
+                  #endif
+                    return file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
+                }
+                else
+                {
+                    return "";
+                }
+            }();
+        auto const delimiter = config.context_delimiter();
 
         if (sizeof...(Ts) == 0)
         {
-            config.output()(output_transcoder(prefix));
-            config.output()(output_transcoder(context));
+            config.output()(output_transcoder(prefix + context));
         }
         else
         {
             auto const forest = build_forest(config, format, std::begin(arg_names), args...);
-            print_forest(forest, prefix, context, config);
+
+            auto const one_line_forest_n_code_points =
+                [&]() -> size_t
+                {
+                    auto n = count_utf8_code_point(prefix);
+
+                    for (auto const& name_tree : forest)
+                    {
+                        n +=
+                            count_utf8_code_point(std::get<0>(name_tree))
+                            + count_utf8_code_point(": ")
+                            + std::get<1>(name_tree).code_point_length();
+                    }
+
+                    // The ", " separators between variables.
+                    if (forest.size() > 1)
+                    {
+                        n += (forest.size() - 1) * count_utf8_code_point(", ");
+                    }
+
+                    return n;
+                }();
+
+            if (one_line_forest_n_code_points > config.line_wrap_width())
+            {
+                config.output()(
+                    output_transcoder(
+                        print_multi_line_forest(prefix, context, forest, config.line_wrap_width())
+                    )
+                );
+            }
+            else
+            {
+                config.output()(
+                    output_transcoder(
+                        print_one_line_forest(prefix, context, delimiter, forest)
+                    )
+                );
+            }
         }
 
         config.output()(output_transcoder("\n"));
