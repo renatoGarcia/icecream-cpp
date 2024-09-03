@@ -268,25 +268,26 @@ TEST_CASE("base")
         IC_CONFIG.output(str);
 
         auto const result =
-            "ic| 7: 7\n"
+            "ic| \n"
+            "    7: 7,\n"
             "    \"same<int, \\\"int>\": [\n"
-            "        's',\n"
-            "        'a',\n"
-            "        'm',\n"
-            "        'e',\n"
-            "        '<',\n"
-            "        'i',\n"
-            "        'n',\n"
-            "        't',\n"
-            "        ',',\n"
-            "        ' ',\n"
-            "        '\"',\n"
-            "        'i',\n"
-            "        'n',\n"
-            "        't',\n"
-            "        '>',\n"
+            "        's', \n"
+            "        'a', \n"
+            "        'm', \n"
+            "        'e', \n"
+            "        '<', \n"
+            "        'i', \n"
+            "        'n', \n"
+            "        't', \n"
+            "        ',', \n"
+            "        ' ', \n"
+            "        '\"', \n"
+            "        'i', \n"
+            "        'n', \n"
+            "        't', \n"
+            "        '>', \n"
             "        '\\0'\n"
-            "    ]\n"
+            "    ],\n"
             "    34: 34\n";
         IC(7, "same<int, \"int>", 34);
         REQUIRE(str == result);
@@ -761,12 +762,13 @@ TEST_CASE("line_wrap")
 
         auto v0 = std::list<int> {10, 20, 30, 40, 50, 60};
         auto const result =
-            "ic| v0: [\n"
-            "        10,\n"
-            "        20,\n"
-            "        30,\n"
-            "        40,\n"
-            "        50,\n"
+            "ic| \n"
+            "    v0: [\n"
+            "        10, \n"
+            "        20, \n"
+            "        30, \n"
+            "        40, \n"
+            "        50, \n"
             "        60\n"
             "    ]\n";
         IC(v0);
@@ -780,16 +782,17 @@ TEST_CASE("line_wrap")
 
         auto v0 = std::vector<std::vector<int>> {{1, 2}, {10, 20, 30, 40, 50, 60}, {3, 4}};
         auto const result =
-            "ic| v0: [\n"
-            "        [1, 2],\n"
+            "ic| \n"
+            "    v0: [\n"
+            "        [1, 2], \n"
             "        [\n"
-            "            10,\n"
-            "            20,\n"
-            "            30,\n"
-            "            40,\n"
-            "            50,\n"
+            "            10, \n"
+            "            20, \n"
+            "            30, \n"
+            "            40, \n"
+            "            50, \n"
             "            60\n"
-            "        ],\n"
+            "        ], \n"
             "        [3, 4]\n"
             "    ]\n";
         IC(v0);
@@ -805,11 +808,15 @@ TEST_CASE("line_wrap")
         auto v0 = std::vector<float> {1.1, 1.2};
         auto v1 = std::vector<int> {11, 12};
         auto const result =
-            "pref -> v0: [\n"
-            "        1.1,\n"
+            "pref -> \n"
+            "    v0: [\n"
+            "        1.1, \n"
             "        1.2\n"
-            "    ]\n"
-            "    v1: [11, 12]\n";
+            "    ],\n"
+            "    v1: [\n"
+            "        11, \n"
+            "        12\n"
+            "    ]\n";
         IC(v0, v1);
         REQUIRE(str == result);
     }
@@ -846,7 +853,7 @@ TEST_CASE("exception")
                 && Catch::Contains("] = 10")
                 && Catch::Contains("StringTag")
                 && Catch::Contains("] = bla_string")
-                && Catch::Contains("ic| e: what info")
+                && Catch::Contains("e: what info")
             );
         }
     }
@@ -896,42 +903,42 @@ TEST_CASE("Tree char count")
         auto v0 = std::string {"str"};
         auto ostream = std::ostringstream{};
         auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
-        REQUIRE(tree.chars_lenght() == 5); // 3 chars (str) plus 2 char (quotes)
+        REQUIRE(tree.code_point_length() == 5); // 3 chars (str) plus 2 char (quotes)
     }
 
     {
         auto v0 = std::string {"\xce\xb1"}; // Greek small letter alpha
         auto ostream = std::ostringstream{};
         auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
-        REQUIRE(tree.chars_lenght() == 3); // 1 chars plus 2 char (quotes)
+        REQUIRE(tree.code_point_length() == 3); // 1 chars plus 2 char (quotes)
     }
 
     {
         auto v0 = std::string {"\xF0\x9F\x90\xA7"}; // Penguin
         auto ostream = std::ostringstream{};
         auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
-        REQUIRE(tree.chars_lenght() == 3); // 1 chars plus 2 char (quotes)
+        REQUIRE(tree.code_point_length() == 3); // 1 chars plus 2 char (quotes)
     }
 
     {
         auto v0 = std::wstring {L"wstr"};
         auto ostream = std::ostringstream{};
         auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
-        REQUIRE(tree.chars_lenght() == 6);
+        REQUIRE(tree.code_point_length() == 6);
     }
 
     {
         auto v0 = std::u16string {u"u16\u03B1"}; // Greek small letter alpha
         auto ostream = std::ostringstream{};
         auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
-        REQUIRE(tree.chars_lenght() == 6);
+        REQUIRE(tree.code_point_length() == 6);
     }
 
     {
         auto v0 = std::u32string {U"abcd\U0001F427"}; // Penguin
         auto ostream = std::ostringstream{};
         auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
-        REQUIRE(tree.chars_lenght() == 7);
+        REQUIRE(tree.code_point_length() == 7);
     }
 }
 
@@ -951,6 +958,6 @@ TEST_CASE("output transcoding")
 
         auto v0 = int{12345};
         IC(v0);
-        REQUIRE(str == "ic| |v0|: |12345|\n|");
+        REQUIRE(str == "ic| v0: 12345|\n|");
     }
 }
