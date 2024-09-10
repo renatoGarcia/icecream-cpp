@@ -164,7 +164,7 @@ TEST_CASE("apply")
         IC_CONFIG_SCOPE();
         auto str = std::string{};
         IC_CONFIG.output(str);
-        IC_A_("#x", sum, 10, 20);
+        IC_FA("#x", sum, 10, 20);
         REQUIRE(str == "ic| 10: 0xa, 20: 0x14\n");
     }
 
@@ -389,16 +389,16 @@ TEST_CASE("return")
     {
         auto const v0 = double{3.14};
 
-        REQUIRE(std::is_same<decltype(IC_("A", v0)), double const&>::value);
+        REQUIRE(std::is_same<decltype(IC_F("A", v0)), double const&>::value);
 
-        auto&& v1 = IC_("A", v0);
+        auto&& v1 = IC_F("A", v0);
         REQUIRE(v1 == 3.14);
         REQUIRE(&v1 == &v0);
     }
 
     {
-        REQUIRE(std::is_same<decltype(IC_("#o", 7)), int&&>::value);
-        REQUIRE(IC_("#o", 7) == 7);
+        REQUIRE(std::is_same<decltype(IC_F("#o", 7)), int&&>::value);
+        REQUIRE(IC_F("#o", 7) == 7);
     }
 
     {
@@ -422,14 +422,14 @@ TEST_CASE("return")
 
         REQUIRE(
             std::is_same<
-                decltype(IC_("#", 7, a, 3.14)),
+                decltype(IC_F("#", 7, a, 3.14)),
                 std::tuple<int&&, int&, double&&>
             >::value
         );
 
-        auto v0 = IC_("#", 7, a, 3.14);
+        auto v0 = IC_F("#", 7, a, 3.14);
         REQUIRE(&std::get<1>(std::move(v0)) == &a);
-        REQUIRE(IC_("#", 7, a, 3.14) == std::make_tuple(7, 30, 3.14));
+        REQUIRE(IC_F("#", 7, a, 3.14) == std::make_tuple(7, 30, 3.14));
     }
 
     {
@@ -519,7 +519,7 @@ TEST_CASE("tuples")
         IC_CONFIG.output(str);
 
         auto s0 = std::make_tuple(10, 20);
-        IC_("x", s0);
+        IC_F("x", s0);
         REQUIRE(str == "ic| s0: (a, 14)\n");
     }
 }
@@ -563,7 +563,7 @@ TEST_CASE("arrays")
         IC_CONFIG.output(str);
 
         int v0[] = {10, 20, 30};
-        IC_("#X", v0);
+        IC_F("#X", v0);
         REQUIRE(str == "ic| v0: [0XA, 0X14, 0X1E]\n");
     }
 }
@@ -617,7 +617,7 @@ TEST_CASE("iterable")
         IC_CONFIG.output(str);
 
         auto v0 = std::list<int> {10, 20, 30};
-        IC_("0v#5x", v0);
+        IC_F("0v#5x", v0);
         REQUIRE(str == "ic| v0: [0x00a, 0x014, 0x01e]\n");
     }
 
@@ -898,7 +898,7 @@ TEST_CASE("formatting")
         IC_CONFIG.output(str);
 
         auto v0 = int{42};
-        IC_("#o", v0, 7);
+        IC_F("#o", v0, 7);
         REQUIRE(str == "ic| v0: 052, 7: 07\n");
     }
 
@@ -908,7 +908,7 @@ TEST_CASE("formatting")
         IC_CONFIG.output(str);
 
         auto v0 = float{12.3456789};
-        IC_("#A", v0);
+        IC_F("#A", v0);
         REQUIRE(
             ((str == "ic| v0: 0X1.8B0FCEP+3\n") ||
              (str == "ic| v0: 0X1.8B0FCE0000000P+3\n")) // Visualstudio 2019 output
@@ -921,7 +921,7 @@ TEST_CASE("formatting")
         IC_CONFIG.output(str);
 
         auto v0 = int{42};
-        IC_("oA", v0);
+        IC_F("oA", v0);
         REQUIRE(str == "ic| v0: *Error* on formatting string\n");
     }
 }
@@ -931,43 +931,37 @@ TEST_CASE("Tree char count")
 {
     {
         auto v0 = std::string {"str"};
-        auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
+        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
         REQUIRE(tree.code_point_length() == 5); // 3 chars (str) plus 2 char (quotes)
     }
 
     {
         auto v0 = std::string {"\xce\xb1"}; // Greek small letter alpha
-        auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
+        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
         REQUIRE(tree.code_point_length() == 3); // 1 chars plus 2 char (quotes)
     }
 
     {
         auto v0 = std::string {"\xF0\x9F\x90\xA7"}; // Penguin
-        auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
+        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
         REQUIRE(tree.code_point_length() == 3); // 1 chars plus 2 char (quotes)
     }
 
     {
         auto v0 = std::wstring {L"wstr"};
-        auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
+        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
         REQUIRE(tree.code_point_length() == 6);
     }
 
     {
         auto v0 = std::u16string {u"u16\u03B1"}; // Greek small letter alpha
-        auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
+        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
         REQUIRE(tree.code_point_length() == 6);
     }
 
     {
         auto v0 = std::u32string {U"abcd\U0001F427"}; // Penguin
-        auto ostream = std::ostringstream{};
-        auto tree = icecream::detail::make_printing_branch(v0, IC_CONFIG, ostream);
+        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
         REQUIRE(tree.code_point_length() == 7);
     }
 }
