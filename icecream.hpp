@@ -153,9 +153,10 @@
 #if defined(ICECREAM_LONG_NAME)
     #define ICECREAM(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__, __VA_ARGS__)
     #define ICECREAM0() ICECREAM_DISPATCH(false, "", "")
-    #define ICECREAM_(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
+    #define ICECREAM_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
     #define ICECREAM_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
-    #define ICECREAM_A_(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
+    #define ICECREAM_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
+    #define ICECREAM_(fmt, arg) ::icecream::detail::make_formatting_argument(fmt, arg)
     #define ICECREAM_CONFIG_SCOPE()                                                            \
         auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
         ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
@@ -163,9 +164,10 @@
 #else
     #define IC(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__, __VA_ARGS__)
     #define IC0() ICECREAM_DISPATCH(false, "", "")
-    #define IC_(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
+    #define IC_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
     #define IC_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
-    #define IC_A_(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
+    #define IC_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
+    #define IC_(fmt, arg) ::icecream::detail::make_formatting_argument(fmt, arg)
     #define IC_CONFIG_SCOPE()                                                                  \
         auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
         ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
@@ -203,7 +205,6 @@ namespace boost
         constexpr auto visit(Visitor&& vis, Variant&& var) -> R;
     }
 }
-
 
 namespace icecream{ namespace detail
 {
@@ -260,6 +261,24 @@ namespace icecream{ namespace detail
             std::false_type,
             std::true_type
         >::type;
+
+
+    // -------------------------------------------------- int_sequence
+
+    template <int...>
+    struct int_sequence {};
+
+    template <int N, int... S>
+    struct int_sequence_generator: int_sequence_generator<N-1, N-1, S...> {};
+
+    template <int... S>
+    struct int_sequence_generator<0, S...>
+    {
+        typedef int_sequence<S...> type;
+    };
+
+    template <int N>
+    using make_int_sequence = typename int_sequence_generator<N>::type;
 
 
     // -------------------------------------------------- is_bounded_array
@@ -1595,21 +1614,6 @@ namespace detail {
         return config.unicode_transcoder()(str, count);
     }
 
-    // inline auto join(
-    //     std::vector<std::string> const& vec, std::string const& separator
-    // ) -> std::string
-    // {
-    //     auto result = std::string{};
-
-    //     for (
-    //         auto it = vec.begin();
-    //         it != vec.end();
-    //     ){
-    //     }
-
-    //     return result;
-    // }
-
     class PrintingNode
     {
     private:
@@ -1898,14 +1902,14 @@ namespace detail {
     // when the elements type shoud be printed using clang dump_struct.
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const&, std::string const&, Config const&
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type;
   #endif
 
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const&, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const&
     ) ->
         typename std::enable_if<
             has_insertion<T>::value
@@ -1918,20 +1922,30 @@ namespace detail {
             PrintingNode
         >::type
     {
-        std::ostringstream buf;
-        buf.copyfmt(stream_ref);
-        buf << value;
-        return PrintingNode(buf.str());
+        auto mb_ostrm = build_ostream(fmt);
+        if (!std::get<0>(mb_ostrm))
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+
+        auto& ostrm = std::get<1>(mb_ostrm);
+        ostrm << value;
+        return PrintingNode(ostrm.str());
     }
 
     // Print C string
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
     {
-        std::ostringstream buf;
-        buf.copyfmt(stream_ref);
+        auto mb_ostrm = build_ostream(fmt);
+        if (!std::get<0>(mb_ostrm))
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+
+        auto& ostrm = std::get<1>(mb_ostrm);
 
         if (config.show_c_string())
         {
@@ -1942,7 +1956,7 @@ namespace detail {
                     >::type
                 >::type;
 
-            buf << '"'
+            ostrm << '"'
                 << transcoder_dispatcher(
                     config, value, std::char_traits<CharT>::length(value)
                 )
@@ -1950,33 +1964,38 @@ namespace detail {
         }
         else
         {
-            buf << reinterpret_cast<void const*>(value);
+            ostrm << reinterpret_cast<void const*>(value);
         }
 
-        return PrintingNode(buf.str());
+        return PrintingNode(ostrm.str());
     }
 
     // Print std::string
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type
     {
-        std::ostringstream buf;
-        buf.copyfmt(stream_ref);
-        buf << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
-        return PrintingNode(buf.str());
+        auto mb_ostrm = build_ostream(fmt);
+        if (!std::get<0>(mb_ostrm))
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+
+        auto& ostrm = std::get<1>(mb_ostrm);
+        ostrm << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
+        return PrintingNode(ostrm.str());
     }
 
   #if defined(ICECREAM_STRING_VIEW_HEADER)
     // Print std::string_view
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type
     {
         return make_printing_branch(
-            std::basic_string<typename T::value_type>{value}, config, stream_ref
+            std::basic_string<typename T::value_type>{value}, fmt, config
         );
     }
   #endif
@@ -1984,13 +2003,16 @@ namespace detail {
     // Print character
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
     {
-        std::ostringstream buf;
-        buf.copyfmt(stream_ref);
+        auto mb_ostrm = build_ostream(fmt);
+        if (!std::get<0>(mb_ostrm))
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
 
-        auto str = std::string {};
+        auto str = std::string{};
         switch (value)
         {
         case T{'\0'}:
@@ -2030,15 +2052,16 @@ namespace detail {
             break;
         }
 
-        buf << '\'' << str << '\'';
+        auto& ostrm = std::get<1>(mb_ostrm);
+        ostrm << '\'' << str << '\'';
 
-        return PrintingNode(buf.str());
+        return PrintingNode(ostrm.str());
     }
 
     // Print signed and unsigned char
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const&, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const&
     ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type
     {
         using T0 =
@@ -2046,111 +2069,115 @@ namespace detail {
                 std::is_signed<T>::value, int, unsigned int
             >::type;
 
-        std::ostringstream buf;
-        buf.copyfmt(stream_ref);
-        buf << static_cast<T0>(value);
-        return PrintingNode(buf.str());
+        auto mb_ostrm = build_ostream(fmt);
+        if (!std::get<0>(mb_ostrm))
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+
+        auto& ostrm = std::get<1>(mb_ostrm);
+        ostrm << static_cast<T0>(value);
+        return PrintingNode(ostrm.str());
     }
 
     // Print smart pointers without an operator<<(ostream&) overload.
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const&, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         // On C++20 unique_ptr will have a << overload.
         is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
         PrintingNode
     >::type
     {
-        std::ostringstream buf;
-        buf.copyfmt(stream_ref);
-        buf << reinterpret_cast<void const*>(value.get());
-        return PrintingNode(buf.str());
+        return make_printing_branch(
+            reinterpret_cast<void const*>(value.get()), fmt, config
+        );
     }
 
     // Print weak pointer classes
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type
     {
         return value.expired() ?
-            PrintingNode("expired") : make_printing_branch(value.lock(), config, stream_ref);
+            PrintingNode("expired") : make_printing_branch(value.lock(), fmt, config);
     }
 
   #if defined(ICECREAM_OPTIONAL_HEADER)
     // Print std::optional<> classes
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         is_optional<T>::value && !has_insertion<T>::value,
         PrintingNode
     >::type
     {
         return value.has_value() ?
-            make_printing_branch(*value, config, stream_ref) : PrintingNode("nullopt");
+            make_printing_branch(*value, fmt, config) : PrintingNode("nullopt");
     }
   #endif
 
     struct Visitor
     {
-        Visitor(Config const& config, std::basic_ostream<char> const& stream_ref)
-            : config_(config)
-            , stream_ref_(stream_ref)
+        Visitor(std::string const& fmt, Config const& config)
+            : fmt_(fmt)
+            , config_(config)
         {}
 
         template <typename T>
         auto operator()(T const& arg) -> PrintingNode
         {
-            return make_printing_branch(arg, this->config_, this->stream_ref_);
+            return make_printing_branch(arg, this->fmt_, this->config_);
         }
 
+        std::string const& fmt_;
         Config const& config_;
-        std::basic_ostream<char> const& stream_ref_;
     };
 
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         is_variant<T>::value && !has_insertion<T>::value,
         PrintingNode
     >::type
     {
-        return visit(Visitor(config, stream_ref), value);
+        return visit(Visitor(fmt, config), value);
     }
 
     template<typename T, size_t N = std::tuple_size<T>::value-1>
     static auto tuple_traverser(
-        T const& t, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& t, std::string const& fmt, Config const& config
     ) -> std::vector<PrintingNode>
     {
         auto result = N > 0 ?
-            tuple_traverser<T, (N > 0) ? N-1 : 0>(t, config, stream_ref)
+            tuple_traverser<T, (N > 0) ? N-1 : 0>(t, fmt, config)
             : std::vector<PrintingNode>{};
 
-        result.push_back(make_printing_branch(std::get<N>(t), config, stream_ref));
+        result.push_back(make_printing_branch(std::get<N>(t), fmt, config));
         return result;
     }
 
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         is_tuple<T>::value && !has_insertion<T>::value,
         PrintingNode
     >::type
     {
-        return PrintingNode("(", ", ", ")", tuple_traverser(value, config, stream_ref));
+        return PrintingNode("(", ", ", ")", tuple_traverser(value, fmt, config));
     }
 
     // Print all items of any iterable class
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         (
             is_iterable<T>::value
@@ -2165,7 +2192,7 @@ namespace detail {
         auto children = std::vector<PrintingNode>{};
         for (auto const& i : value)
         {
-            children.push_back(make_printing_branch(i, config, stream_ref));
+            children.push_back(make_printing_branch(i, fmt, config));
         }
 
         return PrintingNode("[", ", ", "]", std::move(children));
@@ -2174,7 +2201,7 @@ namespace detail {
     // Print classes deriving from only std::exception and not from boost::exception
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const&, std::basic_ostream<char> const&
+        T const& value, std::string const&, Config const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, T>::value
         && !std::is_base_of<boost::exception, T>::value
@@ -2188,7 +2215,7 @@ namespace detail {
     // Print classes deriving from both std::exception and boost::exception
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const&, std::basic_ostream<char> const&
+        T const& value, std::string const&, Config const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, T>::value
         && std::is_base_of<boost::exception, T>::value
@@ -2208,7 +2235,7 @@ namespace detail {
   #if defined(ICECREAM_DUMP_STRUCT_CLANG)
     static auto ds_this = static_cast<PrintingNode*>(nullptr);
     static auto ds_delayed_structs = std::vector<std::pair<std::string, std::function<void()>>>{};
-    static auto ds_stream_ref = static_cast<std::basic_ostream<char> const*>(nullptr);
+    static auto ds_fmt_ref = static_cast<std::string const*>(nullptr);
     static auto ds_config_ref = static_cast<Config const*>(nullptr);
     static auto ds_call_count = int{0};
     template<typename... T> auto parse_dump_struct(char const* format, T&& ...args) -> int;
@@ -2216,7 +2243,7 @@ namespace detail {
     // Print classes using clang's __builtin_dump_struct (clang >= 15).
     template <typename T>
     auto make_printing_branch(
-        T const& value, Config const& config, std::basic_ostream<char> const& stream_ref
+        T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type
     {
         // If this is the outermost class being printed
@@ -2225,7 +2252,7 @@ namespace detail {
             auto branch_node = PrintingNode("");
 
             ds_this = &branch_node;  // Put `this` on scope to be assigned inside `parse_dump_struct`
-            ds_stream_ref = &stream_ref;
+            ds_fmt_ref = &fmt;
             ds_config_ref = &config;
             __builtin_dump_struct(&value, &parse_dump_struct);  // Print the outermost class
 
@@ -2289,11 +2316,11 @@ namespace detail {
     {
         if (deref)
         {
-            return make_printing_branch(*t, *ds_config_ref, *ds_stream_ref);
+            return make_printing_branch(*t, *ds_fmt_ref, *ds_config_ref);
         }
         else
         {
-            return make_printing_branch(t, *ds_config_ref, *ds_stream_ref);
+            return make_printing_branch(t, *ds_fmt_ref, *ds_config_ref);
         }
     }
 
@@ -2301,7 +2328,7 @@ namespace detail {
     template<typename T>
     auto build_tree(bool, T const& t) -> PrintingNode
     {
-        return make_printing_branch(t, *ds_config_ref, *ds_stream_ref);
+        return make_printing_branch(t, *ds_fmt_ref, *ds_config_ref);
     }
 
     // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
@@ -2465,8 +2492,8 @@ namespace detail {
         decltype(
             make_printing_branch(
                 std::declval<T const&>(),
-                std::declval<Config const&>(),
-                std::declval<std::basic_ostream<char> const&>()
+                std::declval<std::string const&>(),
+                std::declval<Config const&>()
             ),
             std::true_type{}
         );
@@ -2481,7 +2508,41 @@ namespace detail {
 
     // -------------------------------------------------- Icecream
 
-    // Print a forest that will fit in an only line.
+    // Holds a pair of argument and formatting string. Created by the macro `IC_`.
+    template <typename T>
+    struct FormattingArgument
+    {
+        std::string const& fmt;
+        T const& value;
+    };
+
+    template <typename T>
+    auto make_formatting_argument(
+        std::string const& fmt, T const& t
+    ) -> FormattingArgument<decltype(t)>
+    {
+        return FormattingArgument<decltype(t)>{fmt, t};
+    }
+
+    // Holds a triple of argument name, formatting string, and value. Those are all the info
+    // required to print an argument.
+    template <typename T>
+    struct PrintingArgument
+    {
+        std::string const& name;
+        std::string const& fmt;
+        T const& value;
+    };
+
+    template <typename T>
+    struct PrintingArgument<FormattingArgument<T>>
+    {
+        std::string const& name;
+        std::string const& fmt;
+        T const& value;
+    };
+
+    // Print a forest that fits into a single line.
     inline auto print_one_line_forest(
         std::string const& prefix,
         std::string const& context,
@@ -2495,15 +2556,14 @@ namespace detail {
             result += context + delimiter;
         }
 
-        // The forest is built with trees in reverse order.
-        for (auto it = forest.crbegin(); it != forest.crend(); ++it)
+        for (auto it = forest.begin(); it != forest.end(); ++it)
         {
             auto const& arg_name = std::get<0>(*it);
             auto const& tree = std::get<1>(*it);
 
             result += arg_name + ": " + tree.print();
 
-            if (it+1 != forest.crend())
+            if (it+1 != forest.end())
             {
                     result += ", ";
             }
@@ -2527,8 +2587,7 @@ namespace detail {
         }
         result +=  + "\n";
 
-        // The forest is built with trees in reverse order.
-        for (auto it = forest.crbegin(); it != forest.crend(); ++it)
+        for (auto it = forest.begin(); it != forest.end(); ++it)
         {
             auto const& arg_name = std::get<0>(*it);
             auto const& tree = std::get<1>(*it);
@@ -2543,7 +2602,7 @@ namespace detail {
                 result += tree.print(2, line_wrap_width);
             }
 
-            if (it+1 != forest.crend())
+            if (it+1 != forest.end())
             {
                 result += ",\n";
             }
@@ -2552,41 +2611,20 @@ namespace detail {
         return result;
     }
 
-    inline auto build_forest(
-        Config const&,
-        std::string const&,
-        std::vector<std::string>::const_iterator
-    ) -> std::vector<std::tuple<std::string, PrintingNode>>
-    {
-        return std::vector<std::tuple<std::string, PrintingNode>>{};
-    }
-
-    template <typename T, typename... Ts>
+    template <typename... Ts>
     auto build_forest(
-        Config const& config,
-        std::string const& format,
-        std::vector<std::string>::const_iterator arg_name,
-        T const& arg_value,
-        Ts const&... args_tail
+        Config const& config, PrintingArgument<Ts>... args
     ) -> std::vector<std::tuple<std::string, PrintingNode>>
     {
-        auto forest = build_forest(config, format, arg_name+1, args_tail...);
-
-        auto result_os = build_ostream(format);
-        if (std::get<0>(result_os))
-        {
-            forest.emplace_back(
-                *arg_name,
-                make_printing_branch(arg_value, config, std::get<1>(result_os))
-            );
-        }
-        else
-        {
-            forest.emplace_back(
-                *arg_name,
-                PrintingNode("*Error* on formatting string")
-            );
-        }
+        auto forest = std::vector<std::tuple<std::string, PrintingNode>>{};
+        (void) std::initializer_list<int>{
+            (
+                (void) forest.emplace_back(
+                    args.name, make_printing_branch(args.value, args.fmt, config)
+                ),
+                0
+            )...
+        };
 
         return forest;
     }
@@ -2597,9 +2635,7 @@ namespace detail {
         std::string const& file,
         int line,
         std::string const& function,
-        std::string const& format,
-        std::vector<std::string> const& arg_names,
-        Ts const&... args
+        PrintingArgument<Ts>... args
     ) -> typename std::enable_if<
             detail::conjunction<detail::is_printable<Ts>...>::value
         >::type
@@ -2633,7 +2669,7 @@ namespace detail {
             }();
         auto const delimiter = config.context_delimiter();
 
-        auto const forest = build_forest(config, format, std::begin(arg_names), args...);
+        auto const forest = build_forest(config, args...);
 
         // The number of codepoints used if the whole forest would be printed in an one
         // line.
@@ -2851,6 +2887,29 @@ namespace detail {
         return result;
     }
 
+    template <typename T>
+    auto get_value(T const& t) -> T const&
+    {
+        return t;
+    }
+
+    template <typename T>
+    auto get_value(FormattingArgument<T> const& t) -> T const&
+    {
+        return t.value;
+    }
+
+    template <typename T>
+    auto get_fmt(T const&, std::string const& default_format) -> std::string
+    {
+        return default_format;
+    }
+
+    template <typename T>
+    auto get_fmt(FormattingArgument<T> const& t, std::string const&) -> std::string
+    {
+        return t.fmt;
+    }
 
     // The use of this struct instead of a free function is a needed hack because of the
     // trailing comma problem with __VA_ARGS__ expansion. A macro like:
@@ -2862,16 +2921,9 @@ namespace detail {
     // print("foo.cpp", 42, "void bar()", "",)
     //
     // print("foo.cpp", 42, "void bar()", ,)
-    struct Dispatcher
+    class Dispatcher
     {
-        bool is_ic_apply_;
-        Config const& config_;
-        std::string const file_;
-        int line_;
-        std::string const function_;
-        std::string const format_;
-        std::string const arg_names_;
-
+    public:
         // Used by compilers that expand an empyt __VA_ARGS__ in
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, ""}
         Dispatcher(
@@ -2880,7 +2932,7 @@ namespace detail {
             std::string const& file,
             int line,
             std::string const& function,
-            std::string const& format,
+            std::string const& default_format,
             std::string const& arg_names
         )
             : is_ic_apply_(is_ic_apply)
@@ -2888,7 +2940,7 @@ namespace detail {
             , file_(file)
             , line_{line}
             , function_(function)
-            , format_(format)
+            , default_format_(default_format)
             , arg_names_(arg_names)
         {}
 
@@ -2900,21 +2952,65 @@ namespace detail {
             std::string const& file,
             int line,
             std::string const& function,
-            std::string const& format
+            std::string const& default_format
         )
-            : is_ic_apply_(is_ic_apply)
-            , config_(config)
-            , file_(file)
-            , line_{line}
-            , function_(function)
-            , format_(format)
-            , arg_names_{""}
+            : Dispatcher(is_ic_apply, config, file, line, function, default_format, "")
         {}
 
+        // Return a std::tuple with all the args
         template <typename... Ts>
-        auto print(Ts const&... args) -> void
+        auto ret(Ts&&... args) -> decltype(std::forward_as_tuple(std::forward<Ts>(args)...))
         {
-            auto arg_names = split_arguments(this->arg_names_);
+            this->dispatch(make_int_sequence<sizeof...(Ts)>(), args...);
+            return std::forward_as_tuple(std::forward<Ts>(args)...);
+        }
+
+        // Return the unique arg
+        template <typename T>
+        auto ret(T&& arg) -> decltype(arg)
+        {
+            this->dispatch(make_int_sequence<1>(), arg);
+            return std::forward<decltype(arg)>(arg);
+        }
+
+        auto ret() -> std::tuple<>
+        {
+            this->dispatch(make_int_sequence<0>());
+            return {};
+        }
+
+    private:
+        template <int... N, typename... Ts>
+        auto dispatch(int_sequence<N...>, Ts const&... args) -> void
+        {
+            // Pick the name of an IC macro's "to be printed" argument. Usually that would be just
+            // to return the argument string itself. However, when using the IC_ macro to set a
+            // formatting string to an argument, all that information will be mixed, and the
+            // argument name will need to be extracted from there.
+            auto pick_argument_name =
+                [](std::string const& ic_argument) -> std::string
+                {
+                    char constexpr prefix[] = "::icecream::detail::make_formatting_argument(";
+                    auto constexpr n_prefix = sizeof(prefix);
+
+                    if (ic_argument.find(prefix) == std::string::npos)
+                    {
+                        return ic_argument;
+                    }
+                    else
+                    {
+                        auto const count = ic_argument.size() - n_prefix - 1;
+                        auto const fmt_args = split_arguments(ic_argument.substr(n_prefix, count));
+                        return fmt_args.back();
+                    }
+                };
+
+            auto arg_names = std::vector<std::string>{};
+            for (auto const& argument : split_arguments(this->arg_names_))
+            {
+                arg_names.push_back(pick_argument_name(argument));
+            }
+
             if (this->is_ic_apply_)
             {
                 // Remove the callable name from the arguments
@@ -2929,31 +3025,25 @@ namespace detail {
             }
             else
             {
-                print_args(config_, file_, line_, function_, format_, arg_names, args...);
+                print_args(
+                    config_,
+                    file_,
+                    line_,
+                    function_,
+                    PrintingArgument<Ts>{
+                        arg_names.at(N), get_fmt(args, this->default_format_), get_value(args)
+                    }...
+                );
             }
         }
 
-        // Return a std::tuple with all the args
-        template <typename... Ts>
-        auto ret(Ts&&... args) -> decltype(std::forward_as_tuple(std::forward<Ts>(args)...))
-        {
-            this->print(args...);
-            return std::forward_as_tuple(std::forward<Ts>(args)...);
-        }
-
-        // Return the unique arg
-        template <typename T>
-        auto ret(T&& arg) -> decltype(arg)
-        {
-            this->print(arg);
-            return std::forward<decltype(arg)>(arg);
-        }
-
-        auto ret() -> std::tuple<>
-        {
-            this->print();
-            return {};
-        }
+        bool is_ic_apply_;
+        Config const& config_;
+        std::string const file_;
+        int line_;
+        std::string const function_;
+        std::string const default_format_;
+        std::string const arg_names_;
     };
 
 }} // namespace icecream::detail
