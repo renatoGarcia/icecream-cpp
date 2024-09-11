@@ -924,6 +924,26 @@ TEST_CASE("formatting")
         IC_F("oA", v0);
         REQUIRE(str == "ic| v0: *Error* on formatting string\n");
     }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = int{42};
+        IC_F("x", v0, IC_("*<",5,"d", v0));
+        REQUIRE(str == "ic| v0: 2a, v0: 42***\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = int{77};
+        IC(v0, IC_("X", v0));
+        REQUIRE(str == "ic| v0: 77, v0: 4D\n");
+    }
 }
 
 

@@ -156,7 +156,7 @@
     #define ICECREAM_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
     #define ICECREAM_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
-    #define ICECREAM_(fmt, arg) ::icecream::detail::make_formatting_argument(fmt, arg)
+    #define ICECREAM_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
     #define ICECREAM_CONFIG_SCOPE()                                                            \
         auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
         ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
@@ -167,7 +167,7 @@
     #define IC_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
     #define IC_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
-    #define IC_(fmt, arg) ::icecream::detail::make_formatting_argument(fmt, arg)
+    #define IC_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
     #define IC_CONFIG_SCOPE()                                                                  \
         auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
         ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
@@ -378,6 +378,24 @@ namespace icecream{ namespace detail
     template <typename T>
     using has_insertion = decltype(has_insertion_impl<T>(0));
 
+
+    // -------------------------------------------------- has_to_string
+
+    // To allow ADL when calling `to_string`
+    using std::to_string;
+
+    template <typename T>
+    auto has_to_string_impl(int) ->
+        decltype (
+            to_string(std::declval<T const&>()),
+            std::true_type{}
+        );
+
+    template <typename T>
+    auto has_to_string_impl(...) -> std::false_type;
+
+    template <typename T>
+    using has_to_string = decltype(has_to_string_impl<T>(0));
 
     // -------------------------------------------------- is_tuple
 
@@ -861,7 +879,7 @@ namespace icecream{ namespace detail
         Prefix(Ts&&... funcs)
             : functions{}
         {
-            // Hack to call this->functions.emplace_back to all funcs
+            // Call this->functions.emplace_back to all funcs
             (void) std::initializer_list<int>{
                 (
                     (void) this->functions.push_back(
@@ -2512,20 +2530,102 @@ namespace detail {
     template <typename T>
     struct FormattingArgument
     {
-        std::string const& fmt;
+        std::string fmt;
         T const& value;
     };
 
     template <typename T>
-    auto make_formatting_argument(
-        std::string const& fmt, T const& t
-    ) -> FormattingArgument<decltype(t)>
+    struct formatting_argumet_type_impl {using type = T;};
+
+    template <typename T>
+    struct formatting_argumet_type_impl<FormattingArgument<T>> {using type = T;};
+
+    template <typename T>
+    using formatting_argumet_type = typename formatting_argumet_type_impl<T>::type;
+
+
+    // If the type has an overload of to_string, call it.
+    template <typename T>
+    auto call_to_string(T const& t) ->
+        typename std::enable_if<
+            has_to_string<T>::value,
+            std::string
+        >::type
     {
-        return FormattingArgument<decltype(t)>{fmt, t};
+        return to_string(t);
     }
 
-    // Holds a triple of argument name, formatting string, and value. Those are all the info
-    // required to print an argument.
+    // If the type is a string like, just return it.
+    template <typename T>
+    auto call_to_string(T const& t) ->
+        typename std::enable_if<
+            !has_to_string<T>::value
+            && (
+                is_character<T>::value
+                || is_c_string<typename std::decay<T>::type>::value
+                || is_std_string<T>::value
+                || is_string_view<T>::value
+            ),
+            std::string
+        >::type
+    {
+        return t;
+    }
+
+    // Otherwise fail to compile
+    template <typename T>
+    auto call_to_string(T const&) ->
+        typename std::enable_if<
+            !has_to_string<T>::value
+            && !(
+                is_character<T>::value
+                || is_c_string<typename std::decay<T>::type>::value
+                || is_std_string<T>::value
+                || is_string_view<T>::value
+            ),
+            std::string
+        >::type;
+
+    // Would be better if this function could be on calling site as a lambda
+    // function, however older compilers (gcc<=9 and clang<=10 for example) fail
+    // to see a parameter pack expansion when inside of a lambda.
+    template <typename T>
+    auto concat_fmt(T const& t, std::string& fmt, size_t& i_arg, size_t n_args) -> void
+    {
+        ++i_arg;
+        if (i_arg < n_args)
+        {
+            fmt += call_to_string(t);
+        }
+    }
+
+    // Returns a FormattingArgument where the value type is the same as the type
+    // of the last `args`, and the formatting string is the concatenation of all
+    // arguments except by the last.
+    template <typename... Ts>
+    auto make_formatting_argument(
+        Ts const&... args
+    ) -> FormattingArgument<typename std::tuple_element<sizeof...(Ts)-1, std::tuple<Ts...>>::type>
+    {
+        auto constexpr value_idx = sizeof...(Ts) - 1;
+        using T = typename std::tuple_element<value_idx, std::tuple<Ts...>>::type;
+
+        auto i_arg = size_t{0};
+        auto fmt = std::string{};
+
+        // Build `fmt` as the concatenation of all args, except by the last,
+        // after converting them to a string through `call_to_string`.
+        (void) std::initializer_list<int>{
+            (concat_fmt(args, fmt, i_arg, sizeof...(Ts)), 0)...
+        };
+
+        auto const& value = std::get<value_idx>(std::forward_as_tuple(args...));
+        return FormattingArgument<T>{fmt, value};
+    }
+
+
+    // Holds a triple of argument name, formatting string, and value. Those are
+    // all the info required to print an argument.
     template <typename T>
     struct PrintingArgument
     {
@@ -2534,13 +2634,6 @@ namespace detail {
         T const& value;
     };
 
-    template <typename T>
-    struct PrintingArgument<FormattingArgument<T>>
-    {
-        std::string const& name;
-        std::string const& fmt;
-        T const& value;
-    };
 
     // Print a forest that fits into a single line.
     inline auto print_one_line_forest(
@@ -2973,24 +3066,19 @@ namespace detail {
             return std::forward<decltype(arg)>(arg);
         }
 
-        auto ret() -> std::tuple<>
-        {
-            this->dispatch(make_int_sequence<0>());
-            return {};
-        }
-
     private:
         template <int... N, typename... Ts>
         auto dispatch(int_sequence<N...>, Ts const&... args) -> void
         {
-            // Pick the name of an IC macro's "to be printed" argument. Usually that would be just
-            // to return the argument string itself. However, when using the IC_ macro to set a
-            // formatting string to an argument, all that information will be mixed, and the
-            // argument name will need to be extracted from there.
+            // Pick the name of an IC macro's "to be printed" argument. Usually that would
+            // just return the argument string itself. However, when using the IC_ macro
+            // to set a formatting string to an argument, all that information will be
+            // mixed on that `IC_` call as a whole, and the argument name will need to be
+            // extracted from there.
             auto pick_argument_name =
                 [](std::string const& ic_argument) -> std::string
                 {
-                    char constexpr prefix[] = "::icecream::detail::make_formatting_argument(";
+                    char constexpr prefix[] = "IC_(";
                     auto constexpr n_prefix = sizeof(prefix);
 
                     if (ic_argument.find(prefix) == std::string::npos)
@@ -3019,8 +3107,8 @@ namespace detail {
 
             if (sizeof...(Ts) == 0 && !this->is_ic_apply_)
             {
-                // Even if with none arguments (just the callable name), an `IC_A` macro
-                // isn't a nullary `IC()` call.
+                // Even if it has no arguments (besides the callable name), an `IC_A`
+                // macro isn't a nullary `IC()` call.
                 print_nullary(config_, file_, line_, function_);
             }
             else
@@ -3030,7 +3118,7 @@ namespace detail {
                     file_,
                     line_,
                     function_,
-                    PrintingArgument<Ts>{
+                    PrintingArgument<formatting_argumet_type<Ts>>{
                         arg_names.at(N), get_fmt(args, this->default_format_), get_value(args)
                     }...
                 );

@@ -1,3 +1,7 @@
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
+
 find_package(Boost 1.71.0 REQUIRED)
 
 enable_testing()

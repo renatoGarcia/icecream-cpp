@@ -187,7 +187,7 @@ All the functionalities of IceCream-Cpp library are implemented by the macros `I
 ### Return value and IceCream apply macro
 
 Except when called with exactly one argument, the `IC(...)` macro will return a tuple with
-all the input arguments. if called with one argument it will return the argument itself.
+all its input arguments. if called with one argument it will return the argument itself.
 
 This is done in this way so that you can use `IC` to inspect a function argument at
 calling point, with no further code change. On the code:
@@ -246,21 +246,57 @@ It is possible to configure how the value must be formatted while printing. The 
 ```C++
 auto a = int{42};
 auto b = int{20};
-IC_("#X", a, b);
-
+IC_F("#X", a, b);
 ```
 
 will print:
 
     ic| a: 0X2A, b: 0X14
 
-The same formatting string will be applied to all the values on an `IC` macro call.
+When using the `IC_F` macro, the same formatting string will be applied by default to all
+the values in an `IC_F` macro call. To set a distinct formatting string to a specific
+argument, we can wrap it with the `IC_` macro. The code:
+
+```C++
+auto a = int{42};
+auto b = int{20};
+IC_F("#X", a, IC_("d", b));
+```
+
+will print:
+
+    ic| a: 0X2A, b: 20
+
+The `IC_` macro can be used with the basic `IC` too:
+
+```C++
+auto a = int{42};
+auto b = int{20};
+IC(IC_("#x", a), b);
+```
+will print:
+
+    ic| a: 0x2a, b: 20
+
+The last argument of `IC_` is the one that will be printed, all other arguments that come
+before the last will converted to a string using the
+[`to_string`](https://en.cppreference.com/w/cpp/string/basic_string/to_string) function
+and concatenated in the resulting formatting string.
+
+```C++
+auto a = float{1.234};
+auto width = int{7};
+IC(IC_("*<",width,".3", a));
+```
+Will have as result a formatting string `"*<7.3"`, and will print:
+
+    ic| a: 1.23***
 
 To configure the formating of [`IC_A`](#return-value-and-icecream-apply-macro) macro,
-there are the macro `IC_A_`. It is just like `IC_A` but receiving a formating string as
+there are the macro `IC_FA`. It is just like `IC_A` but receiving a formating string as
 its first argument. The code:
 ```C++
-IC_A_("#x", my_function, 10, 20);
+IC_FA("#x", my_function, 10, 20);
 ```
 will print:
 
