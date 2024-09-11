@@ -79,9 +79,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: prepare
-        run: choco install boost-msvc-14.2 -y
+        run: choco install boost-msvc-14.2 --version 1.86.0 -y
       - name: build
-        run: cmake . -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build . --config Debug
+        run: cmake . -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON -DBoost_DIR=C:/local/boost_1_86_0/lib64-msvc-14.2/cmake/Boost-1.86.0 && cmake --build . --config Debug
       - name: run
         run: ctest -V -C Debug
 
