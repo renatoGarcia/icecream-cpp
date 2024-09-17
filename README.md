@@ -186,9 +186,8 @@ All the functionalities of IceCream-Cpp library are implemented by the macros `I
 
 ### Return value and IceCream apply macro
 
-If called with no arguments the `IC(...)` macro will return `void`, if called with one
-argument it will return the argument itself, and if called with multiple arguments it will
-return a tuple with all of them.
+Except when called with exactly one argument, the `IC(...)` macro will return a tuple with
+all the input arguments. if called with one argument it will return the argument itself.
 
 This is done in this way so that you can use `IC` to inspect a function argument at
 calling point, with no further code change. On the code:
