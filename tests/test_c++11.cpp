@@ -140,7 +140,7 @@ TEST_CASE("apply")
         auto mc = MyClass{50};
 
         auto r = IC_A(mc.ret_val);
-        REQUIRE(str == "");
+        REQUIRE(str == "ic| \n");
         REQUIRE(r == 50);
     }
 
@@ -188,6 +188,19 @@ TEST_CASE("apply")
         auto r = IC_A(mc.add, MyClass{7});
         REQUIRE(str == "ic| MyClass{7}: <MyClass 7>\n");
         REQUIRE(r == 10);
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = int{5};
+        #define V1 10
+        auto r = IC_A(sum, v0, V1);
+        REQUIRE(str == "ic| v0: 5, V1: 10\n");
+        REQUIRE(r == 15);
+        #undef V1
     }
 }
 
@@ -337,6 +350,18 @@ TEST_CASE("base")
         IC('a');
         REQUIRE(str == "ic| 'a': 'a'\n");
     }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        #define V0 10
+        auto r = IC(V0);
+        REQUIRE(str == "ic| V0: 10\n");
+        #undef V0
+    }
+
 }
 
 
@@ -345,6 +370,11 @@ TEST_CASE("return")
     {
         REQUIRE(std::is_same<decltype(IC(7)), int&&>::value);
         REQUIRE(IC(7) == 7);
+    }
+
+    {
+        auto irval = [](int&&){return 10;};
+        REQUIRE(IC_A(irval, 7) == 10);
     }
 
     {
@@ -403,7 +433,7 @@ TEST_CASE("return")
     }
 
     {
-        REQUIRE(std::is_same<decltype(IC()), void>::value);
+        REQUIRE(std::is_same<decltype(IC()), std::tuple<>>::value);
     }
 }
 

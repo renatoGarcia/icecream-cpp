@@ -85,7 +85,10 @@
 // Used to force MSVC to unpack __VA_ARGS__
 #define ICECREAM_EXPAND(X) X
 
-// __VA_ARGS__ will have the callable name and the args. Returns the quantity of args.
+// Returns the number of args of a callable on IC_A macro. To be able to measure
+// 0 arguments, the first name of the input __VA_ARGS__ must be the callable
+// itself. In other words, this macro will return one less than the size of its
+// inputs.
 #define ICECREAM_ARGS_SIZE(...) ICECREAM_EXPAND(ICECREAM_ARGS_SIZE_( \
     __VA_ARGS__, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22,         \
     21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7,         \
@@ -95,75 +98,74 @@
     _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, \
     _26, _27, _28, _29, _30, _31, _32, N, ...) N
 
-#define ICECREAM_UNPACK_0(F, ICM, ...) [&](){ return F(
-#define ICECREAM_UNPACK_1(F, ICM, ...) [&](){                                  \
-    auto&& ret_value = ICECREAM_EXPAND(ICM(__VA_ARGS__));                      \
-    auto&& ret_tuple = ::icecream::detail::ensure_tuple(std::move(ret_value)); \
-    return F(std::get<0>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_2(F, ICM, ...) ICECREAM_UNPACK_1(F, ICM, __VA_ARGS__), std::get<1>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_3(F, ICM, ...) ICECREAM_UNPACK_2(F, ICM, __VA_ARGS__), std::get<2>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_4(F, ICM, ...) ICECREAM_UNPACK_3(F, ICM, __VA_ARGS__), std::get<3>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_5(F, ICM, ...) ICECREAM_UNPACK_4(F, ICM, __VA_ARGS__), std::get<4>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_6(F, ICM, ...) ICECREAM_UNPACK_5(F, ICM, __VA_ARGS__), std::get<5>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_7(F, ICM, ...) ICECREAM_UNPACK_6(F, ICM, __VA_ARGS__), std::get<6>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_8(F, ICM, ...) ICECREAM_UNPACK_7(F, ICM, __VA_ARGS__), std::get<7>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_9(F, ICM, ...) ICECREAM_UNPACK_8(F, ICM, __VA_ARGS__), std::get<8>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_10(F, ICM, ...) ICECREAM_UNPACK_9(F, ICM, __VA_ARGS__), std::get<9>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_11(F, ICM, ...) ICECREAM_UNPACK_10(F, ICM, __VA_ARGS__), std::get<10>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_12(F, ICM, ...) ICECREAM_UNPACK_11(F, ICM, __VA_ARGS__), std::get<11>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_13(F, ICM, ...) ICECREAM_UNPACK_12(F, ICM, __VA_ARGS__), std::get<12>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_14(F, ICM, ...) ICECREAM_UNPACK_13(F, ICM, __VA_ARGS__), std::get<13>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_15(F, ICM, ...) ICECREAM_UNPACK_14(F, ICM, __VA_ARGS__), std::get<14>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_16(F, ICM, ...) ICECREAM_UNPACK_15(F, ICM, __VA_ARGS__), std::get<15>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_17(F, ICM, ...) ICECREAM_UNPACK_16(F, ICM, __VA_ARGS__), std::get<16>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_18(F, ICM, ...) ICECREAM_UNPACK_17(F, ICM, __VA_ARGS__), std::get<17>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_19(F, ICM, ...) ICECREAM_UNPACK_18(F, ICM, __VA_ARGS__), std::get<18>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_20(F, ICM, ...) ICECREAM_UNPACK_19(F, ICM, __VA_ARGS__), std::get<19>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_21(F, ICM, ...) ICECREAM_UNPACK_20(F, ICM, __VA_ARGS__), std::get<20>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_22(F, ICM, ...) ICECREAM_UNPACK_21(F, ICM, __VA_ARGS__), std::get<21>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_23(F, ICM, ...) ICECREAM_UNPACK_22(F, ICM, __VA_ARGS__), std::get<22>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_24(F, ICM, ...) ICECREAM_UNPACK_23(F, ICM, __VA_ARGS__), std::get<23>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_25(F, ICM, ...) ICECREAM_UNPACK_24(F, ICM, __VA_ARGS__), std::get<24>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_26(F, ICM, ...) ICECREAM_UNPACK_25(F, ICM, __VA_ARGS__), std::get<25>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_27(F, ICM, ...) ICECREAM_UNPACK_26(F, ICM, __VA_ARGS__), std::get<26>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_28(F, ICM, ...) ICECREAM_UNPACK_27(F, ICM, __VA_ARGS__), std::get<27>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_29(F, ICM, ...) ICECREAM_UNPACK_28(F, ICM, __VA_ARGS__), std::get<28>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_30(F, ICM, ...) ICECREAM_UNPACK_29(F, ICM, __VA_ARGS__), std::get<29>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_31(F, ICM, ...) ICECREAM_UNPACK_30(F, ICM, __VA_ARGS__), std::get<30>(std::move(ret_tuple))
-#define ICECREAM_UNPACK_32(F, ICM, ...) ICECREAM_UNPACK_31(F, ICM, __VA_ARGS__), std::get<31>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_0
+#define ICECREAM_UNPACK_1 std::get<0>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_2 ICECREAM_UNPACK_1, std::get<1>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_3 ICECREAM_UNPACK_2, std::get<2>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_4 ICECREAM_UNPACK_3, std::get<3>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_5 ICECREAM_UNPACK_4, std::get<4>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_6 ICECREAM_UNPACK_5, std::get<5>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_7 ICECREAM_UNPACK_6, std::get<6>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_8 ICECREAM_UNPACK_7, std::get<7>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_9 ICECREAM_UNPACK_8, std::get<8>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_10 ICECREAM_UNPACK_9, std::get<9>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_11 ICECREAM_UNPACK_10, std::get<10>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_12 ICECREAM_UNPACK_11, std::get<11>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_13 ICECREAM_UNPACK_12, std::get<12>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_14 ICECREAM_UNPACK_13, std::get<13>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_15 ICECREAM_UNPACK_14, std::get<14>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_16 ICECREAM_UNPACK_15, std::get<15>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_17 ICECREAM_UNPACK_16, std::get<16>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_18 ICECREAM_UNPACK_17, std::get<17>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_19 ICECREAM_UNPACK_18, std::get<18>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_20 ICECREAM_UNPACK_19, std::get<19>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_21 ICECREAM_UNPACK_20, std::get<20>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_22 ICECREAM_UNPACK_21, std::get<21>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_23 ICECREAM_UNPACK_22, std::get<22>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_24 ICECREAM_UNPACK_23, std::get<23>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_25 ICECREAM_UNPACK_24, std::get<24>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_26 ICECREAM_UNPACK_25, std::get<25>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_27 ICECREAM_UNPACK_26, std::get<26>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_28 ICECREAM_UNPACK_27, std::get<27>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_29 ICECREAM_UNPACK_28, std::get<28>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_30 ICECREAM_UNPACK_29, std::get<29>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_31 ICECREAM_UNPACK_30, std::get<30>(std::move(ret_tuple))
+#define ICECREAM_UNPACK_32 ICECREAM_UNPACK_31, std::get<31>(std::move(ret_tuple))
 
-#define ICECREAM_APPLY_(F, ICM, N, ...) ICECREAM_UNPACK_##N(F, ICM, __VA_ARGS__) );}()
-#define ICECREAM_APPLY(ICM, N, F, ...) ICECREAM_APPLY_(F, ICM, N, __VA_ARGS__)
-#define ICECREAM_APPLY_S(ICM, N, S, F, ...) ICECREAM_APPLY_(F, ICM, N, S, __VA_ARGS__)
+#define ICECREAM_APPLY_(fmt, argument_names, N, callable, ...)                         \
+    [&]()                                                                              \
+    {                                                                                  \
+        auto ret_tuple = ::icecream::detail::ensure_tuple(                             \
+            ICECREAM_EXPAND(ICECREAM_DISPATCH(true, fmt, argument_names, __VA_ARGS__)) \
+        );                                                                             \
+        (void) ret_tuple;                                                              \
+        return callable(ICECREAM_UNPACK_##N);                                          \
+    }()
+
+#define ICECREAM_APPLY(fmt, argument_names, N, ...)                       \
+    ICECREAM_EXPAND(ICECREAM_APPLY_(fmt, argument_names, N, __VA_ARGS__))
+
+#define ICECREAM_DISPATCH(is_ic_apply, fmt, argument_names, ...)                           \
+    ::icecream::detail::Dispatcher{                                                        \
+        is_ic_apply, IC_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, fmt, argument_names \
+    }.ret(__VA_ARGS__)
 
 #if defined(ICECREAM_LONG_NAME)
-    #define ICECREAM(...) ICECREAM_("", __VA_ARGS__)
-    #define ICECREAM0() ::icecream::detail::Dispatcher{                \
-        ICECREAM_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, "", "" \
-    }.ret()
-    #define ICECREAM_(S, ...) ::icecream::detail::Dispatcher{                   \
-        ICECREAM_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, S, #__VA_ARGS__ \
-    }.ret(__VA_ARGS__)
-    #define ICECREAM_A(...) \
-        ICECREAM_EXPAND(ICECREAM_APPLY(ICECREAM, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
-    #define ICECREAM_A_(S, ...) \
-        ICECREAM_EXPAND(ICECREAM_APPLY(ICECREAM_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
+    #define ICECREAM(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__, __VA_ARGS__)
+    #define ICECREAM0() ICECREAM_DISPATCH(false, "", "")
+    #define ICECREAM_(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
+    #define ICECREAM_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
+    #define ICECREAM_A_(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_CONFIG_SCOPE()                                                            \
         auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
-        ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4)
+        ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
     #define ICECREAM_CONFIG icecream_config_5f803a3bcdb4
 #else
-    #define IC(...) IC_("", __VA_ARGS__)
-    #define IC0() ::icecream::detail::Dispatcher{                 \
-        IC_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, "",  "" \
-    }.ret()
-    #define IC_(S, ...) ::icecream::detail::Dispatcher{                   \
-        IC_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, S, #__VA_ARGS__ \
-    }.ret(__VA_ARGS__)
-    #define IC_A(...) \
-        ICECREAM_EXPAND(ICECREAM_APPLY(IC, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__))
-    #define IC_A_(S, ...) \
-        ICECREAM_EXPAND(ICECREAM_APPLY_S(IC_, ICECREAM_ARGS_SIZE(__VA_ARGS__), S, __VA_ARGS__))
+    #define IC(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__, __VA_ARGS__)
+    #define IC0() ICECREAM_DISPATCH(false, "", "")
+    #define IC_(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
+    #define IC_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
+    #define IC_A_(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_CONFIG_SCOPE()                                                                  \
         auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
         ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
@@ -2589,9 +2591,8 @@ namespace detail {
         return forest;
     }
 
-
     template <typename... Ts>
-    auto print(
+    auto print_args(
         Config const& config,
         std::string const& file,
         int line,
@@ -2616,7 +2617,7 @@ namespace detail {
             [&]() -> std::string
             {
                 // If used an empty IC macro, i.e.: IC().
-                if (sizeof...(Ts) == 0 || config.include_context())
+                if (config.include_context())
                 {
                   #if defined(_MSC_VER)
                     auto const n = file.rfind('\\');
@@ -2632,57 +2633,78 @@ namespace detail {
             }();
         auto const delimiter = config.context_delimiter();
 
-        if (sizeof...(Ts) == 0)
+        auto const forest = build_forest(config, format, std::begin(arg_names), args...);
+
+        // The number of codepoints used if the whole forest would be printed in an one
+        // line.
+        auto const one_line_forest_n_code_points =
+            [&]() -> size_t
+            {
+                auto n = count_utf8_code_point(prefix);
+
+                for (auto const& name_tree : forest)
+                {
+                    n +=
+                        count_utf8_code_point(std::get<0>(name_tree))
+                        + count_utf8_code_point(": ")
+                        + std::get<1>(name_tree).code_point_length();
+                }
+
+                // The ", " separators between variables.
+                if (forest.size() > 1)
+                {
+                    n += (forest.size() - 1) * count_utf8_code_point(", ");
+                }
+
+                return n;
+            }();
+
+        if (one_line_forest_n_code_points > config.line_wrap_width())
         {
-            config.output()(output_transcoder(prefix + context));
+            config.output()(
+                output_transcoder(
+                    print_multi_line_forest(prefix, context, forest, config.line_wrap_width())
+                )
+            );
         }
         else
         {
-            auto const forest = build_forest(config, format, std::begin(arg_names), args...);
-
-            auto const one_line_forest_n_code_points =
-                [&]() -> size_t
-                {
-                    auto n = count_utf8_code_point(prefix);
-
-                    for (auto const& name_tree : forest)
-                    {
-                        n +=
-                            count_utf8_code_point(std::get<0>(name_tree))
-                            + count_utf8_code_point(": ")
-                            + std::get<1>(name_tree).code_point_length();
-                    }
-
-                    // The ", " separators between variables.
-                    if (forest.size() > 1)
-                    {
-                        n += (forest.size() - 1) * count_utf8_code_point(", ");
-                    }
-
-                    return n;
-                }();
-
-            if (one_line_forest_n_code_points > config.line_wrap_width())
-            {
-                config.output()(
-                    output_transcoder(
-                        print_multi_line_forest(prefix, context, forest, config.line_wrap_width())
-                    )
-                );
-            }
-            else
-            {
-                config.output()(
-                    output_transcoder(
-                        print_one_line_forest(prefix, context, delimiter, forest)
-                    )
-                );
-            }
+            config.output()(
+                output_transcoder(
+                    print_one_line_forest(prefix, context, delimiter, forest)
+                )
+            );
         }
 
         config.output()(output_transcoder("\n"));
     }
 
+    // Handles the printing of a nullary IC() call.
+    inline auto print_nullary(
+        Config const& config,
+        std::string const& file,
+        int line,
+        std::string const& function
+    ) -> void
+    {
+        if (!config.is_enabled()) return;
+
+        auto const prefix = config.prefix()();
+        auto const context =
+            [&]() -> std::string
+            {
+              #if defined(_MSC_VER)
+                auto const n = file.rfind('\\');
+              #else
+                auto const n = file.rfind('/');
+              #endif
+
+                return file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
+            }();
+
+        auto const str = prefix + context + "\n";
+        config.output()(config.output_transcoder()(str.data(), str.size()));
+    }
 
     /** This function will receive a string as "foo, bar, baz" and return a vector with
      * all the arguments split, such as ["foo", "bar", "baz"].
@@ -2842,6 +2864,7 @@ namespace detail {
     // print("foo.cpp", 42, "void bar()", ,)
     struct Dispatcher
     {
+        bool is_ic_apply_;
         Config const& config_;
         std::string const file_;
         int line_;
@@ -2852,6 +2875,7 @@ namespace detail {
         // Used by compilers that expand an empyt __VA_ARGS__ in
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, ""}
         Dispatcher(
+            bool is_ic_apply,
             Config const& config,
             std::string const& file,
             int line,
@@ -2859,7 +2883,8 @@ namespace detail {
             std::string const& format,
             std::string const& arg_names
         )
-            : config_(config)
+            : is_ic_apply_(is_ic_apply)
+            , config_(config)
             , file_(file)
             , line_{line}
             , function_(function)
@@ -2870,13 +2895,15 @@ namespace detail {
         // Used by compilers that expand an empyt __VA_ARGS__ in
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, }
         Dispatcher(
+            bool is_ic_apply,
             Config const& config,
             std::string const& file,
             int line,
             std::string const& function,
             std::string const& format
         )
-            : config_(config)
+            : is_ic_apply_(is_ic_apply)
+            , config_(config)
             , file_(file)
             , line_{line}
             , function_(function)
@@ -2888,7 +2915,22 @@ namespace detail {
         auto print(Ts const&... args) -> void
         {
             auto arg_names = split_arguments(this->arg_names_);
-            ::icecream::detail::print(config_, file_, line_, function_, format_, arg_names, args...);
+            if (this->is_ic_apply_)
+            {
+                // Remove the callable name from the arguments
+                arg_names.erase(arg_names.begin());
+            }
+
+            if (sizeof...(Ts) == 0 && !this->is_ic_apply_)
+            {
+                // Even if with none arguments (just the callable name), an `IC_A` macro
+                // isn't a nullary `IC()` call.
+                print_nullary(config_, file_, line_, function_);
+            }
+            else
+            {
+                print_args(config_, file_, line_, function_, format_, arg_names, args...);
+            }
         }
 
         // Return a std::tuple with all the args
@@ -2907,9 +2949,10 @@ namespace detail {
             return std::forward<decltype(arg)>(arg);
         }
 
-        auto ret() -> void
+        auto ret() -> std::tuple<>
         {
             this->print();
+            return {};
         }
     };
 
