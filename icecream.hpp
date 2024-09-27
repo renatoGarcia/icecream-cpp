@@ -177,6 +177,8 @@
 
 #define ICECREAM_ASSERT(exp, msg) assert(((void)msg, exp))
 
+#define ICECREAM_UNREACHABLE assert(((void)"Should not reach here. Please report the bug", false))
+
 
 namespace boost
 {
@@ -954,6 +956,229 @@ namespace icecream{ namespace detail
     };
 
 
+    // -------------------------------------------------- Variant and Optional
+
+    // Minimal std::variant and std::optional implementation targeting C++11 and
+    // forward. Implements just the functionalities required by Icecream-cpp.
+
+    template <typename T0, typename T1, typename T>
+    struct GetHelper;
+
+    template <typename T0, typename T1>
+    class Variant
+    {
+        template <typename U0, typename U1, typename U2>
+        friend struct GetHelper;
+
+    private:
+        std::size_t type_index;
+
+        union
+        {
+            T0 as_t0;
+            T1 as_t1;
+        };
+
+    public:
+        Variant()
+            : type_index(0)
+            , as_t0()
+        {}
+
+        Variant(T0 const& v)
+            : type_index(0)
+            , as_t0(v)
+        {}
+
+        Variant(T1 const& v)
+            : type_index(1)
+            , as_t1(v)
+        {}
+
+        Variant(T0&& v)
+            : type_index(0)
+            , as_t0(std::move(v))
+        {}
+
+        Variant(T1&& v)
+            : type_index(1)
+            , as_t1(std::move(v))
+        {}
+
+        Variant(Variant<T0, T1> const& v)
+            : type_index(v.type_index)
+        {
+            switch (this->type_index)
+            {
+            case 0:
+                new (&this->as_t0) T0(v.as_t0);
+                break;
+            case 1:
+                new (&this->as_t1) T1(v.as_t1);
+                break;
+            default:
+                ICECREAM_UNREACHABLE;
+            }
+        }
+
+        Variant(Variant<T0, T1>&& v)
+            : type_index(v.type_index)
+        {
+            switch (this->type_index)
+            {
+            case 0:
+                new (&this->as_t0) T0(std::move(v.as_t0));
+                break;
+            case 1:
+                new (&this->as_t1) T1(std::move(v.as_t1));
+                break;
+            default:
+                ICECREAM_UNREACHABLE;
+            }
+        }
+
+        ~Variant()
+        {
+            switch (this->type_index)
+            {
+            case 0:
+                this->as_t0.~T0();
+                break;
+            case 1:
+                this->as_t1.~T1();
+                break;
+            default:
+                ICECREAM_UNREACHABLE;
+            }
+        }
+
+        Variant& operator=(Variant&& other)
+        {
+            if (this != &other)
+            {
+                this->~Variant();
+                new (this) Variant(std::move(other));
+            }
+
+            return *this;
+        }
+
+        auto index() const -> std::size_t
+        {
+            return this->type_index;
+        }
+    };
+
+    template <typename T0, typename T1>
+    struct GetHelper<T0, T1, T0>
+    {
+        auto operator()(Variant<T0, T1> const& v) -> T0 const&
+        {
+            return v.as_t0;
+        }
+
+        auto operator()(Variant<T0, T1>& v) -> T0&
+        {
+            return v.as_t0;
+        }
+
+        auto operator()(Variant<T0, T1>&& v) -> T0&
+        {
+            return v.as_t0;
+        }
+    };
+
+    template <typename T0, typename T1>
+    struct GetHelper<T0, T1, T1>
+    {
+        auto operator()(Variant<T0, T1> const& v) -> T1 const&
+        {
+            return v.as_t1;
+        }
+
+        auto operator()(Variant<T0, T1>& v) -> T1&
+        {
+            return v.as_t1;
+        }
+
+        auto operator()(Variant<T0, T1>&& v) -> T1&
+        {
+            return v.as_t1;
+        }
+    };
+
+    template <typename T, typename T0, typename T1>
+    auto get(Variant<T0, T1>& v) -> T&
+    {
+        return GetHelper<T0, T1, T>()(v);
+    }
+
+    template <typename T, typename T0, typename T1>
+    auto get(Variant<T0, T1> const& v) -> T const&
+    {
+        return GetHelper<T0, T1, T>()(v);
+    }
+
+    template <typename T, typename T0, typename T1>
+    auto get(Variant<T0, T1>&& v) -> T&&
+    {
+        return GetHelper<T0, T1, T>()(std::move(v));
+    }
+
+
+    template <typename T>
+    class Optional
+    {
+    public:
+        Optional() = default;
+
+        Optional(T const& v)
+            : storage(v)
+        {}
+
+        Optional(T&& v)
+            : storage(std::move(v))
+        {}
+
+        Optional(Optional<T>&& v) = default;
+
+        Optional& operator=(Optional&& other)
+        {
+            if (this != &other)
+            {
+                this->storage = std::move(other.storage);
+            }
+
+            return *this;
+        }
+
+        operator bool() const
+        {
+            return this->storage.index() != 0;
+        }
+
+        auto value() const -> T const&
+        {
+            return get<T>(this->storage);
+        }
+
+        auto operator*() -> T&
+        {
+            return get<T>(this->storage);
+        }
+
+        auto operator->() -> T*
+        {
+            return &get<T>(this->storage);
+        }
+
+    private:
+        struct empty {};
+
+        Variant<empty, T> storage;
+    };
+
+
     // -------------------------------------------------- Hereditary
 
     // A hereditary object can optionally hold a value, but will always produce a value
@@ -965,67 +1190,38 @@ namespace icecream{ namespace detail
         // A child constructed without a value will delegate the value requests to its
         // parent.
         Hereditary(Hereditary<T> const& parent)
-            : init{false}
-            , parent{&parent}
+            : parent{&parent}
         {}
 
         // A root object (without a parent) must always have a value.
         Hereditary(T const& value)
             : storage(value)
-            , init{true}
             , parent{nullptr}
         {}
 
         // A root object (without a parent) must always have a value.
         Hereditary(T&& value)
             : storage(std::move(value))
-            , init{true}
             , parent{nullptr}
         {}
 
-        ~Hereditary()
-        {
-            if (this->init)
-            {
-                this->storage.value.~T();
-            }
-        }
-
         auto operator=(T const& value) -> Hereditary&
         {
-            if (this->init)
-            {
-                this->storage.value = value;
-            }
-            else
-            {
-                new (&this->storage.value) T(value);
-                this->init = true;
-            }
-
+            this->storage = value;
             return *this;
         }
 
         auto operator=(T&& value) -> Hereditary&
         {
-            if (this->init)
-            {
-                this->storage.value = std::move(value);
-            }
-            else
-            {
-                new (&this->storage.value) T(std::move(value));
-                this->init = true;
-            }
-
+            this->storage = std::move(value);
             return *this;
         }
 
         auto value() const -> T const&
         {
-            if (this->init)
+            if (this->storage)
             {
-                return this->storage.value;
+                return this->storage.value();
             }
             else if (this->parent)
             {
@@ -1038,27 +1234,7 @@ namespace icecream{ namespace detail
         }
 
     private:
-        union U
-        {
-            char dummy;
-            T value;
-
-            U() {}
-
-            U(T const& v)
-                : value(v)
-            {}
-
-            U(T&& v)
-                : value(std::move(v))
-            {}
-
-            ~U() {}
-
-        } storage;
-
-        bool init;
-
+        Optional<T> storage;
         Hereditary<T> const* parent;
     };
 
@@ -1435,7 +1611,7 @@ namespace detail {
     // -------------------------------------------------- Tree
 
     // Builds an ostringstream and sets its state accordingly to `fmt` string
-    inline auto build_ostream(std::string const& fmt) -> std::tuple<bool, std::ostringstream>
+    inline auto build_ostream(std::string const& fmt) -> Optional<std::ostringstream>
     {
         // format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
         // fill        ::=  <a character>
@@ -1452,7 +1628,7 @@ namespace detail {
         auto it = std::begin(fmt);
         auto end_it = std::end(fmt);
 
-        if (it == end_it) return std::make_tuple(true, std::move(os));
+        if (it == end_it) return std::move(os);
 
         // [[fill]align]
         {
@@ -1587,7 +1763,14 @@ namespace detail {
             ++it;
         }
 
-        return std::make_tuple((it == end_it), std::move(os));
+        if (it == end_it)
+        {
+            return std::move(os);
+        }
+        else
+        {
+            return {};
+        }
     }
 
     // char -> char
@@ -1635,59 +1818,51 @@ namespace detail {
     class PrintingNode
     {
     private:
-        bool is_leaf;
-
-        union U
+        struct Stem
         {
-            std::string leaf;
+            std::string open;
+            std::string separator;
+            std::string close;
+            std::vector<PrintingNode> children;
 
-            struct Stem
-            {
-                std::string open;
-                std::string separator;
-                std::string close;
-                std::vector<PrintingNode> children;
-
-                Stem(
-                    std::string&& open_,
-                    std::string&& separator_,
-                    std::string&& close_,
-                    std::vector<PrintingNode>&& children_
-                )
-                    : open(std::move(open_))
-                    , separator(std::move(separator_))
-                    , close(std::move(close_))
-                    , children(std::move(children_))
-                {}
-
-            } stem;
-
-            U(U&& other, bool is_leaf)
-            {
-                if (is_leaf)
-                {
-                    new (&leaf) std::string(std::move(other.leaf));
-                }
-                else
-                {
-                    new (&stem) Stem(std::move(other.stem));
-                }
-            }
-
-            U(std::string&& leaf_)
-                : leaf(std::move(leaf_))
+            Stem(
+                std::string&& open_,
+                std::string&& separator_,
+                std::string&& close_,
+                std::vector<PrintingNode>&& children_
+            )
+                : open(std::move(open_))
+                , separator(std::move(separator_))
+                , close(std::move(close_))
+                , children(std::move(children_))
             {}
 
-            U(Stem&& stem_)
-                : stem(std::move(stem_))
-            {}
+        };
 
-            ~U() {}
-
-        } content;
+        Variant<std::string, Stem> content;
 
         size_t n_code_unit;
         size_t n_code_point;
+
+        auto is_leaf() const -> bool
+        {
+            return this->content.index() == 0;
+        }
+
+        auto get_leaf() const -> std::string const&
+        {
+            return get<std::string>(this->content);
+        }
+
+        auto get_stem() -> Stem&
+        {
+            return get<Stem>(this->content);
+        }
+
+        auto get_stem() const -> Stem const&
+        {
+            return get<Stem>(this->content);
+        }
 
     public:
         PrintingNode() = delete;
@@ -1695,8 +1870,7 @@ namespace detail {
         PrintingNode& operator=(PrintingNode const&) = delete;
 
         PrintingNode(PrintingNode&& other)
-            : is_leaf{other.is_leaf}
-            , content(std::move(other.content), other.is_leaf)
+            : content(std::move(other.content))
             , n_code_unit(other.n_code_unit)
             , n_code_point(other.n_code_point)
         {}
@@ -1712,23 +1886,10 @@ namespace detail {
             return *this;
         }
 
-        ~PrintingNode()
-        {
-            if (this->is_leaf)
-            {
-                this->content.leaf.~basic_string();
-            }
-            else
-            {
-                this->content.stem.~Stem();
-            }
-        }
-
         explicit PrintingNode(std::string leaf)
-            : is_leaf{true}
-            , content(std::move(leaf))
-            , n_code_unit(this->content.leaf.size())
-            , n_code_point(count_utf8_code_point(this->content.leaf))
+            : content(std::move(leaf))
+            , n_code_unit(this->get_leaf().size())
+            , n_code_point(count_utf8_code_point(this->get_leaf()))
         {}
 
         PrintingNode(
@@ -1737,9 +1898,8 @@ namespace detail {
             std::string close,
             std::vector<PrintingNode> children
         )
-            : is_leaf{false}
-            , content(
-                U::Stem(
+            : content(
+                Stem(
                     std::move(open),
                     std::move(separator),
                     std::move(close),
@@ -1750,20 +1910,20 @@ namespace detail {
                 [this]()
                 {
                     // The enclosing chars.
-                    auto result = this->content.stem.open.size() + this->content.stem.close.size();
+                    auto result = this->get_stem().open.size() + this->get_stem().close.size();
 
                     // count the size of each child
-                    for (auto const& child : this->content.stem.children)
+                    for (auto const& child : this->get_stem().children)
                     {
                         result += child.n_code_unit;
                     }
 
                     // The separators.
-                    if (this->content.stem.children.size() > 1)
+                    if (this->get_stem().children.size() > 1)
                     {
                         result +=
-                            (this->content.stem.children.size() - 1)
-                            * this->content.stem.separator.size();
+                            (this->get_stem().children.size() - 1)
+                            * this->get_stem().separator.size();
                     }
 
                     return result;
@@ -1774,21 +1934,21 @@ namespace detail {
                 {
                     // The enclosing chars.
                     auto result =
-                        count_utf8_code_point(this->content.stem.open)
-                        + count_utf8_code_point(this->content.stem.close);
+                        count_utf8_code_point(this->get_stem().open)
+                        + count_utf8_code_point(this->get_stem().close);
 
                     // count the size of each child
-                    for (auto const& child : this->content.stem.children)
+                    for (auto const& child : this->get_stem().children)
                     {
                         result += child.n_code_point;
                     }
 
                     // The separators.
-                    if (this->content.stem.children.size() > 1)
+                    if (this->get_stem().children.size() > 1)
                     {
                         result +=
-                            (this->content.stem.children.size() - 1)
-                            * count_utf8_code_point(this->content.stem.separator);
+                            (this->get_stem().children.size() - 1)
+                            * count_utf8_code_point(this->get_stem().separator);
                     }
 
                     return result;
@@ -1811,14 +1971,14 @@ namespace detail {
                 auto current = to_visit.back();
                 to_visit.pop_back();
 
-                if (!current->is_leaf)
+                if (!current->is_leaf())
                 {
-                    for (auto& child : current->content.stem.children)
+                    for (auto& child : current->get_stem().children)
                     {
                         to_visit.push_back(&child);
                     }
                 }
-                else if (current->content.leaf == key)
+                else if (current->get_leaf() == key)
                 {
                     return current;
                 }
@@ -1833,29 +1993,29 @@ namespace detail {
             auto result = std::string{};
             result.reserve(this->n_code_unit);
 
-            if (this->is_leaf)
+            if (this->is_leaf())
             {
-                result = this->content.leaf;
+                result = this->get_leaf();
             }
             else
             {
-                result = this->content.stem.open;
+                result = this->get_stem().open;
 
                 for (
-                    auto it = this->content.stem.children.cbegin();
-                    it != this->content.stem.children.cend();
+                    auto it = this->get_stem().children.cbegin();
+                    it != this->get_stem().children.cend();
                 ){
                     result += it->print();
 
                     ++it;
 
-                    if (it != this->content.stem.children.cend())
+                    if (it != this->get_stem().children.cend())
                     {
-                        result += this->content.stem.separator;
+                        result += this->get_stem().separator;
                     }
                 }
 
-                result += this->content.stem.close;
+                result += this->get_stem().close;
             }
 
             return result;
@@ -1868,19 +2028,19 @@ namespace detail {
 
             // Leaf nodes will print its content regardless of being longer than the maximum line
             // length, since there is no children to be split.
-            if (this->is_leaf)
+            if (this->is_leaf())
             {
-                result = this->content.leaf;
+                result = this->get_leaf();
             }
             else
             {
-                result = this->content.stem.open;
+                result = this->get_stem().open;
                 result += "\n";
 
                 auto const indent_lenght = indent_level * Config::INDENT_BASE ;
                 for (
-                    auto it = this->content.stem.children.cbegin();
-                    it != this->content.stem.children.cend();
+                    auto it = this->get_stem().children.cbegin();
+                    it != this->get_stem().children.cend();
                 ){
                     result += std::string(indent_level * Config::INDENT_BASE, ' ');
 
@@ -1895,9 +2055,9 @@ namespace detail {
 
                     ++it;
 
-                    if (it != this->content.stem.children.cend())
+                    if (it != this->get_stem().children.cend())
                     {
-                        result += this->content.stem.separator;
+                        result += this->get_stem().separator;
                         result += "\n";
                     }
                     else
@@ -1908,7 +2068,7 @@ namespace detail {
 
                 result +=
                     std::string((indent_level-1) * Config::INDENT_BASE, ' ')
-                    + this->content.stem.close;
+                    + this->get_stem().close;
             }
 
             return result;
@@ -1941,14 +2101,13 @@ namespace detail {
         >::type
     {
         auto mb_ostrm = build_ostream(fmt);
-        if (!std::get<0>(mb_ostrm))
+        if (!mb_ostrm)
         {
             return PrintingNode("*Error* on formatting string");
         }
 
-        auto& ostrm = std::get<1>(mb_ostrm);
-        ostrm << value;
-        return PrintingNode(ostrm.str());
+        *mb_ostrm << value;
+        return PrintingNode(mb_ostrm->str());
     }
 
     // Print C string
@@ -1958,12 +2117,10 @@ namespace detail {
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
-        if (!std::get<0>(mb_ostrm))
+        if (!mb_ostrm)
         {
             return PrintingNode("*Error* on formatting string");
         }
-
-        auto& ostrm = std::get<1>(mb_ostrm);
 
         if (config.show_c_string())
         {
@@ -1974,7 +2131,7 @@ namespace detail {
                     >::type
                 >::type;
 
-            ostrm << '"'
+            *mb_ostrm << '"'
                 << transcoder_dispatcher(
                     config, value, std::char_traits<CharT>::length(value)
                 )
@@ -1982,10 +2139,10 @@ namespace detail {
         }
         else
         {
-            ostrm << reinterpret_cast<void const*>(value);
+            *mb_ostrm << reinterpret_cast<void const*>(value);
         }
 
-        return PrintingNode(ostrm.str());
+        return PrintingNode(mb_ostrm->str());
     }
 
     // Print std::string
@@ -1995,14 +2152,14 @@ namespace detail {
     ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
-        if (!std::get<0>(mb_ostrm))
+        if (!mb_ostrm)
         {
             return PrintingNode("*Error* on formatting string");
         }
 
-        auto& ostrm = std::get<1>(mb_ostrm);
-        ostrm << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
-        return PrintingNode(ostrm.str());
+        // auto& ostrm = std::get<1>(mb_ostrm);
+        *mb_ostrm << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
+        return PrintingNode(mb_ostrm->str());
     }
 
   #if defined(ICECREAM_STRING_VIEW_HEADER)
@@ -2025,7 +2182,7 @@ namespace detail {
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
-        if (!std::get<0>(mb_ostrm))
+        if (!mb_ostrm)
         {
             return PrintingNode("*Error* on formatting string");
         }
@@ -2070,10 +2227,9 @@ namespace detail {
             break;
         }
 
-        auto& ostrm = std::get<1>(mb_ostrm);
-        ostrm << '\'' << str << '\'';
+        *mb_ostrm << '\'' << str << '\'';
 
-        return PrintingNode(ostrm.str());
+        return PrintingNode(mb_ostrm->str());
     }
 
     // Print signed and unsigned char
@@ -2088,14 +2244,13 @@ namespace detail {
             >::type;
 
         auto mb_ostrm = build_ostream(fmt);
-        if (!std::get<0>(mb_ostrm))
+        if (!mb_ostrm)
         {
             return PrintingNode("*Error* on formatting string");
         }
 
-        auto& ostrm = std::get<1>(mb_ostrm);
-        ostrm << static_cast<T0>(value);
-        return PrintingNode(ostrm.str());
+        *mb_ostrm << static_cast<T0>(value);
+        return PrintingNode(mb_ostrm->str());
     }
 
     // Print smart pointers without an operator<<(ostream&) overload.
