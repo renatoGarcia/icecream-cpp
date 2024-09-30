@@ -2727,7 +2727,7 @@ namespace detail {
         return t;
     }
 
-    // Otherwise fail to compile
+    // Just to compile, should not be called.
     template <typename T>
     auto call_to_string(T const&) ->
         typename std::enable_if<
@@ -2739,7 +2739,10 @@ namespace detail {
                 || is_string_view<T>::value
             ),
             std::string
-        >::type;
+        >::type
+    {
+        ICECREAM_UNREACHABLE;
+    }
 
     // Would be better if this function could be on calling site as a lambda
     // function, however older compilers (gcc<=9 and clang<=10 for example) fail

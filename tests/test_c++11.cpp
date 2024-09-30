@@ -944,6 +944,16 @@ TEST_CASE("formatting")
         IC(v0, IC_("X", v0));
         REQUIRE(str == "ic| v0: 77, v0: 4D\n");
     }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = std::vector<int>{10,12,13};
+        IC(IC_("x", v0));
+        REQUIRE(str == "ic| v0: [a, c, d]\n");
+    }
 }
 
 
