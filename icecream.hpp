@@ -2742,6 +2742,7 @@ namespace detail {
         >::type
     {
         ICECREAM_UNREACHABLE;
+        return "";
     }
 
     // Would be better if this function could be on calling site as a lambda
