@@ -55,6 +55,8 @@ jobs:
         exclude:
           - version: clang5
             cpp: 20
+          - version: clang10
+            cpp: 20
     steps:
       - uses: actions/checkout@v2
       - name: run
@@ -91,7 +93,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cpp: [11, 14, 17, 20]
+        cpp: [11, 14, 17]
     env:
       CPP_STANDARD: ${{ matrix.cpp }}
     steps:

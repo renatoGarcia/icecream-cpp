@@ -32,7 +32,7 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
      * [Wide strings](#wide-strings)
      * [Unicode strings](#unicode-strings)
      * [Pointer like types](#pointer-like-types)
-     * [Iterable types](#iterable-types)
+     * [Range types](#range-types)
      * [Tuple like types](#tuple-like-types)
      * [Optional types](#optional-types)
      * [Variant types](#variant-types)
@@ -305,9 +305,14 @@ will print:
 
 #### Format string syntax
 
+Each printing type has its own formatting string syntax. The specification to [range
+types](#range-types) is described [its section](#range-format-string). At here we describe
+the formatting syntax to types printed using `IOStreams`.
+
 The adopted formatting string is strongly based on
 [{fmt}](https://fmt.dev/11.0/syntax/#format-specification-mini-language) and [STL
 Formatting](https://en.cppreference.com/w/cpp/utility/format/spec)
+
 has the following syntax:
 
 ```
@@ -772,7 +777,7 @@ When printing a type `T`, the precedence is use an overloaded function
 `operator<<(ostream&, T)` always when it is available. The exceptions to that rule are
 strings (C strings, `std::string`, and `std::string_view`), `char` and bounded arrays.
 Strings will be enclosed by `"`, `char` will be enclosed by `'`, and arrays are considered
-iterables rather than let decay to raw pointers.
+ranges rather than let decay to raw pointers.
 
 In general, if an `operator<<(ostream&, T)` overload is not available to a type `T`, a
 call to `IC(t)` will result on a compiling error. All exceptions to that rule, when
@@ -867,28 +872,81 @@ ic| v1: 0x55bcbd840ec0
 ic| v1: expired
 ```
 
-#### Iterable types
+#### Range types
 
-If for a type `A` with an instance `a`, all following operations are valid:
+A range is any type able to provide a [`begin`, `end`) iterator pair. In precise terms,
+the Icecream-cpp library is able to print a range type `R` if it fulfills the
+[`forward_range`](https://en.cppreference.com/w/cpp/ranges/forward_range) concept. In
+roughly terms, a range type `R` having an iterator type `I` and a sentinel type `S` (used
+to mark the end of the range, can be the same type as `I`) is a forward range if all the
+following operations are valid:
 
 ```C++
-auto it = begin(a);
-it != end(a);
-++it;
-*it;
+I i0 = begin(r);
+S s = end(r);
+I i1(i0);
+i0 == i1
+i0 != i1
+i0 == s
+i0 != s
+++i0;
+*i0;
 ```
 
-the type `A` is defined *iterable*, and if `A` has no overload of `operator<<(ostream&,
-A)`, all of its items will be printed instead. The code:
+If all that operations are valid, and an `operator<<(ostream&, R const&)` overload doesn't
+exist, Icecream-cpp will print all items within `R` instead. The code:
 
 ```C++
-auto v0 = std::list<int> {10, 20, 30};
+auto v0 = std::list<int>{10, 20, 30};
 IC(v0);
 ```
 
 will print:
 
     ic| v0: [10, 20, 30]
+
+##### Range format string
+
+The accepted formatting string to a range type is a combination of both a range formatting
+and its elements formatting. The range formatting is syntactically and semantically almost
+identical to the [Python
+slicing](https://docs.python.org/3/reference/expressions.html#slicings).
+
+Formally, the accepted iterable types formatting string is:
+
+```
+format_spec  ::=  [range_fmt][":"elements_fmt]
+range_fmt    ::=  "[" slicing | index "]"
+slicing      ::=  [lower_bound] ":" [upper_bound] [ ":" [stride] ]
+lower_bound  ::=  integer
+upper_bound  ::=  integer
+stride       ::=  integer
+index        ::=  integer
+integer      ::=  ["-"]digit+
+digit        ::=  "0"..."9"
+```
+
+The same `elements_fmt` string will be used by all the printing elements, so it will have
+the same definition as the formatting string of the range elements.
+
+The code:
+
+```C++
+auto arr = std::vector<int>{10, 11, 12, 13, 14, 15};
+IC_F("[:2:-1]:#x", arr);
+```
+will print:
+
+    ic| arr: [:2:-1]->[0xf, 0xe, 0xd]
+
+Even though the specification says that `lower_bound`, `upper_bound`, `stride`, and
+`index`, can have any integer value, some `range` capabilities can restrict them to just
+positive values.
+
+If a `range` is not [`sized`](https://en.cppreference.com/w/cpp/ranges/sized_range), the
+`lower_bound`, `upper_bound`, and `index` values must be positive. Similarly, if a `range`
+is not [`bidirectional`](https://en.cppreference.com/w/cpp/ranges/bidirectional_range) the
+`stride` value must be positive too.
 
 
 #### Tuple like types
