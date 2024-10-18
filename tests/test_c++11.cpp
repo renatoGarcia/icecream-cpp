@@ -563,7 +563,7 @@ TEST_CASE("arrays")
         IC_CONFIG.output(str);
 
         int v0[] = {10, 20, 30};
-        IC_F("#X", v0);
+        IC_F(":#X", v0);
         REQUIRE(str == "ic| v0: [0XA, 0X14, 0X1E]\n");
     }
 }
@@ -617,7 +617,7 @@ TEST_CASE("iterable")
         IC_CONFIG.output(str);
 
         auto v0 = std::list<int> {10, 20, 30};
-        IC_F("0v#5x", v0);
+        IC_F(":0v#5x", v0);
         REQUIRE(str == "ic| v0: [0x00a, 0x014, 0x01e]\n");
     }
 
@@ -951,7 +951,7 @@ TEST_CASE("formatting")
         IC_CONFIG.output(str);
 
         auto v0 = std::vector<int>{10,12,13};
-        IC(IC_("x", v0));
+        IC(IC_(":x", v0));
         REQUIRE(str == "ic| v0: [a, c, d]\n");
     }
 }

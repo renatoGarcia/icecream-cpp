@@ -25,6 +25,7 @@
 #define ICECREAM_HPP_INCLUDED
 
 #include <cassert>
+#include <cerrno>
 #include <clocale>
 #include <cstddef>
 #include <cstdint>
@@ -36,6 +37,7 @@
 #include <ios>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <ostream>
@@ -210,6 +212,15 @@ namespace boost
 
 namespace icecream{ namespace detail
 {
+    // To allow ADL to find custom `begin`, `end`, `size`, and `to_string` function overloads
+    using std::begin;
+    using std::end;
+  #if defined(__cpp_lib_nonmember_container_access)
+    using std::size;
+  #endif
+    using std::to_string;
+
+
     // -------------------------------------------------- is_instantiation
 
     // Checks if a type T (like std::pair<int, float>) is an instantiation of a template
@@ -323,28 +334,181 @@ namespace icecream{ namespace detail
     using returned_type = decltype(returned_type_impl<T>(0));
 
 
-    // -------------------------------------------------- is_iterable
+    // -------------------------------------------------- is_sized
+    // Checks if a class `T` has either a `size()` method or a `size(T const&)` overload.
 
-    // To allow ADL with custom begin/end
-    using std::begin;
-    using std::end;
-
-    // Checks if T is iterable, i.e.: to a variable `t` and an iterator `it`, are valid
-    // the statements: begin(t), end(t), it != it, ++it, *it.
     template <typename T>
-    auto is_iterable_impl(int) ->
-        decltype (
-            begin(std::declval<T const&>()) != end(std::declval<T const&>()), // begin, end, operator!=
-            ++std::declval<decltype(begin(std::declval<T const&>()))&>(),     // operator++
-            *begin(std::declval<T const&>()),                                 // operator*
+    auto has_size_method_impl(int) ->
+        decltype(
+            std::declval<T const&>().size(),
             std::true_type{}
         );
 
     template <typename T>
-    auto is_iterable_impl(...) -> std::false_type;
+    auto has_size_method_impl(...) -> std::false_type;
 
     template <typename T>
-    using is_iterable = decltype(is_iterable_impl<T>(0));
+    auto has_size_overload_impl(int) ->
+        decltype(
+            size(std::declval<T const&>()),
+            std::true_type{}
+        );
+
+    template <typename T>
+    auto has_size_overload_impl(...) -> std::false_type;
+
+    template <typename T>
+    using is_sized =
+        typename disjunction<
+            decltype(has_size_method_impl<T>(0)),
+            decltype(has_size_overload_impl<T>(0))
+        >::type;
+
+    template <typename T>
+    using has_size_method = decltype(has_size_method_impl<T>(0));
+
+    template <typename T>
+    using has_size_function_overload = decltype(has_size_overload_impl<T>(0));
+
+
+    // -------------------------------------------------- is_sentinel_for
+
+    template <typename S, typename I>
+    auto is_sentinel_for_impl(int) ->
+        decltype (
+            S(std::declval<S&>()),
+            std::declval<S&>() = std::declval<S&>(),
+            std::declval<I&>() != std::declval<S&>(),
+            std::declval<I&>() == std::declval<S&>(),
+            std::true_type{}
+        );
+
+    template <typename S, typename I>
+    auto is_sentinel_for_impl(...) -> std::false_type;
+
+    template <typename S, typename I>
+    using is_sentinel_for = decltype(is_sentinel_for_impl<S, I>(0));
+
+
+    // -------------------------------------------------- is_range
+
+    template <typename R>
+    auto is_range_impl(int) ->
+        decltype (
+            begin(std::declval<R&>()),
+            end(std::declval<R&>()),
+            std::true_type{}
+        );
+
+    template <typename R>
+    auto is_range_impl(...) -> std::false_type;
+
+    template <typename R>
+    using is_range = decltype(is_range_impl<R>(0));
+
+
+    // -------------------------------------------------- get_iterator_t
+
+    template <typename R>
+    using get_iterator_t = decltype(begin(std::declval<R&>()));
+
+
+    // -------------------------------------------------- get_reference_t
+
+    template <typename I>
+    using get_reference_t = decltype(*std::declval<I&>());
+
+
+    // -------------------------------------------------- is_input_iterator
+
+    template <typename T>
+    auto is_input_iterator_impl(int) ->
+        decltype (
+            *std::declval<T&>(),    // is dereferenciable
+            ++std::declval<T&>(),   // is pre-incrementable
+            std::true_type{}
+        );
+
+    template <typename T>
+    auto is_input_iterator_impl(...) -> std::false_type;
+
+    template <typename T>
+    using is_input_iterator = decltype(is_input_iterator_impl<T>(0));
+
+
+    // -------------------------------------------------- is_input_range
+
+    template <typename T>
+    using is_input_range =
+        typename conjunction<
+            is_range<T>,
+            is_input_iterator<get_iterator_t<T>>
+        >::type;
+
+
+    // -------------------------------------------------- is_forward_iterator
+
+    template <typename I>
+    auto is_forward_iterator_impl(int) ->
+        decltype (
+            I(std::declval<I&>()),   // is copyable
+            I(),                     // is default initializable
+            std::declval<I&>() == std::declval<I&>(),   // is copyable
+            std::declval<I&>() != std::declval<I&>(),   // is copyable
+            std::true_type{}
+        );
+
+    template <typename I>
+    auto is_forward_iterator_impl(...) -> std::false_type;
+
+    template <typename I>
+    using is_forward_iterator =
+        typename conjunction<
+            is_input_iterator<I>,
+            is_sentinel_for<I, I>,
+            decltype(is_forward_iterator_impl<I>(0))
+        >::type;
+
+
+    // -------------------------------------------------- is_forward_range
+
+    template <typename R>
+    using is_forward_range =
+        typename conjunction<
+            is_input_range<R>,
+            is_forward_iterator<get_iterator_t<R>>
+        >::type;
+
+
+    // -------------------------------------------------- is_bidirectional_iterator
+
+    template <typename I>
+    auto is_bidirectional_iterator_impl(int) ->
+        decltype (
+            --std::declval<I&>(),
+            std::declval<I&>()--,
+            std::true_type{}
+        );
+
+    template <typename I>
+    auto is_bidirectional_iterator_impl(...) -> std::false_type;
+
+    template <typename I>
+    using is_bidirectional_iterator =
+        typename conjunction<
+            is_forward_iterator<I>,
+            decltype(is_bidirectional_iterator_impl<I>(0))
+        >::type;
+
+
+    // -------------------------------------------------- is_bidirectional_range
+
+    template <typename R>
+    using is_bidirectional_range =
+        typename conjunction<
+            is_forward_range<R>,
+            is_bidirectional_iterator<get_iterator_t<R>>
+        >::type;
 
 
     // -------------------------------------------------- has_push_back_T
@@ -383,9 +547,6 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- has_to_string
 
-    // To allow ADL when calling `to_string`
-    using std::to_string;
-
     template <typename T>
     auto has_to_string_impl(int) ->
         decltype (
@@ -398,6 +559,7 @@ namespace icecream{ namespace detail
 
     template <typename T>
     using has_to_string = decltype(has_to_string_impl<T>(0));
+
 
     // -------------------------------------------------- is_tuple
 
@@ -486,11 +648,11 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- is_collection
 
-    // Checks if T is a collection, i.e.: an iterable type that is not a std::string.
+    // Checks if T is a collection, i.e.: a range type that is not a std::string.
     template <typename T>
     using is_collection =
         typename conjunction<
-            is_iterable<T>, negation<is_std_string<T>>, negation<is_string_view<T>>
+            is_range<T>, negation<is_std_string<T>>, negation<is_string_view<T>>
         >::type;
 
 
@@ -1140,6 +1302,8 @@ namespace icecream{ namespace detail
             : storage(std::move(v))
         {}
 
+        Optional(Optional<T> const& v) = default;
+
         Optional(Optional<T>&& v) = default;
 
         Optional& operator=(Optional&& other)
@@ -1167,6 +1331,11 @@ namespace icecream{ namespace detail
             return get<T>(this->storage);
         }
 
+        auto operator*() const -> T const&
+        {
+            return get<T>(this->storage);
+        }
+
         auto operator->() -> T*
         {
             return &get<T>(this->storage);
@@ -1178,6 +1347,65 @@ namespace icecream{ namespace detail
         Variant<empty, T> storage;
     };
 
+
+    template <typename T>
+    class Optional<T&>
+    {
+    public:
+        Optional() = default;
+
+        Optional(T& v)
+            : storage(v)
+        {}
+
+        Optional(T&& v)
+            : storage(std::move(v))
+        {}
+
+        Optional(Optional<T&> const& v) = default;
+
+        Optional(Optional<T&>&& v) = default;
+
+        Optional& operator=(Optional&& other)
+        {
+            if (this != &other)
+            {
+                this->storage = std::move(other.storage);
+            }
+
+            return *this;
+        }
+
+        operator bool() const
+        {
+            return this->storage.index() != 0;
+        }
+
+        auto value() const -> T const&
+        {
+            return get<std::reference_wrapper<T>>(this->storage);
+        }
+
+        auto operator*() -> T&
+        {
+            return get<std::reference_wrapper<T>>(this->storage);
+        }
+
+        auto operator*() const -> T const&
+        {
+            return get<std::reference_wrapper<T>>(this->storage);
+        }
+
+        auto operator->() -> T*
+        {
+            return &(get<std::reference_wrapper<T>>(this->storage).get());
+        }
+
+    private:
+        struct empty {};
+
+        Variant<empty, std::reference_wrapper<T>> storage;
+    };
 
     // -------------------------------------------------- Hereditary
 
@@ -2347,13 +2575,439 @@ namespace detail {
         return PrintingNode("(", ", ", ")", tuple_traverser(value, fmt, config));
     }
 
-    // Print all items of any iterable class
+
+    // -------------------------------------------------- Range classes
+
+    // Direct representation of a slicing string.
+    struct Slice
+    {
+        Optional<ptrdiff_t> start;
+        Optional<ptrdiff_t> stop;
+        Optional<ptrdiff_t> step;
+
+        // Receives a slicing string, like "[:-2:2]" and returns an instance of `Slice`
+        // class that represents it. If the string is an invalid slicing, returns nothing.
+        static auto build(std::string const& fmt) -> Optional<Slice>
+        {
+            if (fmt.empty())
+            {
+                return Slice{{}, {}, {}};
+            }
+
+            auto it = fmt.begin();
+            auto const it_end = fmt.end() - 1;
+
+            // All iterable slicings must start with '[' and finish with ']'
+            if (*it != '[' || *it_end != ']')
+            {
+                return {};
+            }
+
+            // An empty '[]' slicing is invalid
+            if (it+1 == it_end)
+            {
+                return {};
+            }
+
+            // At here, `it` points to the opening '[' and `it_end` points to the closing ']'
+
+            auto indexes = std::vector<Optional<ptrdiff_t>>{};
+            auto idx_begin_it = it;
+            for (; it != fmt.end(); ++it)
+            {
+                if (*it == ']' || *it == ':')
+                {
+                    auto const idx_string = std::string(idx_begin_it+1, it);
+                    if (idx_string.empty())
+                    {
+                        indexes.push_back({});
+                    }
+                    else
+                    {
+                        auto end = static_cast<char*>(nullptr);
+                        auto const lnum = strtol(idx_string.data(), &end, 10);
+                        if (
+                            // if no characters were converted
+                            end == idx_string.data()
+
+                            // or if there is an overflow on long int
+                            || (
+                                (
+                                 lnum == std::numeric_limits<long>::max()
+                                 || lnum == std::numeric_limits<long>::lowest()
+                                )
+                                && errno == ERANGE
+                            )
+
+                            // or if there is an overflow to convert from long to ptrdiff
+                            || (
+                                lnum > std::numeric_limits<ptrdiff_t>::max()
+                                || lnum < std::numeric_limits<ptrdiff_t>::lowest()
+                            )
+                        ) {
+                            return {};
+                        }
+
+                        indexes.push_back(lnum);
+                    }
+
+                    idx_begin_it = it;
+                }
+            }
+
+            // If indexing an element ("[3]") instead of a proper slicing.
+            if (indexes.size() == 1 && indexes[0])
+            {
+                auto const idx = *indexes[0];
+                return Slice{idx, idx+1, {}};
+            }
+
+            while (indexes.size() < 3)
+            {
+                indexes.push_back({});
+            }
+
+            if (indexes.size() != 3) return {};
+
+            return Slice{indexes[0], indexes[1], indexes[2]};
+        }
+    };
+
+    // Advances `it` for `n` steps. Will stop before advancing `n` steps if `sentinel` is
+    // reached. Returns the actual displacement.
+    template <typename I, typename S>
+    auto advance_it(I it, S const& sentinel, size_t n) -> I
+    {
+        auto offset = size_t{0};
+        while (it != sentinel && offset != n)
+        {
+            std::advance(it, 1);
+            offset += 1;
+        }
+
+        return it;
+    }
+
+    // A functor whose nullary function call operator will return an Optional element in
+    // the range [it, sentinel) spaced by `step`. After exhausting the range, any call
+    // will return an empty Optional.
+    template <typename I, typename S>
+    class SliceFunctorImpl
+    {
+    private:
+        I it;
+        S sentinel;
+        size_t step;
+
+    public:
+        SliceFunctorImpl(I it, S sentinel, size_t step)
+            : it(it)
+            , sentinel(sentinel)
+            , step(step)
+        {}
+
+        auto operator()() -> Optional<get_reference_t<I>>
+        {
+            if (this->it == this->sentinel) return {};
+
+            auto old_it = this->it;
+            this->it = advance_it(this->it, this->sentinel, this->step);
+
+            return {*old_it};
+        }
+    };
+
+    template <typename R>
+    using SliceFunctor = std::function<Optional<get_reference_t<get_iterator_t<R>>>()>;
+
+    template <typename R, typename I, typename S>
+    auto make_slice_functor(I iterator, S sentinel, size_t step) -> SliceFunctor<R>
+    {
+        return SliceFunctorImpl<I, S>{iterator, sentinel, step};
+    }
+
+    template <typename R>
+    auto build_slice_functor_p(
+        R const& range,
+        Optional<size_t> mb_start,
+        Optional<size_t> mb_stop,
+        size_t step
+    ) -> SliceFunctor<R const>
+    {
+        auto const start_it = mb_start ? advance_it(begin(range), end(range), *mb_start) : begin(range);
+
+        if (!mb_stop)
+        {
+            return make_slice_functor<R const>(start_it, end(range), step);
+        }
+        else if (is_sized<R>::value)  // So it has a value and it is normalized
+        {
+            auto stop_it = begin(range);
+            std::advance(stop_it, *mb_stop);
+            return make_slice_functor<R const>(start_it, stop_it, step);
+        }
+        else
+        {
+            return make_slice_functor<R const>(
+                start_it,
+                advance_it(begin(range), end(range), *mb_stop),
+                step
+            );
+        }
+    }
+
+    template <typename R>
+    auto build_slice_functor_n(
+        R const& range,
+        Optional<size_t> mb_start,
+        Optional<size_t> mb_stop,
+        size_t step
+    ) ->
+        typename std::enable_if<
+            is_bidirectional_range<R>::value,
+            SliceFunctor<R const>
+        >::type
+    {
+        auto make_reverse_iterator = [](get_iterator_t<R const> it)
+        {
+            return std::reverse_iterator<get_iterator_t<R const>>(it);
+        };
+
+        auto start_it = mb_start ?
+            advance_it(begin(range), end(range), *mb_start) :
+
+            // An Iterator instance evaluating equal to the range Sentinel. Since we will
+            // backwardly iterate over the range, that is the default starting point.
+            advance_it(begin(range), end(range), std::numeric_limits<size_t>::max());
+
+        // When derreferencing a `reverse_iterator<IT>`, the retrieved element will be one
+        // before the element pointed by IT. So here we fix that offset.
+        if (start_it != end(range)) ++start_it;
+
+        // If we don't have a stop value, set it to the beginning of the range
+        if (!mb_stop)
+        {
+            auto stop_it = begin(range);
+            return make_slice_functor<R const>(
+                make_reverse_iterator(start_it), make_reverse_iterator(stop_it), step
+            );
+        }
+
+        // If we do have a stop value, and its value is normalized within [0, range_size]
+        else if (is_sized<R>::value)
+        {
+            auto stop_it = begin(range);
+            std::advance(stop_it, *mb_stop);
+            if (stop_it != end(range)) ++stop_it;
+
+            return make_slice_functor<R const>(
+                make_reverse_iterator(start_it), make_reverse_iterator(stop_it), step
+            );
+        }
+
+        // If we do have a stop value, and its value is not normalized
+        else
+        {
+            auto stop_it = advance_it(begin(range), end(range), *mb_stop);
+            return make_slice_functor<R const>(
+                make_reverse_iterator(start_it), make_reverse_iterator(stop_it), step
+            );
+        }
+    }
+
+    template <typename R>
+    auto build_slice_functor_n(R const& r, Optional<size_t>, Optional<size_t>, size_t) ->
+        typename std::enable_if<
+            !is_bidirectional_range<R>::value,
+            SliceFunctor<R const>
+        >::type
+    {
+        ICECREAM_UNREACHABLE;
+        return make_slice_functor<R const>(begin(r), begin(r), 0);
+    }
+
+    template <typename R>
+    auto maybe_get_size(
+        R const& range
+    ) -> typename std::enable_if<
+        has_size_function_overload<R>::value,
+        Optional<size_t>
+    >::type
+    {
+        return size(range);
+    }
+
+    template <typename R>
+    auto maybe_get_size(
+        R const& range
+    ) -> typename std::enable_if<
+        has_size_method<R>::value && !has_size_function_overload<R>::value,
+        Optional<size_t>
+    >::type
+    {
+        return range.size();
+    }
+
+    template <typename R>
+    auto maybe_get_size(
+        R const&
+    ) -> typename std::enable_if<
+        !is_sized<R>::value,
+        Optional<size_t>
+    >::type
+    {
+        return {};
+    }
+
+    template <typename R>
+    auto maybe_make_slice_functor(
+        R const& range, Slice const& slice
+    ) -> Variant<std::string,  SliceFunctor<R const>>
+    {
+        auto const mb_range_size = maybe_get_size(range);
+
+        if (
+            mb_range_size
+            && *mb_range_size > static_cast<size_t>(std::numeric_limits<ptrdiff_t>::max())
+        ) {
+            return std::string("<this range size greater than the maximum supported>");
+        }
+
+        // If the range size is unknown it is not possible to normalize a negative index.
+        // So here we return an error message if we have that situation.
+        if (
+            !mb_range_size
+            && ((slice.start && *slice.start < 0) || (slice.stop && *slice.stop < 0))
+        ) {
+            return std::string{"<this range supports only non-negative start and stop slice indexes>"};
+        }
+
+        auto const step = slice.step ? *slice.step : 1;
+        if (step == 0)
+        {
+            return std::string{"<slice step cannot be zero>"};
+        }
+        if (!is_bidirectional_range<R>::value && step < 0)
+        {
+            return std::string{"<this range supports only strictly positive slice steps>"};
+        }
+
+        auto const mb_start =
+            [&]() -> Optional<size_t> {
+                if (!slice.start)
+                {
+                    return {};
+                }
+                else if (mb_range_size)
+                {
+                    auto const range_size = static_cast<ptrdiff_t>(*mb_range_size);
+                    auto const idx = (*slice.start >= 0) ? *slice.start : *slice.start + range_size;
+                    return (idx < 0) ?
+                        0
+                        : (idx > range_size) ? static_cast<size_t>(range_size) : static_cast<size_t>(idx);
+                }
+                else
+                {
+                    // If range is unsized, start was ensured as non-negative above
+                    return static_cast<size_t>(*slice.start);
+                }
+            }();
+
+        auto const mb_stop =
+            [&]() -> Optional<size_t> {
+                if (!slice.stop)
+                {
+                    return {};
+                }
+                else if (mb_range_size)
+                {
+                    auto const range_size = static_cast<ptrdiff_t>(*mb_range_size);
+                    auto const idx = (*slice.stop >= 0) ? *slice.stop : *slice.stop + range_size;
+
+                    if (step < 0 && idx < 0)
+                    {
+                        return {};
+                    }
+                    else
+                    {
+                        return (idx < 0) ?
+                            0
+                            : (idx > range_size) ? static_cast<size_t>(range_size) : static_cast<size_t>(idx);
+                    }
+                }
+                else
+                {
+                    // If range is unsized, stop was ensured as non-negative above
+                    return static_cast<size_t>(*slice.stop);
+                }
+            }();
+
+        // If the stop point would be placed before the start point. Return an empty slicing.
+        if (
+            mb_start && mb_stop &&
+            (
+                (step > 0 && *mb_stop <= *mb_start) ||
+                (step < 0 && *mb_stop >= *mb_start)
+            )
+        ) {
+            return build_slice_functor_p(range, 0, 0, 1);
+        }
+
+        // At here, we know for sure that for all start, stop, and step; if they have a
+        // value, that value is non-negative and step non zero too. In addition to that,
+        // stop for sure is placed at the same location as start or in a place after
+        // start.
+
+        if (step > 0)
+        {
+            return build_slice_functor_p(range, mb_start, mb_stop, static_cast<size_t>(step));
+        }
+        else  // step < 0
+        {
+            return build_slice_functor_n(range, mb_start, mb_stop, static_cast<size_t>(-step));
+        }
+    }
+
+
+    // Receives a range formatting string, "[:3]:#x" for instance, and splits it in a
+    // pair: the range formatting itself ("[:3]") and the elements formatting ("#x"). The
+    // cut point is the leftmost colon that is outside of a square bracket pair.
+    inline auto split_range_fmt_string(std::string const& fmt) -> std::tuple<std::string, std::string>
+    {
+        auto is_inside_square_brackets = false;
+        for (auto it = fmt.begin(); it != fmt.end(); ++it)
+        {
+            if (*it == '[')
+            {
+                is_inside_square_brackets = true;
+            }
+            else if (*it == ']')
+            {
+                is_inside_square_brackets = false;
+            }
+            else if (!is_inside_square_brackets && *it == ':')
+            {
+                auto const colon_idx = static_cast<size_t>(it - fmt.begin());
+                auto const iterable_fmt = fmt.substr(0, colon_idx);
+                auto const element_fmt_size = fmt.size() - colon_idx + 1;
+                auto const element_fmt = fmt.substr(colon_idx+1, element_fmt_size);
+
+                return {iterable_fmt, element_fmt};
+            }
+        }
+
+        // If there isn't a colon cut point, all the input `fmt` string is the iterable
+        // formatting
+        return {fmt, ""};
+    }
+
+    // Print all elements of a range
     template <typename T>
     auto make_printing_branch(
         T const& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         (
-            is_iterable<T>::value
+            is_range<T>::value
             && !has_insertion<T>::value
             && !is_std_string<T>::value
             && !is_string_view<T>::value
@@ -2362,14 +3016,42 @@ namespace detail {
         PrintingNode
     >::type
     {
-        auto children = std::vector<PrintingNode>{};
-        for (auto const& i : value)
+        auto range_fmt = std::string{};
+        auto elements_fmt = std::string{};
+        std::tie(range_fmt, elements_fmt) = split_range_fmt_string(fmt);
+
+        auto const mb_slice = Slice::build(range_fmt);
+        if (!mb_slice)
         {
-            children.push_back(make_printing_branch(i, fmt, config));
+            return PrintingNode("<invalid range slicing>");
         }
 
-        return PrintingNode("[", ", ", "]", std::move(children));
+        auto const slice = *mb_slice;
+
+        auto children = std::vector<PrintingNode>{};
+
+        auto mb_slice_functor = maybe_make_slice_functor(value, slice);
+
+        // If there was any error while creating the SliceFunctor
+        if (mb_slice_functor.index() == 0)
+        {
+            return PrintingNode(get<std::string>(mb_slice_functor));
+        }
+
+        auto slice_functor = get<SliceFunctor<T const>>(mb_slice_functor);
+
+        auto mb_element = slice_functor();
+        while (mb_element)
+        {
+            children.push_back(make_printing_branch(*mb_element, elements_fmt, config));
+            mb_element = slice_functor();
+        }
+
+        auto const opening = range_fmt.empty() ? "[" : range_fmt + "->[";
+        return PrintingNode(opening, ", ", "]", std::move(children));
     }
+
+    // ---------------------------------------------------------------------------------------------
 
     // Print classes deriving from only std::exception and not from boost::exception
     template <typename T>
