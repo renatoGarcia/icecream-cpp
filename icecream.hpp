@@ -900,7 +900,7 @@ namespace icecream{ namespace detail
         // to make sure that all calls to utf8_decode will have at leas 4 readable
         // elements.
         char8_t remainder[6] = {'\0'};
-        for (auto i = size_t{0}; i < input_end - input_next; ++i)
+        for (auto i = 0; i < input_end - input_next; ++i)
         {
             remainder[i] = input_next[i];
         }
@@ -938,31 +938,31 @@ namespace icecream{ namespace detail
         {
             if (input[i] < 0x80)
             {
-                result.push_back(input[i]);  // 0xxxxxxx
+                result.push_back(static_cast<char>(input[i]));  // 0xxxxxxx
             }
             else if (input[i] < 0x800)  // 00000yyy yyxxxxxx
             {
-                result.push_back(0xC0 | (input[i] >> 6));    // 110yyyyy
-                result.push_back(0x80 | (input[i] & 0x3F));  // 10xxxxxx
+                result.push_back(static_cast<char>(0xC0 | (input[i] >> 6)));    // 110yyyyy
+                result.push_back(static_cast<char>(0x80 | (input[i] & 0x3F)));  // 10xxxxxx
             }
             else if (input[i] < 0x10000)   // zzzzyyyy yyxxxxxx
             {
-                result.push_back(0xE0 | (input[i] >> 12));          // 1110zzzz
-                result.push_back(0x80 | ((input[i] >> 6) & 0x3F));  // 10yyyyyy
-                result.push_back(0x80 | (input[i] & 0x3F));         // 10xxxxxx
+                result.push_back(static_cast<char>(0xE0 | (input[i] >> 12)));          // 1110zzzz
+                result.push_back(static_cast<char>(0x80 | ((input[i] >> 6) & 0x3F)));  // 10yyyyyy
+                result.push_back(static_cast<char>(0x80 | (input[i] & 0x3F)));         // 10xxxxxx
             }
             else if (input[i] < 0x200000)  // 000uuuuu zzzzyyyy yyxxxxxx
             {
-                result.push_back(0xF0 | (input[i] >> 18));           // 11110uuu
-                result.push_back(0x80 | ((input[i] >> 12) & 0x3F));  // 10uuzzzz
-                result.push_back(0x80 | ((input[i] >> 6)  & 0x3F));  // 10yyyyyy
-                result.push_back(0x80 | (input[i] & 0x3F));          // 10xxxxxx
+                result.push_back(static_cast<char>(0xF0 | (input[i] >> 18)));           // 11110uuu
+                result.push_back(static_cast<char>(0x80 | ((input[i] >> 12) & 0x3F)));  // 10uuzzzz
+                result.push_back(static_cast<char>(0x80 | ((input[i] >> 6)  & 0x3F)));  // 10yyyyyy
+                result.push_back(static_cast<char>(0x80 | (input[i] & 0x3F)));          // 10xxxxxx
             }
             else  // Encoding error, print the REPLACEMENT CHARACTER
             {
-                result.push_back(0xEF);
-                result.push_back(0xBF);
-                result.push_back(0xBD);
+                result.push_back(static_cast<char>(0xEF));
+                result.push_back(static_cast<char>(0xBF));
+                result.push_back(static_cast<char>(0xBD));
             }
         }
         return result;
@@ -1856,7 +1856,7 @@ namespace detail {
         auto it = std::begin(fmt);
         auto end_it = std::end(fmt);
 
-        if (it == end_it) return std::move(os);
+        if (it == end_it) return os;
 
         // [[fill]align]
         {
@@ -1993,7 +1993,7 @@ namespace detail {
 
         if (it == end_it)
         {
-            return std::move(os);
+            return os;
         }
         else
         {
