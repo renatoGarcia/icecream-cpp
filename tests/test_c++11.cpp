@@ -357,7 +357,7 @@ TEST_CASE("base")
         IC_CONFIG.output(str);
 
         #define V0 10
-        auto r = IC(V0);
+        IC(V0);
         REQUIRE(str == "ic| V0: 10\n");
         #undef V0
     }
@@ -907,7 +907,7 @@ TEST_CASE("formatting")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto v0 = float{12.3456789};
+        auto v0 = 12.3456789f;
         IC_F("#A", v0);
         REQUIRE(
             ((str == "ic| v0: 0X1.8B0FCEP+3\n") ||
