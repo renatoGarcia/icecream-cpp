@@ -522,6 +522,16 @@ TEST_CASE("tuples")
         IC_F("x", s0);
         REQUIRE(str == "ic| s0: (a, 14)\n");
     }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto s0 = std::make_tuple(10, std::make_tuple(20, 1.1));
+        IC(s0);
+        REQUIRE(str == "ic| s0: (10, (20, 1.1))\n");
+    }
 }
 
 
@@ -569,7 +579,7 @@ TEST_CASE("arrays")
 }
 
 
-TEST_CASE("iterable")
+TEST_CASE("range")
 {
     {
         IC_CONFIG_SCOPE();
@@ -621,6 +631,15 @@ TEST_CASE("iterable")
         REQUIRE(str == "ic| v0: [0x00a, 0x014, 0x01e]\n");
     }
 
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = std::vector<std::tuple<int, double>> {{1, 1.1}, {2, 1.2}};
+        IC(v0);
+        REQUIRE(str == "ic| v0: [(1, 1.1), (2, 1.2)]\n");
+    }
 }
 
 

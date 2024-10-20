@@ -759,6 +759,159 @@ namespace icecream{ namespace detail
             >
         >::type;
 
+    // -------------------------------------------- Forward declare all make_printing_branch overloads
+
+    // This is required because the declarations must be visible by some implementation
+    // that can need to delegate the printing to other overload. For example when a
+    // printing a std::vector<std::tuple<int, float>>>, fist the range implementation will
+    // be called, then it will delegate the printing to the tuple overload, then finally
+    // it will delegate the printing to the operator<<(std::ostream&, T) overload.
+
+} // namespace detail
+    class Config;
+namespace detail {
+
+    class PrintingNode;
+
+    // Print any class that overloads operator<<(std::ostream&, T)
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) ->
+        typename std::enable_if<
+            has_insertion<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<T>::value,
+            PrintingNode
+        >::type;
+
+    // Print C string
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type;
+
+    // Print std::string
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type;
+
+  #if defined(ICECREAM_STRING_VIEW_HEADER)
+    // Print std::string_view
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type;
+  #endif
+
+    // Print character
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type;
+
+    // Print signed and unsigned char
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type;
+
+    // Print smart pointers without an operator<<(ostream&) overload.
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<
+        is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
+        PrintingNode
+    >::type;
+
+    // Print weak pointer classes
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type;
+
+  #if defined(ICECREAM_OPTIONAL_HEADER)
+    // Print std::optional<> classes
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<
+        is_optional<T>::value && !has_insertion<T>::value,
+        PrintingNode
+    >::type;
+  #endif
+
+    // Print *::variant<Ts...> classes
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<
+        is_variant<T>::value && !has_insertion<T>::value,
+        PrintingNode
+    >::type;
+
+    // Print tuple like classes
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<
+        is_tuple<T>::value && !has_insertion<T>::value,
+        PrintingNode
+    >::type;
+
+    // Print all elements of a range
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, std::string const& fmt, Config const& config
+    ) -> typename std::enable_if<
+        (
+            is_range<T>::value
+            && !has_insertion<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+        )
+        || std::is_array<T>::value,
+        PrintingNode
+    >::type;
+
+    // Print classes deriving from only std::exception and not from boost::exception
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, std::string const&, Config const&
+    ) -> typename std::enable_if<
+        std::is_base_of<std::exception, T>::value
+        && !std::is_base_of<boost::exception, T>::value
+        && !has_insertion<T>::value,
+        PrintingNode
+    >::type;
+
+    // Print classes deriving from both std::exception and boost::exception
+    template <typename T>
+    auto make_printing_branch(
+        T const& value, std::string const&, Config const&
+    ) -> typename std::enable_if<
+        std::is_base_of<std::exception, T>::value
+        && std::is_base_of<boost::exception, T>::value
+        && !has_insertion<T>::value,
+        PrintingNode
+    >::type;
+
+  #if defined(ICECREAM_DUMP_STRUCT_CLANG)
+    // Forward declare so that it can be called by the overload printing a collection for instance,
+    // when the elements type shoud be printed using clang dump_struct.
+    template <typename T>
+    auto make_printing_branch(
+        T const&, std::string const&, Config const&
+    ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type;
+  #endif
+
+
     // -------------------------------------------------- ensure_tuple
 
     template <typename T>
@@ -1470,8 +1623,6 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- Config
 
-    // Forward declared so that s_global can be friend of Config class
-    class Config;
     namespace detail
     {
         auto global_config() -> Config&;
@@ -2302,15 +2453,6 @@ namespace detail {
             return result;
         }
     };
-
-  #if defined(ICECREAM_DUMP_STRUCT_CLANG)
-    // Forward declare so that it can be called by the overload printing a collection for instance,
-    // when the elements type shoud be printed using clang dump_struct.
-    template <typename T>
-    auto make_printing_branch(
-        T const&, std::string const&, Config const&
-    ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type;
-  #endif
 
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
