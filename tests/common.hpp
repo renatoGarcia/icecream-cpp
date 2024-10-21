@@ -42,5 +42,21 @@ public:
 };
 
 
+class MutableStream
+{
+public:
+    explicit MutableStream(int i_)
+        : i {i_}
+    {}
+
+    int i;
+
+    friend auto operator<<(std::ostream& os, MutableStream& self) -> std::ostream&
+    {
+        os << "<MutableStream " << self.i << ">";
+        return os;
+    }
+};
+
 
 #endif // TESTS_COMMON_HPP_INCLUDED
