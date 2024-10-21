@@ -276,6 +276,13 @@ namespace icecream{ namespace detail
         >::type;
 
 
+    // -------------------------------------------------- remove_cvref
+
+    template <typename T>
+    using remove_cvref_t =
+        typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+
+
     // -------------------------------------------------- int_sequence
 
     template <int...>
@@ -340,7 +347,7 @@ namespace icecream{ namespace detail
     template <typename T>
     auto has_size_method_impl(int) ->
         decltype(
-            std::declval<T const&>().size(),
+            std::declval<T&>().size(),
             std::true_type{}
         );
 
@@ -350,7 +357,7 @@ namespace icecream{ namespace detail
     template <typename T>
     auto has_size_overload_impl(int) ->
         decltype(
-            size(std::declval<T const&>()),
+            size(std::declval<T&>()),
             std::true_type{}
         );
 
@@ -550,7 +557,7 @@ namespace icecream{ namespace detail
     template <typename T>
     auto has_to_string_impl(int) ->
         decltype (
-            to_string(std::declval<T const&>()),
+            to_string(std::declval<T&>()),
             std::true_type{}
         );
 
@@ -568,8 +575,8 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_tuple =
         typename disjunction<
-            is_instantiation<std::pair, typename std::decay<T>::type>,
-            is_instantiation<std::tuple, typename std::decay<T>::type>
+            is_instantiation<std::pair, remove_cvref_t<T>>,
+            is_instantiation<std::tuple, remove_cvref_t<T>>
         >::type;
 
 
@@ -632,7 +639,7 @@ namespace icecream{ namespace detail
 
     // Checks if T is a std::basic_string<typename U>
     template <typename T>
-    using is_std_string = typename is_instantiation<std::basic_string, T>::type;
+    using is_std_string = typename is_instantiation<std::basic_string, remove_cvref_t<T>>::type;
 
 
     // -------------------------------------------------- is_string_view
@@ -642,7 +649,7 @@ namespace icecream{ namespace detail
     using is_string_view =
         typename disjunction<
           #if defined(ICECREAM_STRING_VIEW_HEADER)
-            is_instantiation<std::basic_string_view, T>
+            is_instantiation<std::basic_string_view, remove_cvref_t<T>>
           #endif
         >::type;
 
@@ -662,9 +669,9 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_variant =
         typename disjunction<
-            is_instantiation<boost::variant2::variant, T>
+            is_instantiation<boost::variant2::variant, remove_cvref_t<T>>
           #if defined(ICECREAM_VARIANT_HEADER)
-            , is_instantiation<std::variant, T>
+            , is_instantiation<std::variant, remove_cvref_t<T>>
           #endif
         >::type;
 
@@ -676,7 +683,7 @@ namespace icecream{ namespace detail
     using is_optional =
         typename disjunction<
           #if defined(ICECREAM_OPTIONAL_HEADER)
-            is_instantiation<std::optional, T>
+            is_instantiation<std::optional, remove_cvref_t<T>>
           #endif
         >::type;
 
@@ -688,7 +695,8 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_unstreamable_ptr =
         typename disjunction<
-            is_instantiation<std::unique_ptr, T>, is_instantiation<boost::scoped_ptr, T>
+            is_instantiation<std::unique_ptr, remove_cvref_t<T>>,
+            is_instantiation<boost::scoped_ptr, remove_cvref_t<T>>
         >::type;
 
 
@@ -699,7 +707,8 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_weak_ptr =
         typename disjunction<
-            is_instantiation<std::weak_ptr, T>, is_instantiation<boost::weak_ptr, T>
+            is_instantiation<std::weak_ptr, remove_cvref_t<T>>,
+            is_instantiation<boost::weak_ptr, remove_cvref_t<T>>
         >::type;
 
 
@@ -754,8 +763,8 @@ namespace icecream{ namespace detail
                 has_insertion<T>,
                 is_character<T>,
                 is_c_string<T>,
-                std::is_base_of<std::exception, T>,
-                std::is_base_of<boost::exception, T>
+                std::is_base_of<std::exception, remove_cvref_t<T>>,
+                std::is_base_of<boost::exception, remove_cvref_t<T>>
             >
         >::type;
 
@@ -776,7 +785,7 @@ namespace detail {
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) ->
         typename std::enable_if<
             has_insertion<T>::value
@@ -785,46 +794,46 @@ namespace detail {
             && !is_xsig_char<T>::value
             && !is_std_string<T>::value
             && !is_string_view<T>::value
-            && !std::is_array<T>::value,
+            && !std::is_array<remove_cvref_t<T>>::value,
             PrintingNode
         >::type;
 
     // Print C string
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type;
 
     // Print std::string
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type;
 
   #if defined(ICECREAM_STRING_VIEW_HEADER)
     // Print std::string_view
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type;
   #endif
 
     // Print character
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type;
 
     // Print signed and unsigned char
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type;
 
     // Print smart pointers without an operator<<(ostream&) overload.
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
         is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -833,14 +842,14 @@ namespace detail {
     // Print weak pointer classes
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type;
 
   #if defined(ICECREAM_OPTIONAL_HEADER)
     // Print std::optional<> classes
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
         is_optional<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -850,7 +859,7 @@ namespace detail {
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
         is_variant<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -859,7 +868,7 @@ namespace detail {
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
         is_tuple<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -868,7 +877,7 @@ namespace detail {
     // Print all elements of a range
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
         (
             is_range<T>::value
@@ -876,17 +885,17 @@ namespace detail {
             && !is_std_string<T>::value
             && !is_string_view<T>::value
         )
-        || std::is_array<T>::value,
+        || std::is_array<remove_cvref_t<T>>::value,
         PrintingNode
     >::type;
 
     // Print classes deriving from only std::exception and not from boost::exception
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
-        std::is_base_of<std::exception, T>::value
-        && !std::is_base_of<boost::exception, T>::value
+        std::is_base_of<std::exception, remove_cvref_t<T>>::value
+        && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
         && !has_insertion<T>::value,
         PrintingNode
     >::type;
@@ -894,10 +903,10 @@ namespace detail {
     // Print classes deriving from both std::exception and boost::exception
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
-        std::is_base_of<std::exception, T>::value
-        && std::is_base_of<boost::exception, T>::value
+        std::is_base_of<std::exception, remove_cvref_t<T>>::value
+        && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
         && !has_insertion<T>::value,
         PrintingNode
     >::type;
@@ -907,7 +916,7 @@ namespace detail {
     // when the elements type shoud be printed using clang dump_struct.
     template <typename T>
     auto make_printing_branch(
-        T const&, std::string const&, Config const&
+        T&&, std::string const&, Config const&
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type;
   #endif
 
@@ -2457,7 +2466,7 @@ namespace detail {
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const&
+        T&& value, std::string const& fmt, Config const&
     ) ->
         typename std::enable_if<
             has_insertion<T>::value
@@ -2466,7 +2475,7 @@ namespace detail {
             && !is_xsig_char<T>::value
             && !is_std_string<T>::value
             && !is_string_view<T>::value
-            && !std::is_array<T>::value,
+            && !std::is_array<remove_cvref_t<T>>::value,
             PrintingNode
         >::type
     {
@@ -2483,7 +2492,7 @@ namespace detail {
     // Print C string
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
@@ -2518,7 +2527,7 @@ namespace detail {
     // Print std::string
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
@@ -2527,7 +2536,6 @@ namespace detail {
             return PrintingNode("*Error* on formatting string");
         }
 
-        // auto& ostrm = std::get<1>(mb_ostrm);
         *mb_ostrm << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
         return PrintingNode(mb_ostrm->str());
     }
@@ -2536,21 +2544,22 @@ namespace detail {
     // Print std::string_view
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type
     {
-        return make_printing_branch(
-            std::basic_string<typename T::value_type>{value}, fmt, config
-        );
+        using String = std::basic_string<typename remove_cvref_t<T>::value_type>;
+        return make_printing_branch(String{value}, fmt, config);
     }
   #endif
 
     // Print character
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
     {
+        using C = remove_cvref_t<T>;
+
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
         {
@@ -2560,35 +2569,35 @@ namespace detail {
         auto str = std::string{};
         switch (value)
         {
-        case T{'\0'}:
+        case C{'\0'}:
             str = "\\0";
             break;
 
-        case T{'\a'}:
+        case C{'\a'}:
             str = "\\a";
             break;
 
-        case T{'\b'}:
+        case C{'\b'}:
             str = "\\b";
             break;
 
-        case T{'\f'}:
+        case C{'\f'}:
             str = "\\f";
             break;
 
-        case T{'\n'}:
+        case C{'\n'}:
             str = "\\n";
             break;
 
-        case T{'\r'}:
+        case C{'\r'}:
             str = "\\r";
             break;
 
-        case T{'\t'}:
+        case C{'\t'}:
             str = "\\t";
             break;
 
-        case T{'\v'}:
+        case C{'\v'}:
             str = "\\v";
             break;
 
@@ -2605,7 +2614,7 @@ namespace detail {
     // Print signed and unsigned char
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const&
+        T&& value, std::string const& fmt, Config const&
     ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type
     {
         using T0 =
@@ -2626,7 +2635,7 @@ namespace detail {
     // Print smart pointers without an operator<<(ostream&) overload.
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         // On C++20 unique_ptr will have a << overload.
         is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
@@ -2641,7 +2650,7 @@ namespace detail {
     // Print weak pointer classes
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type
     {
         return value.expired() ?
@@ -2652,7 +2661,7 @@ namespace detail {
     // Print std::optional<> classes
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         is_optional<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -2683,7 +2692,7 @@ namespace detail {
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         is_variant<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -2708,7 +2717,7 @@ namespace detail {
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         is_tuple<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -2870,27 +2879,27 @@ namespace detail {
 
     template <typename R>
     auto build_slice_functor_p(
-        R const& range,
+        R&& range,
         Optional<size_t> mb_start,
         Optional<size_t> mb_stop,
         size_t step
-    ) -> SliceFunctor<R const>
+    ) -> SliceFunctor<R>
     {
         auto const start_it = mb_start ? advance_it(begin(range), end(range), *mb_start) : begin(range);
 
         if (!mb_stop)
         {
-            return make_slice_functor<R const>(start_it, end(range), step);
+            return make_slice_functor<R>(start_it, end(range), step);
         }
         else if (is_sized<R>::value)  // So it has a value and it is normalized
         {
             auto stop_it = begin(range);
             std::advance(stop_it, *mb_stop);
-            return make_slice_functor<R const>(start_it, stop_it, step);
+            return make_slice_functor<R>(start_it, stop_it, step);
         }
         else
         {
-            return make_slice_functor<R const>(
+            return make_slice_functor<R>(
                 start_it,
                 advance_it(begin(range), end(range), *mb_stop),
                 step
@@ -2900,19 +2909,19 @@ namespace detail {
 
     template <typename R>
     auto build_slice_functor_n(
-        R const& range,
+        R&& range,
         Optional<size_t> mb_start,
         Optional<size_t> mb_stop,
         size_t step
     ) ->
         typename std::enable_if<
             is_bidirectional_range<R>::value,
-            SliceFunctor<R const>
+            SliceFunctor<R>
         >::type
     {
-        auto make_reverse_iterator = [](get_iterator_t<R const> it)
+        auto make_reverse_iterator = [](get_iterator_t<R> it)
         {
-            return std::reverse_iterator<get_iterator_t<R const>>(it);
+            return std::reverse_iterator<get_iterator_t<R>>(it);
         };
 
         auto start_it = mb_start ?
@@ -2930,7 +2939,7 @@ namespace detail {
         if (!mb_stop)
         {
             auto stop_it = begin(range);
-            return make_slice_functor<R const>(
+            return make_slice_functor<R>(
                 make_reverse_iterator(start_it), make_reverse_iterator(stop_it), step
             );
         }
@@ -2942,7 +2951,7 @@ namespace detail {
             std::advance(stop_it, *mb_stop);
             if (stop_it != end(range)) ++stop_it;
 
-            return make_slice_functor<R const>(
+            return make_slice_functor<R>(
                 make_reverse_iterator(start_it), make_reverse_iterator(stop_it), step
             );
         }
@@ -2951,26 +2960,26 @@ namespace detail {
         else
         {
             auto stop_it = advance_it(begin(range), end(range), *mb_stop);
-            return make_slice_functor<R const>(
+            return make_slice_functor<R>(
                 make_reverse_iterator(start_it), make_reverse_iterator(stop_it), step
             );
         }
     }
 
     template <typename R>
-    auto build_slice_functor_n(R const& r, Optional<size_t>, Optional<size_t>, size_t) ->
+    auto build_slice_functor_n(R&& r, Optional<size_t>, Optional<size_t>, size_t) ->
         typename std::enable_if<
             !is_bidirectional_range<R>::value,
-            SliceFunctor<R const>
+            SliceFunctor<R>
         >::type
     {
         ICECREAM_UNREACHABLE;
-        return make_slice_functor<R const>(begin(r), begin(r), 0);
+        return make_slice_functor<R>(begin(r), begin(r), 0);
     }
 
     template <typename R>
     auto maybe_get_size(
-        R const& range
+        R&& range
     ) -> typename std::enable_if<
         has_size_function_overload<R>::value,
         Optional<size_t>
@@ -2981,7 +2990,7 @@ namespace detail {
 
     template <typename R>
     auto maybe_get_size(
-        R const& range
+        R&& range
     ) -> typename std::enable_if<
         has_size_method<R>::value && !has_size_function_overload<R>::value,
         Optional<size_t>
@@ -2992,7 +3001,7 @@ namespace detail {
 
     template <typename R>
     auto maybe_get_size(
-        R const&
+        R&&
     ) -> typename std::enable_if<
         !is_sized<R>::value,
         Optional<size_t>
@@ -3003,8 +3012,8 @@ namespace detail {
 
     template <typename R>
     auto maybe_make_slice_functor(
-        R const& range, Slice const& slice
-    ) -> Variant<std::string,  SliceFunctor<R const>>
+        R&& range, Slice const& slice
+    ) -> Variant<std::string,  SliceFunctor<R>>
     {
         auto const mb_range_size = maybe_get_size(range);
 
@@ -3146,7 +3155,7 @@ namespace detail {
     // Print all elements of a range
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         (
             is_range<T>::value
@@ -3154,7 +3163,7 @@ namespace detail {
             && !is_std_string<T>::value
             && !is_string_view<T>::value
         )
-        || std::is_array<T>::value,
+        || std::is_array<remove_cvref_t<T>>::value,
         PrintingNode
     >::type
     {
@@ -3198,10 +3207,10 @@ namespace detail {
     // Print classes deriving from only std::exception and not from boost::exception
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const&, Config const&
+        T&& value, std::string const&, Config const&
     ) -> typename std::enable_if<
-        std::is_base_of<std::exception, T>::value
-        && !std::is_base_of<boost::exception, T>::value
+        std::is_base_of<std::exception, remove_cvref_t<T>>::value
+        && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
         && !has_insertion<T>::value,
         PrintingNode
     >::type
@@ -3212,10 +3221,10 @@ namespace detail {
     // Print classes deriving from both std::exception and boost::exception
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const&, Config const&
+        T&& value, std::string const&, Config const&
     ) -> typename std::enable_if<
-        std::is_base_of<std::exception, T>::value
-        && std::is_base_of<boost::exception, T>::value
+        std::is_base_of<std::exception, remove_cvref_t<T>>::value
+        && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
         && !has_insertion<T>::value,
         PrintingNode
     >::type
@@ -3240,7 +3249,7 @@ namespace detail {
     // Print classes using clang's __builtin_dump_struct (clang >= 15).
     template <typename T>
     auto make_printing_branch(
-        T const& value, std::string const& fmt, Config const& config
+        T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type
     {
         // If this is the outermost class being printed
@@ -3510,17 +3519,18 @@ namespace detail {
     struct FormattingArgument
     {
         std::string fmt;
-        T const& value;
+        T&& value;
     };
 
     template <typename T>
     struct formatting_argumet_type_impl {using type = T;};
 
     template <typename T>
-    struct formatting_argumet_type_impl<FormattingArgument<T>> {using type = T;};
+    struct formatting_argumet_type_impl<FormattingArgument<T>&> {using type = T;};
 
     template <typename T>
-    using formatting_argumet_type = typename formatting_argumet_type_impl<T>::type;
+    using formatting_argumet_type =
+        typename formatting_argumet_type_impl<T>::type;
 
 
     // If the type has an overload of to_string, call it.
@@ -3587,11 +3597,11 @@ namespace detail {
     // arguments except by the last.
     template <typename... Ts>
     auto make_formatting_argument(
-        Ts const&... args
-    ) -> FormattingArgument<typename std::tuple_element<sizeof...(Ts)-1, std::tuple<Ts...>>::type>
+        Ts&&... args
+    ) -> FormattingArgument<typename std::tuple_element<sizeof...(Ts)-1, std::tuple<Ts&&...>>::type>
     {
         auto constexpr value_idx = sizeof...(Ts) - 1;
-        using T = typename std::tuple_element<value_idx, std::tuple<Ts...>>::type;
+        using T = typename std::tuple_element<value_idx, std::tuple<Ts&&...>>::type;
 
         auto i_arg = size_t{0};
         auto fmt = std::string{};
@@ -3602,8 +3612,8 @@ namespace detail {
             (concat_fmt(args, fmt, i_arg, sizeof...(Ts)), 0)...
         };
 
-        auto const& value = std::get<value_idx>(std::forward_as_tuple(args...));
-        return FormattingArgument<T>{fmt, value};
+        T value = std::get<value_idx>(std::forward_as_tuple(std::forward<Ts>(args)...));
+        return FormattingArgument<T>{fmt, std::forward<T>(value)};
     }
 
 
@@ -3614,7 +3624,7 @@ namespace detail {
     {
         std::string const& name;
         std::string const& fmt;
-        T const& value;
+        T&& value;
     };
 
 
@@ -3689,7 +3699,7 @@ namespace detail {
 
     template <typename... Ts>
     auto build_forest(
-        Config const& config, PrintingArgument<Ts>... args
+        Config const& config, PrintingArgument<Ts>&... args
     ) -> std::vector<std::tuple<std::string, PrintingNode>>
     {
         auto forest = std::vector<std::tuple<std::string, PrintingNode>>{};
@@ -3964,15 +3974,23 @@ namespace detail {
     }
 
     template <typename T>
-    auto get_value(T const& t) -> T const&
+    auto get_value(T&& t) ->
+        typename std::enable_if<
+            !is_instantiation<FormattingArgument, remove_cvref_t<T>>::value,
+            T&&
+        >::type
     {
-        return t;
+        return std::forward<T>(t);
     }
 
     template <typename T>
-    auto get_value(FormattingArgument<T> const& t) -> T const&
+    auto get_value(T&& t) ->
+        typename std::enable_if<
+            is_instantiation<FormattingArgument, remove_cvref_t<T>>::value,
+            decltype(t.value)
+        >::type
     {
-        return t.value;
+        return std::forward<decltype(t.value)>(t.value);
     }
 
     template <typename T>
@@ -4051,7 +4069,7 @@ namespace detail {
 
     private:
         template <int... N, typename... Ts>
-        auto dispatch(int_sequence<N...>, Ts const&... args) -> void
+        auto dispatch(int_sequence<N...>, Ts&&... args) -> void
         {
             // Pick the name of an IC macro's "to be printed" argument. Usually that would
             // just return the argument string itself. However, when using the IC_ macro
@@ -4102,7 +4120,9 @@ namespace detail {
                     line_,
                     function_,
                     PrintingArgument<formatting_argumet_type<Ts>>{
-                        arg_names.at(N), get_fmt(args, this->default_format_), get_value(args)
+                        arg_names.at(N),
+                        get_fmt(args, this->default_format_),
+                        get_value(std::forward<Ts>(args))
                     }...
                 );
             }
