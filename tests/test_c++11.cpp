@@ -362,6 +362,15 @@ TEST_CASE("base")
         #undef V0
     }
 
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto ms = MutableStream{7};
+        IC(ms);
+        REQUIRE(str == "ic| ms: <MutableStream 7>\n");
+    }
 }
 
 
