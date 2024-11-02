@@ -1,0 +1,10 @@
+[requires]
+boost/1.86.0
+catch2/2.13.10
+
+[options]
+boost/*:header_only=True
+
+[generators]
+CMakeDeps
+CMakeToolchain

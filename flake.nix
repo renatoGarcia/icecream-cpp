@@ -50,38 +50,14 @@
             name = "icecream-cpp";
 
             nativeBuildInputs = with pkgs.buildPackages; [
-              clang-tools
-              clang
-              cmakeCurses
               boost
+              catch2
+              clang
+              clang-tools
+              cmakeCurses
+              conan
             ] ++ app.nativeBuildInputs;
        };
-
-      ci-docker = { pkgs, compiler, tagname }:
-        pkgs.dockerTools.buildLayeredImage {
-            name = "icecream-ci";
-            tag = tagname;
-
-            contents = with pkgs; [
-              compiler
-              gnumake
-              cmake
-              boost.dev
-              busybox
-            ];
-
-            # Required by clang using mktemp and failing when /tmp doesn't exist.
-            extraCommands = ''
-              mkdir -p tmp
-            '';
-
-            config = {
-              WorkingDir = "/home";
-              Env = [
-                "Boost_INCLUDE_DIR=/include"
-              ];
-            };
-        };
 
     in {
       overlays.default = final: prev: {
