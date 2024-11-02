@@ -4,7 +4,7 @@
 #include <string_view>
 
 #define CATCH_CONFIG_MAIN
-#include "catch.hpp"
+#include <catch2/catch.hpp>
 
 
 TEST_CASE("std_string_view")

@@ -21,28 +21,31 @@ on:
       - 'example_project/**'
 
 jobs:
-
   gcc:
     name: ${{ matrix.version }} C++${{ matrix.cpp }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        version: [gcc6, gcc7, gcc9, gcc13]
+        version: [gcc6, gcc9, gcc14]
         cpp: [11, 14, 17, 20]
         exclude:
           - version: gcc6
             cpp: 17
           - version: gcc6
             cpp: 20
-          - version: gcc7
-            cpp: 20
           - version: gcc9
             cpp: 20
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: run
-        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "cmake /home/src -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build . && ctest -V"
+        run: |
+          docker run --rm -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c " \
+          conan profile detect && \
+          conan install ./src/tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing && \
+          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release && \
+          cmake --build . && \
+          ctest -V"
 
   clang:
     name: ${{ matrix.version }} C++${{ matrix.cpp }}
@@ -50,17 +53,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [clang5, clang10, clang17]
+        version: [clang8, clang18]
         cpp: [11, 14, 17, 20]
         exclude:
-          - version: clang5
-            cpp: 20
-          - version: clang10
+          - version: clang8
             cpp: 20
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: run
-        run: docker run -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c "cmake /home/src -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build . && ctest -V"
+        run: |
+          docker run --rm -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c " \
+          conan profile detect && \
+          conan install ./src/tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing && \
+          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release && \
+          cmake --build . && \
+          ctest -V"
 
   msvc:
     name: ${{ matrix.name }} C++${{ matrix.cpp }}
@@ -69,7 +76,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2022, windows-2019]
-        cpp: [11, 14, 17, 20]
+        cpp: [14, 17, 20]
         exclude:
           - os: windows-2019
             cpp: 20
@@ -79,13 +86,17 @@ jobs:
           - os: windows-2019
             name: vs2019
     steps:
-      - uses: actions/checkout@v2
-      - name: prepare
-        run: choco install boost-msvc-14.2 --version 1.86.0 -y
+      - uses: actions/checkout@v4
+      - name: Install Conan
+        run: pip3 install conan --upgrade
       - name: build
-        run: cmake . -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON -DBoost_DIR=C:/local/boost_1_86_0/lib64-msvc-14.2/cmake/Boost-1.86.0 && cmake --build . --config Debug
+        run: |
+          conan profile detect
+          conan install ./tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=conan --build=missing
+          cmake . -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake" -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release
       - name: run
-        run: ctest -V -C Debug
+        run: ctest -V -C Release
 
   xcode:
     name: Xcode C++${{ matrix.cpp }}
@@ -97,10 +108,14 @@ jobs:
     env:
       CPP_STANDARD: ${{ matrix.cpp }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: prepare
-        run: brew install boost
+        run: brew install conan
       - name: build
-        run: cmake . -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DBUILD_TESTING=ON && cmake --build .
+        run: |
+          conan profile detect
+          conan install ./tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing
+          cmake . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build .
       - name: run
         run: ctest -V
