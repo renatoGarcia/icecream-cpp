@@ -1,47 +1,48 @@
 #include "icecream.hpp"
 
-#include <ranges>
+#include <range/v3/view.hpp>
+#include <range/v3/version.hpp>
 #include <vector>
 #include <forward_list>
 
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
-
-template <typename T>
-struct Sentinel
-{
-    T it;
-
-    friend bool operator==(Sentinel const& lho, T const& rho)
-    {
-        return lho.it == rho;
-    }
-
-    friend bool operator==(T const& lho, Sentinel const& rho)
-    {
-        return lho == rho.it;
-    }
-};
-
+#if defined(__cpp_lib_source_location)
+    #define SRC_LOCATION
+#endif
 
 TEST_CASE("ranges view")
 {
-    namespace rv = std::views;
+  #if RANGE_V3_VERSION <= 500
+    namespace rv = ranges::view;
+  #else
+    namespace rv = ranges::views;
+  #endif
 
     {
         IC_CONFIG_SCOPE();
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}};
-        auto v0 = arr | rv::transform([](auto i){return i.second;}) | IC_V();
+        using Pair = std::pair<double, int>;
+        auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}};
+        auto v0 = arr | rv::transform([](Pair const& i){return i.second;}) | IC_V();
         for (auto i : v0){}
-      #if defined(__clang__)
-        REQUIRE(str == "ic| range_view_38:76[0]: 10\nic| range_view_38:76[1]: 11\n");
+      #if defined(SRC_LOCATION) && defined(__clang__)
+        auto const result =
+            "ic| range_view_30:83[0]: 10\n"
+            "ic| range_view_30:83[1]: 11\n";
+      #elif defined(SRC_LOCATION)
+        auto const result =
+            "ic| range_view_30:78[0]: 10\n"
+            "ic| range_view_30:78[1]: 11\n";
       #else
-        REQUIRE(str == "ic| range_view_38:71[0]: 10\nic| range_view_38:71[1]: 11\n");
+        auto const result =
+            "ic| range_view_30[0]: 10\n"
+            "ic| range_view_30[1]: 11\n";
       #endif
+        REQUIRE(str == result);
     }
 
     {
@@ -49,14 +50,18 @@ TEST_CASE("ranges view")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
-        auto v0 = arr | rv::drop(2) | IC_V([](auto i){return i.second;});
+        using Pair = std::pair<double, int>;
+        auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
+        auto v0 = arr | rv::drop(2) | IC_V([](Pair const& i){return i.second;});
         for (auto i : v0){}
-      #if defined(__clang__)
-        REQUIRE(str == "ic| range_view_53:72[0]: 12\n");
+      #if defined(SRC_LOCATION) && defined(__clang__)
+        auto const result = "ic| range_view_55:79[0]: 12\n";
+      #elif defined(SRC_LOCATION)
+        auto const result = "ic| range_view_55:39[0]: 12\n";
       #else
-        REQUIRE(str == "ic| range_view_53:39[0]: 12\n");
+        auto const result = "ic| range_view_55[0]: 12\n";
       #endif
+        REQUIRE(str == result);
     }
 
     {
@@ -64,17 +69,22 @@ TEST_CASE("ranges view")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}};
-        auto v0 = arr | IC_FV(":#x", [](auto i){return i.second;}) | rv::drop(0);
+        using Pair = std::pair<double, int>;
+        auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}};
+        auto v0 = arr | IC_FV(":#x", [](Pair const& i){return i.second;}) | rv::drop(0);
         for (auto i : v0){}
-      #if defined(__clang__)
+      #if defined(SRC_LOCATION) && defined(__clang__)
         auto const result =
-            "ic| range_view_68:66[0]: 0xa\n"
-            "ic| range_view_68:66[1]: 0xb\n";
+            "ic| range_view_74:73[0]: 0xa\n"
+            "ic| range_view_74:73[1]: 0xb\n";
+      #elif defined(SRC_LOCATION)
+        auto const result =
+            "ic| range_view_74:25[0]: 0xa\n"
+            "ic| range_view_74:25[1]: 0xb\n";
       #else
         auto const result =
-            "ic| range_view_68:25[0]: 0xa\n"
-            "ic| range_view_68:25[1]: 0xb\n";
+            "ic| range_view_74[0]: 0xa\n"
+            "ic| range_view_74[1]: 0xb\n";
       #endif
         REQUIRE(str == result);
     }
@@ -95,8 +105,9 @@ TEST_CASE("ranges view")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
-        auto v0 = arr | rv::drop(1) | IC_V("v1", [](auto i){return i.first;}) | rv::drop(1) | IC_V("v2");
+        using Pair = std::pair<double, int>;
+        auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
+        auto v0 = arr | rv::drop(1) | IC_V("v1", [](Pair const& i){return i.first;}) | rv::drop(1) | IC_V("v2");
         for (auto i : v0){}
         REQUIRE(str == "ic| v1[0]: 2.1\nic| v2[0]: (2.1, 12)\n");
     }
@@ -156,8 +167,9 @@ TEST_CASE("ranges view")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}, {3.1, 13}, {4.1, 14}};
-        auto v0 = arr | IC_FV("[1::2]:#x", "v1", [](auto i){return i.second;}) | rv::drop(0);
+        using Pair = std::pair<double, int>;
+        auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}, {2.1, 12}, {3.1, 13}, {4.1, 14}};
+        auto v0 = arr | IC_FV("[1::2]:#x", "v1", [](Pair const& i){return i.second;}) | rv::drop(0);
         for (auto i : v0){}
         auto const result =
             "ic| v1[1]: 0xb\n"
@@ -169,7 +181,11 @@ TEST_CASE("ranges view")
 
 TEST_CASE("ranges view erros")
 {
-    namespace rv = std::views;
+  #if RANGE_V3_VERSION <= 500
+    namespace rv = ranges::view;
+  #else
+    namespace rv = ranges::views;
+  #endif
 
     {
         IC_CONFIG_SCOPE();
@@ -215,35 +231,3 @@ TEST_CASE("ranges view erros")
         REQUIRE(str == "ic| v[0]: \"<partial views supports only non-negative slice indexes>\"\n");
     }
 }
-
-
-TEST_CASE("ranges")
-{
-    {
-        IC_CONFIG_SCOPE();
-        auto str = std::string{};
-        IC_CONFIG.output(str);
-
-        auto arr = std::vector<int>{10, 11, 12, 13, 14, 15};
-        auto v0 = std::ranges::subrange(arr.begin()+2, arr.end());
-
-        IC_F("[0:3]", v0);
-        REQUIRE(str == "ic| v0: [0:3]->[12, 13, 14]\n");
-    }
-
-    {
-        IC_CONFIG_SCOPE();
-        auto str = std::string{};
-        IC_CONFIG.output(str);
-
-        auto arr = std::vector<int>{10, 11, 12, 13, 14, 15};
-        auto v0 = std::ranges::subrange(
-            arr.begin(), Sentinel<decltype(arr.end())>{arr.end()}
-        );
-
-        IC_F("[0:3]", v0);
-        REQUIRE(str == "ic| v0: [0:3]->[10, 11, 12]\n");
-    }
-}
-
-

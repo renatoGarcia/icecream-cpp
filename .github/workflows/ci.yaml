@@ -21,13 +21,13 @@ on:
       - 'example_project/**'
 
 jobs:
-  gcc:
+  linux:
     name: ${{ matrix.version }} C++${{ matrix.cpp }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        version: [gcc6, gcc9, gcc14]
+        version: [gcc6, gcc9, gcc14, clang8, clang18]
         cpp: [11, 14, 17, 20]
         exclude:
           - version: gcc6
@@ -36,40 +36,33 @@ jobs:
             cpp: 20
           - version: gcc9
             cpp: 20
-    steps:
-      - uses: actions/checkout@v4
-      - name: run
-        run: |
-          docker run --rm -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c " \
-          conan profile detect && \
-          conan install ./src/tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing && \
-          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release && \
-          cmake --build . && \
-          ctest -V"
-
-  clang:
-    name: ${{ matrix.version }} C++${{ matrix.cpp }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [clang8, clang18]
-        cpp: [11, 14, 17, 20]
-        exclude:
           - version: clang8
             cpp: 20
+        include:
+          - range_v3: ON
+          - range_v3: OFF
+            version: gcc6
+          - range_v3: OFF
+            cpp: 11
     steps:
       - uses: actions/checkout@v4
+      - name: create container
+        run: docker run -dit --name ic-test -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh
+      - name: prepare
+        run: |
+          docker exec ic-test /bin/sh -c " \
+          conan profile detect && \
+          conan install ./src/tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing"
+      - name: build
+        run: |
+          docker exec ic-test /bin/sh -c " \
+          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release && \
+          cmake --build ."
       - name: run
         run: |
-          docker run --rm -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh -c " \
-          conan profile detect && \
-          conan install ./src/tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing && \
-          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release && \
-          cmake --build . && \
-          ctest -V"
+          docker exec ic-test ctest -V
 
-  msvc:
+  windows:
     name: ${{ matrix.name }} C++${{ matrix.cpp }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -85,26 +78,35 @@ jobs:
             name: vs2022
           - os: windows-2019
             name: vs2019
+          - range_v3: ON
+          - range_v3: OFF
+            cpp: 14
     steps:
       - uses: actions/checkout@v4
       - name: Install Conan
         run: pip3 install conan --upgrade
-      - name: build
+      - name: Prepare
         run: |
           conan profile detect
           conan install ./tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=conan --build=missing
-          cmake . -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake" -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+      - name: build
+        run: |
+          cmake . -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake" -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
       - name: run
         run: ctest -V -C Release
 
-  xcode:
+  macos:
     name: Xcode C++${{ matrix.cpp }}
     runs-on: macos-12
     strategy:
       fail-fast: false
       matrix:
         cpp: [11, 14, 17]
+        include:
+          - range_v3: ON
+          - range_v3: OFF
+            cpp: 11
     env:
       CPP_STANDARD: ${{ matrix.cpp }}
     steps:
@@ -115,7 +117,7 @@ jobs:
         run: |
           conan profile detect
           conan install ./tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing
-          cmake . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+          cmake . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
           cmake --build .
       - name: run
         run: ctest -V

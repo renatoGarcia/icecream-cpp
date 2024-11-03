@@ -36,7 +36,7 @@ TEST_CASE("dump_string")
             {&i0},
         };
 
-        auto const result = "ic\\| v0: \\{integers: \\[(0x)*[0-9a-fA-F]+, 0\\]\\}\n";
+        auto const result = "ic\\| v0: \\{integers: \\[(0x)*[0-9a-fA-F]+, (0x)*0\\]\\}\n";
 
         IC(v0);
         REQUIRE_THAT(str, Catch::Matches(result));
