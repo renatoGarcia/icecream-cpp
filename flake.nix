@@ -56,6 +56,7 @@
               clang-tools
               cmakeCurses
               conan
+              range-v3
             ] ++ app.nativeBuildInputs;
        };
 

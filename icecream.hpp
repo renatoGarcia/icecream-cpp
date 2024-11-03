@@ -74,6 +74,35 @@
     #endif
 #endif
 
+#if defined(__has_include) && __has_include(<ranges>)
+    #include <ranges>
+    #if defined(__cpp_lib_ranges)
+        #define ICECREAM_LIB_RANGES
+    #endif
+#endif
+
+#if defined(__has_include) && __has_include(<source_location>)
+    #include <source_location>
+#endif
+
+#if defined(ICECREAM_RANGE_V3)                                                  \
+    || (defined(__has_include) && __has_include(<range/v3/view/transform.hpp>)) \
+    || defined(RANGE_V3_VERSION)
+
+    #define ICECREAM_RANGE_V3
+    #include <range/v3/version.hpp>
+    #include <range/v3/view/transform.hpp>
+
+    namespace icecream { namespace detail {
+      #if RANGE_V3_VERSION <= 500
+        namespace rv3v = ::ranges::view;
+      #else
+        namespace rv3v = ::ranges::views;
+      #endif
+    }}
+#endif
+
+
 #define ICECREAM_DEV_HASH "$Format:%H$"
 
 #if defined(__GNUC__)
@@ -159,6 +188,8 @@
     #define ICECREAM_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
+    #define ICECREAM_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(ICECREAM_CONFIG, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define ICECREAM_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(ICECREAM_CONFIG, __LINE__, __FILE__, ICECREAM_FUNCTION)
     #define ICECREAM_CONFIG_SCOPE()                                                            \
         auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
         ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
@@ -170,6 +201,8 @@
     #define IC_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
+    #define IC_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(IC_CONFIG, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define IC_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(IC_CONFIG, __LINE__, __FILE__, ICECREAM_FUNCTION)
     #define IC_CONFIG_SCOPE()                                                                  \
         auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
         ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
@@ -327,6 +360,17 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_invocable = decltype(is_invocable_impl<T>(0));
 
+    // -------------------------------------------------- is_string_convertible
+
+    // Checks if T is nullary invocable, i.e.: the statement T(U) is valid.
+    template <typename T>
+    auto is_string_convertible_impl(int) -> decltype(std::string(std::declval<T&>()), std::true_type{});
+
+    template <typename T>
+    auto is_string_convertible_impl(...) -> std::false_type;
+
+    template <typename T>
+    using is_string_convertible = decltype(is_string_convertible_impl<T>(0));
 
     // -------------------------------------------------- returned_type
 
@@ -339,6 +383,18 @@ namespace icecream{ namespace detail
 
     template <typename T>
     using returned_type = decltype(returned_type_impl<T>(0));
+
+
+    // -------------------------------------------------- resolve_view_t
+
+    template <typename T>
+    auto resolve_view_t_impl(int) -> decltype(std::declval<std::vector<int>&>() | std::declval<T&>());
+
+    template <typename T>
+    auto resolve_view_t_impl(...) -> void;
+
+    template <typename T>
+    using resolve_view_t = decltype(resolve_view_t_impl<T>(0));
 
 
     // -------------------------------------------------- is_sized
@@ -933,6 +989,17 @@ namespace detail {
     auto ensure_tuple(std::tuple<Ts...>&& t) -> std::tuple<Ts...>
     {
         return std::move(t);
+    };
+
+    // -------------------------------------------------- Identity
+
+    struct Identity
+    {
+        template <typename T>
+        auto operator()(T&& t) const -> T&&
+        {
+            return std::forward<T>(t);
+        }
     };
 
     // -------------------------------------------------- Character transcoders
@@ -1620,6 +1687,7 @@ namespace detail {
             else
             {
                 ICECREAM_ASSERT(false, "Should never reach here");
+                return this->storage.value();
             }
         }
 
@@ -1632,8 +1700,7 @@ namespace detail {
 
     // -------------------------------------------------- Config
 
-    namespace detail
-    {
+    namespace detail{
         auto global_config() -> Config&;
     }
 
@@ -1643,7 +1710,7 @@ namespace detail {
 
         constexpr static size_t INDENT_BASE = 4;
 
-        Config(Config const* parent)
+        explicit Config(Config const* parent)
             : enabled_(parent->enabled_)
             , output_(parent->output_)
             , prefix_(parent->prefix_)
@@ -4136,6 +4203,350 @@ namespace detail {
         std::string const default_format_;
         std::string const arg_names_;
     };
+
+    // --------------------------------------------------- Range View
+
+    template <typename Proj>
+    struct RangeViewArgs
+    {
+        Optional<std::string> mb_name;
+        Proj proj;
+        std::string elements_fmt;
+        Optional<Slice> mb_slice;
+        Config const* config_ = nullptr;
+        int line_;
+        std::string src_location;
+        std::string file_;
+        std::string function_;
+
+        RangeViewArgs(Optional<std::string> const& name, std::string const& fmt, Proj&& proj)
+            : mb_name(name)
+            , proj(proj)
+        {
+            auto view_fmt = std::string{};
+            std::tie(view_fmt, this->elements_fmt) = split_range_fmt_string(fmt);
+            this->mb_slice = Slice::build(view_fmt);
+        }
+
+        auto complete(
+            Config& config,
+            int line,
+            std::string file,
+            std::string function
+          #if defined(__cpp_lib_source_location)
+            ,std::source_location const location = std::source_location::current()
+          #endif
+        ) -> RangeViewArgs&
+        {
+            this->config_ = &config;
+            this->line_ = line;
+            this->file_ = file;
+            this->function_ = function;
+
+          #if defined(__cpp_lib_source_location)
+            (void)line;
+            this->src_location =
+                std::to_string(location.line()) + ":" + std::to_string(location.column());
+          #else
+            this->src_location = std::to_string(line);
+          #endif
+
+            return *this;
+        }
+    };
+
+    template <typename Proj=Identity>
+    auto IC_FV_(
+        std::string const& fmt, std::string const& name, Proj&& proj = Identity{}
+    ) -> RangeViewArgs<Proj>
+    {
+        return RangeViewArgs<Proj>(name, fmt, std::forward<Proj>(proj));
+    }
+
+    template <typename Proj=Identity>
+    auto IC_FV_(
+        std::string const& fmt, Proj&& proj = Identity{}
+    ) -> typename std::enable_if<
+        !is_string_convertible<Proj>::value,
+        RangeViewArgs<Proj>
+    >::type
+    {
+        return RangeViewArgs<Proj>({}, fmt, std::forward<Proj>(proj));
+    }
+
+    template <typename Proj=Identity>
+    auto IC_V_(
+        std::string const& name, Proj&& proj = Identity{}
+    ) -> RangeViewArgs<Proj>
+    {
+        return RangeViewArgs<Proj>(name, "", std::forward<Proj>(proj));
+    }
+
+    template <typename Proj=Identity>
+    auto IC_V_(
+        Proj&& proj = Identity{}
+    ) -> typename std::enable_if<
+        !is_string_convertible<Proj>::value,
+        RangeViewArgs<Proj>
+    >::type
+    {
+        return RangeViewArgs<Proj>({}, "", std::forward<Proj>(proj));
+    }
+
+
+    template <typename Proj>
+    struct RangeView
+    {
+        std::string name;
+        Proj proj;
+        Optional<Slice> mb_slice;
+        std::string elements_fmt;
+        Config const& config;
+        int line;
+        std::string file;
+        std::string function;
+
+        int current_idx = 0;
+        ptrdiff_t start;
+        ptrdiff_t stop;
+        ptrdiff_t step;
+        Optional<std::string> slice_error;
+
+        explicit RangeView(RangeViewArgs<Proj> par)
+            : name(
+                par.mb_name ? *par.mb_name : std::string{"range_view_"} + par.src_location
+            )
+            , proj(par.proj)
+            , mb_slice(par.mb_slice)
+            , elements_fmt(par.elements_fmt)
+            , config(*par.config_)
+            , line(par.line_)
+            , file(par.file_)
+            , function(par.function_)
+        {}
+
+        auto normalize_slice() -> void
+        {
+            if (!this->mb_slice)
+            {
+                this->slice_error = std::string{"<invalid slice formatting string>"};
+                return;
+            }
+
+            auto const mb_start = this->mb_slice->start;
+            auto const mb_stop = this->mb_slice->stop;
+            auto const mb_step = this->mb_slice->step;
+
+            if ((mb_start && *mb_start < 0) || (mb_stop && *mb_stop < 0))
+            {
+                this->slice_error = std::string{
+                    "<partial views supports only non-negative slice indexes>"
+                };
+            }
+
+            if (mb_step && *mb_step < 0)
+            {
+                this->slice_error = std::string{"<slice steps must be strictly positive>"};
+            }
+
+            this->start = mb_start ? *mb_start : 0;
+            this->stop = mb_stop ? *mb_stop : std::numeric_limits<ptrdiff_t>::max();
+            this->step = mb_step ? *mb_step : 1;
+        }
+
+        // Will be called by the operator `Range | IC_VIEW_`. Here we will know what is the
+        // ranges and we can inspect its capabilities.
+        template <typename R>
+        auto normalize_slice(R&& range) -> void
+        {
+            if (!this->mb_slice)
+            {
+                this->slice_error = std::string{"<invalid slice formatting string>"};
+                return;
+            }
+
+            auto const mb_size = maybe_get_size(range);
+
+            auto const mb_start = this->mb_slice->start;
+            auto const mb_stop = this->mb_slice->stop;
+            auto const mb_step = this->mb_slice->step;
+
+            if (!mb_size && ((mb_start && *mb_start < 0) || (mb_stop && *mb_stop < 0)))
+            {
+                this->slice_error = std::string{"<this range view supports only non-negative slice indexes>"};
+            }
+
+            if (mb_step && *mb_step < 0)
+            {
+                this->slice_error = std::string{"<slice steps must be strictly positive>"};
+            }
+
+            auto normalize_idx = [&](ptrdiff_t idx) -> ptrdiff_t
+            {
+                if (mb_size)
+                {
+                    auto const range_size = static_cast<ptrdiff_t>(*mb_size);
+                    idx = (idx >= 0) ? idx : idx + range_size;
+                    return (idx < 0) ? 0 : idx;
+                }
+                else
+                {
+                    return idx;
+                }
+            };
+
+            this->start = mb_start ? normalize_idx(*mb_start) : 0;
+            this->stop = mb_stop ? normalize_idx(*mb_stop) : std::numeric_limits<ptrdiff_t>::max();
+            this->step = mb_step ? *mb_step : 1;
+        }
+
+        template <typename T>
+        auto operator()(T&& element) -> T&&
+        {
+            auto const idx = this->current_idx++;
+            auto dispatcher = Dispatcher{
+                false,
+                this->config,
+                this->file,
+                this->line,
+                this->function,
+                this->elements_fmt,
+                this->name + "[" + std::to_string(idx) + "]"
+            };
+
+            if (this->slice_error)
+            {
+                dispatcher.ret(*this->slice_error);
+            }
+            else if (
+                this->start <= idx && idx < this->stop
+                && ((idx - this->start) % this->step) == 0
+            ) {
+                dispatcher.ret(this->proj(element));
+            }
+
+            return std::forward<T>(element);
+        }
+    };
+
+  #if defined(ICECREAM_LIB_RANGES)
+    // View | IC_V
+    template <typename T, typename Proj>
+    requires std::ranges::view<T>
+    auto operator|(T&& t, RangeViewArgs<Proj> view_args)
+    {
+        auto rv = RangeView<Proj>(view_args);
+        rv.normalize_slice(t);
+        return std::forward<T>(t) | std::views::transform(std::move(rv));
+    }
+
+    // PartialView | IC_V
+    template <typename T, typename Proj>
+    requires std::ranges::view<resolve_view_t<T>>
+    auto operator|(T&& t, RangeViewArgs<Proj> view_args)
+    {
+        auto rv = RangeView<Proj>(view_args);
+        rv.normalize_slice();
+        return std::forward<T>(t) | std::views::transform(std::move(rv));
+    }
+
+    // IC_V | PartialView
+    template <typename T, typename Proj>
+    requires std::ranges::view<resolve_view_t<T>>
+    auto operator|(RangeViewArgs<Proj> view_args, T&& t)
+    {
+        auto rv = RangeView<Proj>(view_args);
+        rv.normalize_slice();
+        return std::views::transform(std::move(rv)) | std::forward<T>(t);
+    }
+
+    // Range | IC_V
+    // Here we don't know yet if we are in a Range-v3 or STL Ranges pipeline.
+    template <typename T, typename Proj>
+    requires (!std::ranges::view<T> && !std::ranges::view<resolve_view_t<T>>)
+    auto operator|(T& t, RangeViewArgs<Proj> view_args) -> std::pair<T&, RangeViewArgs<Proj>>
+    {
+        return {t, std::move(view_args)};
+    }
+
+    // Pair (Range, IC_V) | PartialView
+    template <typename T0, typename T1, typename Proj>
+    requires std::ranges::view<resolve_view_t<T1>>
+    auto operator|(std::pair<T0&, RangeViewArgs<Proj>> t0, T1&& t1)
+    {
+        auto rv = RangeView<Proj>(t0.second);
+        rv.normalize_slice(t0.first);
+        return t0.first | std::views::transform(std::move(rv)) | std::forward<T1>(t1);
+    }
+  #endif
+
+
+  #if defined(ICECREAM_RANGE_V3)
+    // View | IC_V
+    template <typename T, typename Proj>
+    auto operator|(T&& t, RangeViewArgs<Proj> view_args)
+        -> typename std::enable_if<
+            std::is_base_of<ranges::view_base, T>::value,
+            decltype(std::forward<T>(t) | rv3v::transform(std::declval<RangeView<Proj>&>()))
+        >::type
+    {
+        auto rv = RangeView<Proj>(view_args);
+        rv.normalize_slice(t);
+        return std::forward<T>(t) | rv3v::transform(std::move(rv));
+    }
+
+    // PartialView | IC_V
+    template <typename T, typename Proj>
+    auto operator|(T&& t, RangeViewArgs<Proj> view_args)
+        -> typename std::enable_if<
+            std::is_base_of<ranges::view_base, resolve_view_t<T>>::value,
+            decltype(std::forward<T>(t) | rv3v::transform(std::declval<RangeView<Proj>&>()))
+        >::type
+    {
+        auto rv = RangeView<Proj>(view_args);
+        rv.normalize_slice();
+        return std::forward<T>(t) | rv3v::transform(std::move(rv));
+    }
+
+    // IC_V | PartialView
+    template <typename T, typename Proj>
+    auto operator|(RangeViewArgs<Proj> view_args, T&& t)
+        -> typename std::enable_if<
+            std::is_base_of<ranges::view_base, resolve_view_t<T>>::value,
+            decltype(rv3v::transform(std::declval<RangeView<Proj>&>()) | std::forward<T>(t))
+        >::type
+    {
+        auto rv = RangeView<Proj>(view_args);
+        rv.normalize_slice();
+        return rv3v::transform(std::move(rv)) | std::forward<T>(t);
+    }
+
+    // Range | IC_V
+    // Here we don't know yet if we are in a Range-v3 or STL Ranges pipeline.
+    template <typename T, typename Proj>
+    auto operator|(T& t, RangeViewArgs<Proj> view_args)
+        -> typename std::enable_if<
+            !std::is_base_of<ranges::view_base, T>::value && !std::is_base_of<ranges::view_base, resolve_view_t<T>>::value,
+            std::pair<T&, RangeViewArgs<Proj>>
+        >::type
+    {
+        return {t, std::move(view_args)};
+    }
+
+    // Pair (Range, IC_V) | PartialView
+    template <typename T0, typename T1, typename Proj>
+    auto operator|(std::pair<T0&, RangeViewArgs<Proj>> t0, T1&& t1)
+        -> typename std::enable_if<
+            std::is_base_of<ranges::view_base, resolve_view_t<T1>>::value,
+            decltype(t0.first | rv3v::transform(std::declval<RangeView<Proj>&>()) | std::forward<T1>(t1))
+        >::type
+    {
+        auto rv = RangeView<Proj>(t0.second);
+        rv.normalize_slice(t0.first);
+        return t0.first | rv3v::transform(std::move(rv)) | std::forward<T1>(t1);
+    }
+
+  #endif
 
 }} // namespace icecream::detail
 

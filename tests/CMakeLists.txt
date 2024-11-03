@@ -4,6 +4,9 @@ endif()
 
 find_package(Catch2 REQUIRED)
 find_package(Boost REQUIRED)
+if (ENABLE_RANGE_V3)
+  find_package(range-v3 REQUIRED)
+endif()
 
 enable_testing()
 
@@ -16,6 +19,10 @@ function(declare_test name)
     add_executable(test_${name} test_${name}.cpp)
     add_test(NAME test_${name} COMMAND test_${name})
     target_link_libraries(test_${name} PRIVATE Catch2::Catch2 Boost::headers)
+
+    if (ENABLE_RANGE_V3)
+      target_link_libraries(test_${name} PRIVATE range-v3::range-v3)
+    endif()
 endfunction()
 
 if (
@@ -28,6 +35,9 @@ if (
     declare_test(strings_c++11)
     declare_test(config)
     declare_test(slicing)
+    if (ENABLE_RANGE_V3)
+      declare_test(range_v3)
+    endif()
 endif()
 
 if (CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20)

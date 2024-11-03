@@ -3,18 +3,21 @@
 [![CI.badge]][CI.link]
 [![LICENSE.badge]][LICENSE.link]
 
-IceCream-Cpp is a little (single header) library to help with the print debugging on C++11 and forward.
+IceCream-Cpp is a little (single header) library to help with the print debugging in C++11
+and forward.
 
-[Try it at Compiler Explorer!](https://godbolt.org/z/88x5MzosW)
+[Try it at Compiler Explorer!](https://godbolt.org/z/WKbxejjaa)
+
 
 **Contents**
 * [Install](#install)
   * [Nix](#nix)
   * [Conan](#conan)
 * [Usage](#usage)
+  * [Direct printing](#direct-printing)
+  * [Range views pipeline](#range-views-pipeline)
   * [Return value and IceCream apply macro](#return-value-and-icecream-apply-macro)
   * [Output formatting](#output-formatting)
-     * [Format string syntax](#format-string-syntax)
   * [Character Encoding](#character-encoding)
   * [Configuration](#configuration)
      * [enable/disable](#enabledisable)
@@ -27,10 +30,11 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
      * [line_wrap_width](#line_wrap_width)
      * [include_context](#include_context)
      * [context_delimiter](#context_delimiter)
-  * [Printing logic](#printing-logic)
+  * [Printing strategies](#printing-strategies)
      * [C strings](#c-strings)
      * [Wide strings](#wide-strings)
      * [Unicode strings](#unicode-strings)
+     * [Streamable types](#streamable-types)
      * [Pointer like types](#pointer-like-types)
      * [Range types](#range-types)
      * [Tuple like types](#tuple-like-types)
@@ -40,7 +44,7 @@ IceCream-Cpp is a little (single header) library to help with the print debuggin
      * [Not streamable types](#not-streamable-types-clang-only)
 * [Pitfalls](#pitfalls)
 
-With IceCream-Cpp, an execution inspection:
+With IceCream, an execution inspection:
 
 ```c++
 auto my_function(int i, double d) -> void
@@ -90,7 +94,27 @@ and will print:
 
     ic| a: 7, b: 2, sum(a, b): 9
 
+We also can inspect the data flowing through a range views pipeline (both [STL
+ranges](https://en.cppreference.com/w/cpp/header/ranges) and
+[Range-v3](https://ericniebler.github.io/range-v3/)), by inserting a `IC_V()` function at the
+point of interest:
+
+```c++
+auto rv = std::vector<int>{1, 0, 2, 3, 0, 4, 5}
+    | vws::split(0)
+    | IC_V()
+    | vws::enumerate;
+```
+
+So that when we iterate on `rv`, we will see the printing:
+
+    ic| range_view_63:16[0]: [1]
+    ic| range_view_63:16[1]: [2, 3]
+    ic| range_view_63:16[2]: [4, 5]
+
+
 This library is inspired by the original [Python IceCream](https://github.com/gruns/icecream) library.
+
 
 ## Install
 
@@ -144,15 +168,24 @@ include_directories(${IcecreamCpp_INCLUDE_DIRS})
 ```
 will add the installed directory within the include paths list.
 
-After including the `icecream.hpp` header in a source file, here named `test.cpp`:
+After including the `icecream.hpp` header in a source file:
 
 ```C++
 #include <icecream.hpp>
 ```
 
-A macro `IC(...)` will be defined. If called with no arguments it will print the prefix
-(default `ic| `), the source file name, the current line number, and the current function
-signature. The code:
+all the functionalities of IceCream-Cpp library will be available by the functions
+[`IC`](#direct-printing), [`IC_A`](#return-value-and-icecream-apply-macro), and
+[`IC_V`](#range-views-pipeline); together with its respective counterparts `IC_F`,
+`IC_FA`, and `IC_FV`; that behave the same but accept an [output formatting
+string](#output-formatting) as its first argument.
+
+
+### Direct printing
+
+The `IC` is the simplest of the IceCream functions. If called with no arguments it will
+print the [prefix](#prefix), the source file name, the current line number, and the
+current function signature. The code:
 
 ```C++
 auto my_function(int foo, double bar) -> void
@@ -167,8 +200,8 @@ will print:
 
     ic| test.cpp:34 in "void my_function(int, double)"
 
-If called with arguments it will print the prefix, those arguments names, and its values.
-The code:
+If called with arguments it will print the [prefix](#prefix), those arguments names, and
+its values.  The code:
 
 ```C++
 auto v0 = std::vector<int>{1, 2, 3};
@@ -180,30 +213,108 @@ will print:
 
     ic| v0: [1, 2, 3], s0: "bla", 3.14: 3.14
 
-All the functionalities of IceCream-Cpp library are implemented by the macros `IC`,
-[`IC_`](#output-formatting), [`IC_A`](#return-value-and-icecream-apply-macro), and
-[`IC_A_`](#output-formatting).
+The variant `IC_F` behaves the same as the `IC` function, but accepts an [output
+formatting string](#output-formatting) as its first argument.
+
+
+### Range views pipeline
+
+To print the data flowing through a range views pipeline (both [STL
+ranges](https://en.cppreference.com/w/cpp/header/ranges) and
+[Range-v3](https://ericniebler.github.io/range-v3/)), we use the `IC_V` function, which
+will print any input it receives from the previous view. Since the `IC_V` function is
+within a range views pipeline, the printing will be done lazily, while each element is
+generated. For instance:
+
+```C++
+namespace vws = std::views;
+auto v0 = vws::iota('a') | vws::enumerate | IC_V() | vws::take(3);
+for (auto e : v0)
+{
+    //...
+}
+```
+
+In this code nothing will be printed when `v0` is created, just when iterating over it. At
+each iteration in the `for` loop one line will be printed, until we have the output:
+
+    ic| range_view_61:53[0]: (0, 'a')
+    ic| range_view_61:53[1]: (1, 'b')
+    ic| range_view_61:53[2]: (2, 'c')
+
+> [!NOTE]
+> IceCream-Cpp will try to detect if the Range-v3 library is installed, and if so, the
+> support to it will be automatically enabled. When using C++11 and C++14 however, there
+> is a chance of having Range-v3 in the system, but IceCream not finding it. To make sure
+> that the support to Range-v3 is enabled, just define the macro `ICECREAM_RANGE_V3`
+> before including the `icecream.hpp` header
+
+The `IC_V` function has two optional parameters, `IC_V(name, projection)`.
+
+#### name
+
+The variable name used to the view when printing. The printing layout is: `<name>[<idx>]:
+<value>`. If the name parameter is not used, the default value to `<name>` is
+`range_view_<source_location>`.
+
+The code:
+
+```C++
+vws::iota('a') | vws::enumerate | IC_V("foo") | vws::take(2);
+```
+
+when iterated over will print:
+
+    ic| foo[0]: (0, 'a')
+    ic| foo[1]: (1, 'b')
+
+
+#### projection
+
+A [callable](https://en.cppreference.com/w/cpp/named_req/Callable) that will receive as
+input the elements from the previous view and must return the actual object to be printed.
+
+The code:
+
+```C++
+vws::iota('a') | vws::enumerate | IC_V([](auto e){return std::get<1>(e);}) | vws::take(2);
+```
+
+when iterated over will print:
+
+    ic| range_view_61:53[0]: 'a'
+    ic| range_view_61:53[1]: 'b'
+
+> [!NOTE]
+> The `IC_V` function will still forward to the next view an unchanged input element,
+> exactly as it was received from the previous view. None action done by the `projection`
+> function will have any effect on that.
+
+The variant `IC_FV` has the same behavior as the `IC_V` function, but accepts an [output
+formatting string](#output-formatting) as its first argument.
+
 
 ### Return value and IceCream apply macro
 
-Except when called with exactly one argument, the `IC(...)` macro will return a tuple with
-all its input arguments. if called with one argument it will return the argument itself.
+Except when called with exactly one argument, the [`IC`](#direct-printing) function will
+return a tuple with all its input arguments. If called with one argument it will return
+the argument itself.
 
-This is done in this way so that you can use `IC` to inspect a function argument at
-calling point, with no further code change. On the code:
+This is done this way so that you can use `IC` to inspect a function argument at calling
+point, with no further code change. In the code:
 
 ```C++
 my_function(IC(MyClass{}));
 ```
-the created `MyClass` instance will be passed to `my_function` exactly the same as if the
-`IC` macro was not there. The `my_function` will keep receiving a rvalue reference of a
+the `MyClass` object will be forwarded to `my_function` exactly the same as if the
+`IC` function was not there. The `my_function` will continue receiving a rvalue reference to a
 `MyClass` object.
 
 This approach however is not so practical when the function has many arguments. On the code:
 ```C++
 my_function(IC(a), IC(b), IC(c), IC(d));
 ```
-besides writing four times the `IC` macro, the printed output will be split on four
+besides writing four times the `IC` function, the printed output will be split in four
 distinct lines. Something like:
 
     ic| a: 1
@@ -215,28 +326,38 @@ Unfortunately, just wrapping all the four arguments in a single `IC` call will n
 too. The returned value will be a `std:::tuple` with `(a, b, c, d)` and the `my_function`
 expects four arguments.
 
-To work around that, there is the `IC_A` macro. `IC_A` behaves exactly like the `IC` macro,
-but receives a function (any callable actually) as its first argument, and will call that
-function with all the following arguments, printing all of them before. That last code can
-be rewritten as:
+To work around that, there is the `IC_A` function. `IC_A` behaves exactly like the `IC`
+function, but receives a [callable](https://en.cppreference.com/w/cpp/named_req/Callable)
+as its first argument, and will call it using all the next arguments, printing all of them
+before that. That previous example code could be rewritten as:
+
 ```C++
 IC_A(my_function, a, b, c, d);
 ```
-and this time will print:
+
+and this time it will print:
 
     ic| a: 1, b: 2, c: 3, d: 4
 
-`IC_A` will return the same value returned by the callable. The code:
+The `IC_A` function will return the same value as returned by the callable. The code:
+
 ```C++
 auto mc = std::make_unique<MyClass>();
 auto r = IC_A(mc->my_function, a, b);
 ```
+
 behaves exactly the same as:
+
 ```C++
 auto mc = std::make_unique<MyClass>();
 auto r = mc->my_function(a, b);
 ```
+
 but will print the values of `a` and `b`.
+
+The variant `IC_FA` behaves the same as the `IC_A` function, but accepts an [output
+formatting string](#output-formatting) as its first argument, even before the callable
+argument.
 
 
 ### Output formatting
@@ -253,9 +374,16 @@ will print:
 
     ic| a: 0X2A, b: 0X14
 
-When using the `IC_F` macro, the same formatting string will be applied by default to all
-the values in an `IC_F` macro call. To set a distinct formatting string to a specific
-argument, we can wrap it with the `IC_` macro. The code:
+when using the `IC_F` variant instead of the plain [`IC`](#direct-printing) functio. A
+similar result would be obtained if using `IC_FA` and `IC_FV` in place of
+[`IC_A`](#return-value-and-icecream-apply-macro) and [`IC_V`](#range-views-pipeline)
+respectively.
+
+When using the formatting function variants (`IC_F` and `IC_FA`), the same formatting
+string will be applied by default to all the arguments. That could be a problem if we wish
+to have arguments with distinct formatting, or if the arguments have multiple types with
+non mutually valid syntaxes. Therefore, to set a distinct formatting string to a specific
+argument we can wrap it with the `IC_` function.  The code:
 
 ```C++
 auto a = int{42};
@@ -267,143 +395,56 @@ will print:
 
     ic| a: 0X2A, b: 20
 
-The `IC_` macro can be used with the basic `IC` too:
+The `IC_` function can be used within the plain `IC` (or `IC_A`) function too:
 
 ```C++
 auto a = int{42};
 auto b = int{20};
 IC(IC_("#x", a), b);
 ```
+
 will print:
 
     ic| a: 0x2a, b: 20
 
-The last argument of `IC_` is the one that will be printed, all other arguments that come
-before the last will converted to a string using the
+The last argument in an `IC_` function call is the one that will be printed, all other
+arguments that come before the last will be converted to a string using the
 [`to_string`](https://en.cppreference.com/w/cpp/string/basic_string/to_string) function
-and concatenated in the resulting formatting string.
+and concatenated as the resulting formatting string.
 
 ```C++
 auto a = float{1.234};
 auto width = int{7};
 IC(IC_("*<",width,".3", a));
 ```
+
 Will have as result a formatting string `"*<7.3"`, and will print:
 
     ic| a: 1.23***
 
-To configure the formating of [`IC_A`](#return-value-and-icecream-apply-macro) macro,
-there are the macro `IC_FA`. It is just like `IC_A` but receiving a formating string as
-its first argument. The code:
+Just for completeness in the examples, an usage of `IC_FA` and `IC_FV` would be:
+
 ```C++
 IC_FA("#x", my_function, 10, 20);
+auto rv0 = vws::iota(0) | IC_FV("[::2]:#x", "bar") | vws::take(5);
 ```
-will print:
+
+This will print:
 
     ic| 10: 0xa, 20: 0x14
 
+and when iterating on `rv0`:
 
-#### Format string syntax
+    ic| bar[0]: 0
+    ic| bar[2]: 0x2
+    ic| bar[4]: 0x4
 
-Each printing type has its own formatting string syntax. The specification to [range
-types](#range-types) is described [its section](#range-format-string). At here we describe
-the formatting syntax to types printed using `IOStreams`.
+To `IC_F` and `IC_FA`, the syntax specification of the formatting strings depends both on
+the type `T` being printed, and in that type's [printing strategy](#printing-strategies)
+used by IceCream.
 
-The adopted formatting string is strongly based on
-[{fmt}](https://fmt.dev/11.0/syntax/#format-specification-mini-language) and [STL
-Formatting](https://en.cppreference.com/w/cpp/utility/format/spec)
-
-has the following syntax:
-
-```
-format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
-fill        ::=  <a character>
-align       ::=  "<" | ">" | "v"
-sign        ::=  "+" | "-"
-width       ::=  integer
-precision   ::=  integer
-type        ::=  "a" | "A" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X"
-integer     ::=  digit+
-digit       ::=  "0"..."9"
-```
-
-##### [[fill]align]
-
-The fill character can be any char. The presence of a fill character is signaled by the
-character following it, which must be one of the alignment options. The meaning of the
-alignment options is as follows:
-
-| Symbol | Meaning                                                                                                                                                |
-|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `'<'`  | Left align within the available space.                                                                                                                 |
-| `'>'`  | Right align within the available space. This is the default.                                                                                           |
-| `'v'`  | Internally align the data, with the fill character being placed between the digits and either the base or sign. Applies to integer and floating-point. |
-
-Note that unless a minimum field width is defined, the field width will always be the same
-size as the data to fill it, so that the alignment option has no meaning in this case.
-
-##### [sign]
-
-The sign option is only valid for number types, and can be one of the following:
-
-| Symbol | Meaning                                                                 |
-|--------|-------------------------------------------------------------------------|
-| `'+'`  | A sign will be used for both nonnegative as well as negative numbers. |
-| `'-'`  | A sign will be used only for negative numbers. This is the default.   |
-
-##### ["#"]
-
-Causes the “alternate form” to be used for the conversion. The alternate form is defined
-differently for different types. This option is only valid for integer and floating-point
-types. For integers, when binary, octal, or hexadecimal output is used, this option adds
-the prefix respective "0b" ("0B"), "0", or "0x" ("0X") to the output value. Whether the
-prefix is lower-case or upper-case is determined by the case of the type specifier, for
-example, the prefix "0x" is used for the type 'x' and "0X" is used for 'X'. For
-floating-point numbers the alternate form causes the result of the conversion to always
-contain a decimal-point character, even if no digits follow it. Normally, a decimal-point
-character appears in the result of these conversions only if a digit follows it. In
-addition, for 'g' and 'G' conversions, trailing zeros are not removed from the result.
-
-##### [width]
-
-A decimal integer defining the minimum field width. If not specified, then the field width
-will be determined by the content.
-
-##### ["." precision]
-
-The precision is a decimal number indicating how many digits should be displayed after the
-decimal point for a floating-point value formatted with 'f' and 'F', or before and after
-the decimal point for a floating-point value formatted with 'g' or 'G'. For non-number
-types the field indicates the maximum field size - in other words, how many characters
-will be used from the field content. The precision is not allowed for integer, character,
-Boolean, and pointer values. Note that a C string must be null-terminated even if
-precision is specified.
-
-##### [type]
-
-Determines how the data should be presented.
-
-The available integer presentation types are:
-
-| Symbol | Meaning                                                                                                                                                                   |
-|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `'d'`  | Decimal integer. Outputs the number in base 10.                                                                                                                           |
-| `'o'`  | Octal format. Outputs the number in base 8.                                                                                                                               |
-| `'x'`  | Hex format. Outputs the number in base 16, using lower-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0x" to the output value. |
-| `'X'`  | Hex format. Outputs the number in base 16, using upper-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0X" to the output value. |
-
-The available presentation types for floating-point values are:
-
-| Symbol | Meaning                                                                                                                                                                                                                                                                     |
-|--------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `'a'`  | Hexadecimal floating point format. Prints the number in base 16 with prefix "0x" and lower-case letters for digits above 9. Uses 'p' to indicate the exponent.                                                                                                              |
-| `'A'`  | Same as 'a' except it uses upper-case letters for the prefix, digits above 9 and to indicate the exponent.                                                                                                                                                                  |
-| `'e'`  | Exponent notation. Prints the number in scientific notation using the letter ‘e’ to indicate the exponent.                                                                                                                                                                  |
-| `'E'`  | Exponent notation. Same as 'e' except it uses an upper-case 'E' as the separator character.                                                                                                                                                                                 |
-| `'f'`  | Fixed point. Displays the number as a fixed-point number.                                                                                                                                                                                                                   |
-| `'F'`  | Fixed point. Same as 'f', but converts nan to NAN and inf to INF.                                                                                                                                                                                                           |
-| `'g'`  | General format. For a given precision p >= 1, this rounds the number to p significant digits and then formats the result in either fixed-point format or in scientific notation, depending on its magnitude. A precision of 0 is treated as equivalent to a precision of 1. |
-| `'G'`  | General format. Same as 'g' except switches to 'E' if the number gets too large. The representations of infinity and NaN are uppercased, too.                                                                                                                               |
+To `IC_FV`, the formatting syntax if the same as the [Range format
+string](#range-format-string).
 
 
 ### Character Encoding
@@ -771,19 +812,17 @@ The string separating the context text from the variables values. Default value 
     auto context_delimiter(std::string const& value) -> Config&;
     ```
 
-### Printing logic
 
-When printing a type `T`, the precedence is use an overloaded function
-`operator<<(ostream&, T)` always when it is available. The exceptions to that rule are
-strings (C strings, `std::string`, and `std::string_view`), `char` and bounded arrays.
-Strings will be enclosed by `"`, `char` will be enclosed by `'`, and arrays are considered
-ranges rather than let decay to raw pointers.
+### Printing strategies
 
-In general, if an `operator<<(ostream&, T)` overload is not available to a type `T`, a
-call to `IC(t)` will result on a compiling error. All exceptions to that rule, when
-IceCream-Cpp will print a type `T` even without an `operator<<(ostream&, T)` overload are
-discussed below. Note however that even to those, if a user implements a custom
-`operator<<(ostream&, T)` it will take precedence and be used instead.
+In order to be printable, a type `T` must satisfy one of the strategies described in the
+next sections. If it happens that multiple strategies are satisfied, the one with the
+higher precedence will be chosen.
+
+The strategy with the highest precedence is to use the [STL stream-based
+I/O](https://en.cppreference.com/w/cpp/io). Consequently, when printing an object of type
+`T`, if there exist an overloaded function `operator<<(ostream&, T)`, it will be used.
+
 
 #### C strings
 
@@ -837,6 +876,7 @@ format, making sure that it is in "execution encoding". Icecream-cpp implements 
 transcoder function for doing that, but is possible to customize it by setting the
 [wide_string_transcoder](#wide_string_transcoder) option.
 
+
 #### Unicode strings
 
 Any realization of `char8_t`, `char16_t`, and `char32_t` strings, like `char32_t*`,
@@ -846,6 +886,115 @@ Since the [output](#output) expects a `char` string, we must convert the data to
 format, making sure that it is in "execution encoding". Icecream-cpp implements a default
 transcoder function for doing that, but is possible to customize it by setting the
 [unicode_transcoder](#unicode_transcoder) option.
+
+
+#### Streamable types
+
+A type `T` is *streamable* if an overloading function `operator<<(std::ostream&, T)`is
+defined.  This is the printing strategy with the highest priority, so if that overload
+exists to a type `T`, it will be the used strategy.
+
+
+##### Streamable format string
+
+The [STL stream-based I/O](https://en.cppreference.com/w/cpp/io) hasn't the concept of a
+*formatting string*, all the configurations are done using
+[manipulators](https://en.cppreference.com/w/cpp/io/manip). Because of that, we have
+created a custom formatting string syntax, strongly based on
+[{fmt}](https://fmt.dev/11.0/syntax/#format-specification-mini-language) and [STL
+Formatting](https://en.cppreference.com/w/cpp/utility/format/spec).
+
+It has the following specification:
+
+```
+format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
+fill        ::=  <a character>
+align       ::=  "<" | ">" | "v"
+sign        ::=  "+" | "-"
+width       ::=  integer
+precision   ::=  integer
+type        ::=  "a" | "A" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X"
+integer     ::=  digit+
+digit       ::=  "0"..."9"
+```
+
+###### [[fill]align]
+
+The fill character can be any char. The presence of a fill character is signaled by the
+character following it, which must be one of the alignment options. The meaning of the
+alignment options is as follows:
+
+| Symbol | Meaning                                                                                                                                                |
+|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `'<'`  | Left align within the available space.                                                                                                                 |
+| `'>'`  | Right align within the available space. This is the default.                                                                                           |
+| `'v'`  | Internally align the data, with the fill character being placed between the digits and either the base or sign. Applies to integer and floating-point. |
+
+Note that unless a minimum field width is defined, the field width will always be the same
+size as the data to fill it, so that the alignment option has no meaning in this case.
+
+###### [sign]
+
+The sign option is only valid for number types, and can be one of the following:
+
+| Symbol | Meaning                                                                 |
+|--------|-------------------------------------------------------------------------|
+| `'+'`  | A sign will be used for both nonnegative as well as negative numbers. |
+| `'-'`  | A sign will be used only for negative numbers. This is the default.   |
+
+###### ["#"]
+
+Causes the “alternate form” to be used for the conversion. The alternate form is defined
+differently for different types. This option is only valid for integer and floating-point
+types. For integers, when binary, octal, or hexadecimal output is used, this option adds
+the prefix respective "0b" ("0B"), "0", or "0x" ("0X") to the output value. Whether the
+prefix is lower-case or upper-case is determined by the case of the type specifier, for
+example, the prefix "0x" is used for the type 'x' and "0X" is used for 'X'. For
+floating-point numbers the alternate form causes the result of the conversion to always
+contain a decimal-point character, even if no digits follow it. Normally, a decimal-point
+character appears in the result of these conversions only if a digit follows it. In
+addition, for 'g' and 'G' conversions, trailing zeros are not removed from the result.
+
+###### [width]
+
+A decimal integer defining the minimum field width. If not specified, then the field width
+will be determined by the content.
+
+###### ["." precision]
+
+The precision is a decimal number indicating how many digits should be displayed after the
+decimal point for a floating-point value formatted with 'f' and 'F', or before and after
+the decimal point for a floating-point value formatted with 'g' or 'G'. For non-number
+types the field indicates the maximum field size - in other words, how many characters
+will be used from the field content. The precision is not allowed for integer, character,
+Boolean, and pointer values. Note that a C string must be null-terminated even if
+precision is specified.
+
+###### [type]
+
+Determines how the data should be presented.
+
+The available integer presentation types are:
+
+| Symbol | Meaning                                                                                                                                                                   |
+|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `'d'`  | Decimal integer. Outputs the number in base 10.                                                                                                                           |
+| `'o'`  | Octal format. Outputs the number in base 8.                                                                                                                               |
+| `'x'`  | Hex format. Outputs the number in base 16, using lower-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0x" to the output value. |
+| `'X'`  | Hex format. Outputs the number in base 16, using upper-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0X" to the output value. |
+
+The available presentation types for floating-point values are:
+
+| Symbol | Meaning                                                                                                                                                                                                                                                                     |
+|--------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `'a'`  | Hexadecimal floating point format. Prints the number in base 16 with prefix "0x" and lower-case letters for digits above 9. Uses 'p' to indicate the exponent.                                                                                                              |
+| `'A'`  | Same as 'a' except it uses upper-case letters for the prefix, digits above 9 and to indicate the exponent.                                                                                                                                                                  |
+| `'e'`  | Exponent notation. Prints the number in scientific notation using the letter ‘e’ to indicate the exponent.                                                                                                                                                                  |
+| `'E'`  | Exponent notation. Same as 'e' except it uses an upper-case 'E' as the separator character.                                                                                                                                                                                 |
+| `'f'`  | Fixed point. Displays the number as a fixed-point number.                                                                                                                                                                                                                   |
+| `'F'`  | Fixed point. Same as 'f', but converts nan to NAN and inf to INF.                                                                                                                                                                                                           |
+| `'g'`  | General format. For a given precision p >= 1, this rounds the number to p significant digits and then formats the result in either fixed-point format or in scientific notation, depending on its magnitude. A precision of 0 is treated as equivalent to a precision of 1. |
+| `'G'`  | General format. Same as 'g' except switches to 'E' if the number gets too large. The representations of infinity and NaN are uppercased, too.                                                                                                                               |
 
 
 #### Pointer like types
@@ -893,8 +1042,11 @@ i0 != s
 *i0;
 ```
 
-If all that operations are valid, and an `operator<<(ostream&, R const&)` overload doesn't
-exist, Icecream-cpp will print all items within `R` instead. The code:
+If all that operations are valid, the type `R` is not [streamable](#streamable-types) but
+the elements inside `R` are, IceCream will print all items within `R` in place of `R`
+itself.
+
+The code:
 
 ```C++
 auto v0 = std::list<int>{10, 20, 30};
@@ -905,6 +1057,9 @@ will print:
 
     ic| v0: [10, 20, 30]
 
+Although lazily printing one item at a time, instead of the whole range at once. The
+[`IC_V`](#range-views-pipeline) function is printing a range too.
+
 ##### Range format string
 
 The accepted formatting string to a range type is a combination of both a range formatting
@@ -912,7 +1067,7 @@ and its elements formatting. The range formatting is syntactically and semantica
 identical to the [Python
 slicing](https://docs.python.org/3/reference/expressions.html#slicings).
 
-Formally, the accepted iterable types formatting string is:
+Formally, the accepted range types formatting string is:
 
 ```
 format_spec  ::=  [range_fmt][":"elements_fmt]
@@ -927,7 +1082,7 @@ digit        ::=  "0"..."9"
 ```
 
 The same `elements_fmt` string will be used by all the printing elements, so it will have
-the same definition as the formatting string of the range elements.
+the same syntax as the formatting string of the range elements.
 
 The code:
 
@@ -947,6 +1102,9 @@ If a `range` is not [`sized`](https://en.cppreference.com/w/cpp/ranges/sized_ran
 `lower_bound`, `upper_bound`, and `index` values must be positive. Similarly, if a `range`
 is not [`bidirectional`](https://en.cppreference.com/w/cpp/ranges/bidirectional_range) the
 `stride` value must be positive too.
+
+When printing within a [range views pipeline](#range-views-pipeline) using the `IC_FV`
+function, all the `lower_bound`, `upper_bound`, and `index` values must be positive.
 
 
 #### Tuple like types
