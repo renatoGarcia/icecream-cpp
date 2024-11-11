@@ -59,4 +59,15 @@ public:
 };
 
 
+class NonStreamable
+{
+public:
+    explicit NonStreamable(int i_)
+        : i {i_}
+    {}
+
+    int i;
+};
+
+
 #endif // TESTS_COMMON_HPP_INCLUDED

@@ -57,6 +57,7 @@
               cmakeCurses
               conan
               range-v3
+              fmt
             ] ++ app.nativeBuildInputs;
        };
 

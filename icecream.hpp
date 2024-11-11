@@ -85,6 +85,34 @@
     #include <source_location>
 #endif
 
+#if defined(__has_include) && __has_include(<format>)
+    #include <format>
+    #if defined(__cpp_lib_format)
+        #define ICECREAM_STL_FORMAT
+    #endif
+#endif
+
+// #if defined(ICECREAM_FMTLIB)                                            \
+    // || (defined(__has_include) && __has_include(<range/v3/view/transform.hpp>)) \
+    // || defined(RANGE_V3_VERSION)
+
+    #include <fmt/format.h>
+
+    // #define ICECREAM_RANGE_V3
+    // #include <range/v3/version.hpp>
+    // #include <range/v3/view/transform.hpp>
+
+    // namespace icecream { namespace detail {
+    //   #if RANGE_V3_VERSION <= 500
+    //     namespace rv3v = ::ranges::view;
+    //   #else
+    //     namespace rv3v = ::ranges::views;
+    //   #endif
+    // }}
+// #endif
+
+
+
 #if defined(ICECREAM_RANGE_V3)                                                  \
     || (defined(__has_include) && __has_include(<range/v3/view/transform.hpp>)) \
     || defined(RANGE_V3_VERSION)
@@ -242,6 +270,14 @@ namespace boost
         constexpr auto visit(Visitor&& vis, Variant&& var) -> R;
     }
 }
+
+namespace fmt
+{
+    template <typename T, typename Char, typename Enable> struct formatter {};
+    template <typename Context> class basic_format_args;
+    // auto vformat(string_view fmt, format_args args) -> std::string;;
+}
+
 
 namespace icecream{ namespace detail
 {
@@ -591,21 +627,62 @@ namespace icecream{ namespace detail
     using has_push_back_T = decltype(has_push_back_T_impl<C, T>(0));
 
 
-    // -------------------------------------------------- has_insertion
+    // --------------------------------------------------is_streamable
 
     // Checks if T has an insertion overload, i.e.: std::ostream& << T const&
     template <typename T>
-    auto has_insertion_impl(int) ->
+    auto is_streamable_impl(int) ->
         decltype (
             std::declval<std::ostream&>() << std::declval<T const&>(),
             std::true_type{}
         );
 
     template <typename T>
-    auto has_insertion_impl(...) -> std::false_type;
+    auto is_streamable_impl(...) -> std::false_type;
 
     template <typename T>
-    using has_insertion = decltype(has_insertion_impl<T>(0));
+    using is_streamable = decltype(is_streamable_impl<T>(0));
+
+
+    // --------------------------------------------------is_stl_formattable
+
+    template <class T>
+    auto is_stl_formattable_impl(int) ->
+        decltype (
+            std::formatter<T, char>{},
+            std::true_type{}
+        );
+
+    template <class T>
+    auto is_stl_formattable_impl(...) -> std::false_type ;
+
+    template <class T>
+    using is_stl_formattable = decltype(is_stl_formattable_impl<remove_cvref_t<T>>(0));
+
+
+    // --------------------------------------------------is_fmt_formattable
+
+    template <class T>
+    auto is_fmt_formattable_impl(int) ->
+        decltype (
+            fmt::formatter<T>{},
+            std::true_type{}
+        );
+
+    template <class T>
+    auto is_fmt_formattable_impl(...) -> std::false_type ;
+
+    template <class T>
+    using is_fmt_formattable = decltype(is_fmt_formattable_impl<remove_cvref_t<T>>(0));
+
+
+    // --------------------------------------------------is_baseline_printable
+
+    template <typename T>
+    using is_baseline_printable =
+        typename disjunction<
+            is_streamable<T>, is_stl_formattable<T>, is_fmt_formattable<T>
+        >::type;
 
 
     // -------------------------------------------------- has_to_string
@@ -780,7 +857,7 @@ namespace icecream{ namespace detail
             is_c_string<typename std::decay<T>::type>,
             conjunction<
                 is_invocable<T>,
-                has_insertion<returned_type<T>>
+                is_streamable<returned_type<T>>
             >
         >::type;
 
@@ -816,7 +893,7 @@ namespace icecream{ namespace detail
                 is_string_view<T>,
                 is_variant<T>,
                 is_optional<T>,
-                has_insertion<T>,
+                is_baseline_printable<T>,
                 is_character<T>,
                 is_c_string<T>,
                 std::is_base_of<std::exception, remove_cvref_t<T>>,
@@ -844,7 +921,42 @@ namespace detail {
         T&&, std::string const&, Config const&
     ) ->
         typename std::enable_if<
-            has_insertion<T>::value
+            is_streamable<T>::value
+            && !is_stl_formattable<T>::value
+            && !is_fmt_formattable<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type;
+
+    // Print any class that specializes std::formatter<T, char>
+    template <typename T>
+    auto make_printing_branch(
+        T&&, std::string const&, Config const&
+    ) ->
+        typename std::enable_if<
+            is_stl_formattable<T>::value
+            && !is_fmt_formattable<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type;
+
+    // Print any class that specializes fmt::formatter<T>
+    template <typename T>
+    auto make_printing_branch(
+        T&&, std::string const&, Config const&
+    ) ->
+        typename std::enable_if<
+            is_fmt_formattable<T>::value
             && !is_c_string<T>::value
             && !is_character<T>::value
             && !is_xsig_char<T>::value
@@ -891,7 +1003,7 @@ namespace detail {
     auto make_printing_branch(
         T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
-        is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
+        is_unstreamable_ptr<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -907,7 +1019,7 @@ namespace detail {
     auto make_printing_branch(
         T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
-        is_optional<T>::value && !has_insertion<T>::value,
+        is_optional<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
   #endif
@@ -917,7 +1029,7 @@ namespace detail {
     auto make_printing_branch(
         T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
-        is_variant<T>::value && !has_insertion<T>::value,
+        is_variant<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -926,7 +1038,7 @@ namespace detail {
     auto make_printing_branch(
         T&&, std::string const&, Config const&
     ) -> typename std::enable_if<
-        is_tuple<T>::value && !has_insertion<T>::value,
+        is_tuple<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -937,7 +1049,7 @@ namespace detail {
     ) -> typename std::enable_if<
         (
             is_range<T>::value
-            && !has_insertion<T>::value
+            && !is_baseline_printable<T>::value
             && !is_std_string<T>::value
             && !is_string_view<T>::value
         )
@@ -952,7 +1064,7 @@ namespace detail {
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
-        && !has_insertion<T>::value,
+        && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -963,7 +1075,7 @@ namespace detail {
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
-        && !has_insertion<T>::value,
+        && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -2536,7 +2648,9 @@ namespace detail {
         T&& value, std::string const& fmt, Config const&
     ) ->
         typename std::enable_if<
-            has_insertion<T>::value
+            is_streamable<T>::value
+            && !is_stl_formattable<T>::value
+            && !is_fmt_formattable<T>::value
             && !is_c_string<T>::value
             && !is_character<T>::value
             && !is_xsig_char<T>::value
@@ -2554,6 +2668,50 @@ namespace detail {
 
         *mb_ostrm << value;
         return PrintingNode(mb_ostrm->str());
+    }
+
+    // Print any class that specializes std::formatter<T, char>
+    template <typename T>
+    auto make_printing_branch(
+        T&& value, std::string const& fmt, Config const&
+    ) ->
+        typename std::enable_if<
+            is_stl_formattable<T>::value
+            && !is_fmt_formattable<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type
+    {
+        return PrintingNode(
+            std::vformat("{:" + fmt + "}", std::make_format_args(value))
+        );
+    }
+
+    // Print any class that specializes fmt::formatter<T>
+    template <typename T>
+    auto make_printing_branch(
+        T&& value, std::string const& fmt, Config const&
+    ) ->
+        typename std::enable_if<
+            is_fmt_formattable<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type
+    {
+        return PrintingNode(
+            fmt::vformat("{:" + fmt + "}", fmt::make_format_args(value))
+
+        );
     }
 
     // Print C string
@@ -2705,7 +2863,7 @@ namespace detail {
         T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
         // On C++20 unique_ptr will have a << overload.
-        is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
+        is_unstreamable_ptr<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -2730,7 +2888,7 @@ namespace detail {
     auto make_printing_branch(
         T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
-        is_optional<T>::value && !has_insertion<T>::value,
+        is_optional<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -2761,7 +2919,7 @@ namespace detail {
     auto make_printing_branch(
         T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
-        is_variant<T>::value && !has_insertion<T>::value,
+        is_variant<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -2786,7 +2944,7 @@ namespace detail {
     auto make_printing_branch(
         T&& value, std::string const& fmt, Config const& config
     ) -> typename std::enable_if<
-        is_tuple<T>::value && !has_insertion<T>::value,
+        is_tuple<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -3226,7 +3384,7 @@ namespace detail {
     ) -> typename std::enable_if<
         (
             is_range<T>::value
-            && !has_insertion<T>::value
+            && !is_baseline_printable<T>::value
             && !is_std_string<T>::value
             && !is_string_view<T>::value
         )
@@ -3278,7 +3436,7 @@ namespace detail {
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
-        && !has_insertion<T>::value,
+        && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -3292,7 +3450,7 @@ namespace detail {
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
-        && !has_insertion<T>::value,
+        && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {

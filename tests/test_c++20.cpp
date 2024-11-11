@@ -1,5 +1,8 @@
 #include "icecream.hpp"
 
+
+#include "common.hpp"
+
 #include <ranges>
 #include <vector>
 #include <forward_list>
@@ -25,6 +28,23 @@ struct Sentinel
 };
 
 
+template<>
+struct std::formatter<NonStreamable, char>
+{
+    template<class ParseContext>
+    constexpr ParseContext::iterator parse(ParseContext& ctx)
+    {
+        return ctx.begin();
+    }
+
+    template<class FmtContext>
+    FmtContext::iterator format(NonStreamable v, FmtContext& ctx) const
+    {
+        return std::format_to(ctx.out(), "fmt {}", v.i);
+    }
+};
+
+
 TEST_CASE("ranges view")
 {
     namespace rv = std::views;
@@ -38,9 +58,9 @@ TEST_CASE("ranges view")
         auto v0 = arr | rv::transform([](auto i){return i.second;}) | IC_V();
         for (auto i : v0){}
       #if defined(__clang__)
-        REQUIRE(str == "ic| range_view_38:76[0]: 10\nic| range_view_38:76[1]: 11\n");
+        REQUIRE(str == "ic| range_view_58:76[0]: 10\nic| range_view_58:76[1]: 11\n");
       #else
-        REQUIRE(str == "ic| range_view_38:71[0]: 10\nic| range_view_38:71[1]: 11\n");
+        REQUIRE(str == "ic| range_view_58:71[0]: 10\nic| range_view_58:71[1]: 11\n");
       #endif
     }
 
@@ -53,9 +73,9 @@ TEST_CASE("ranges view")
         auto v0 = arr | rv::drop(2) | IC_V([](auto i){return i.second;});
         for (auto i : v0){}
       #if defined(__clang__)
-        REQUIRE(str == "ic| range_view_53:72[0]: 12\n");
+        REQUIRE(str == "ic| range_view_73:72[0]: 12\n");
       #else
-        REQUIRE(str == "ic| range_view_53:39[0]: 12\n");
+        REQUIRE(str == "ic| range_view_73:39[0]: 12\n");
       #endif
     }
 
@@ -69,12 +89,12 @@ TEST_CASE("ranges view")
         for (auto i : v0){}
       #if defined(__clang__)
         auto const result =
-            "ic| range_view_68:66[0]: 0xa\n"
-            "ic| range_view_68:66[1]: 0xb\n";
+            "ic| range_view_88:66[0]: 0xa\n"
+            "ic| range_view_88:66[1]: 0xb\n";
       #else
         auto const result =
-            "ic| range_view_68:25[0]: 0xa\n"
-            "ic| range_view_68:25[1]: 0xb\n";
+            "ic| range_view_88:25[0]: 0xa\n"
+            "ic| range_view_88:25[1]: 0xb\n";
       #endif
         REQUIRE(str == result);
     }
@@ -247,3 +267,46 @@ TEST_CASE("ranges")
 }
 
 
+template<>
+struct std::formatter<MyClass, char>
+{
+    template<class ParseContext>
+    constexpr ParseContext::iterator parse(ParseContext& ctx)
+    {
+        return ctx.begin();
+    }
+
+    template<class FmtContext>
+    FmtContext::iterator format(MyClass const& v, FmtContext& ctx) const
+    {
+        return std::format_to(ctx.out(), "MyClass fmt {}", v.i);
+    }
+};
+
+
+
+TEST_CASE("STL formatting lib")
+{
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = NonStreamable{42};
+
+        IC(v0);
+        REQUIRE(str == "ic| v0: fmt 42\n");
+    }
+
+    // Test the precedence of std::formatter specialization
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = MyClass{1};
+
+        IC(v0);
+        REQUIRE(str == "ic| v0: MyClass fmt 1\n");
+    }
+}
