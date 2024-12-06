@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [gcc6, gcc9, gcc14, clang8, clang18]
+        version: [gcc6, gcc9, gcc14, clang8, clang19]
         cpp: [11, 14, 17, 20]
         exclude:
           - version: gcc6
@@ -44,15 +44,21 @@ jobs:
             version: gcc6
           - range_v3: OFF
             cpp: 11
+
+          - libcxx: libstdc++11
+          - libcxx: libc++
+            version: clang8
+          - libcxx: libc++
+            version: clang19
     steps:
       - uses: actions/checkout@v4
       - name: create container
-        run: docker run -dit --name ic-test -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }} /bin/sh
+        run: docker run -dit --name ic-test -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }}-3 /bin/sh
       - name: prepare
         run: |
           docker exec ic-test /bin/sh -c " \
           conan profile detect && \
-          conan install ./src/tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing"
+          conan install ./src/tests -s compiler.cppstd=${{ matrix.cpp }} -s compiler.libcxx=${{ matrix.libcxx }} --output-folder=build --build=missing"
       - name: build
         run: |
           docker exec ic-test /bin/sh -c " \

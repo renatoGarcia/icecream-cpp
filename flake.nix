@@ -42,17 +42,16 @@
         };
       };
 
-      dev-env = { pkgs }:
+      dev-env = { pkgs, stdenv }:
         let
           app = application { inherit pkgs; };
         in
-          pkgs.mkShell {
+          pkgs.mkShell.override { inherit stdenv; } {
             name = "icecream-cpp";
-
             nativeBuildInputs = with pkgs.buildPackages; [
+              (fmt.override { inherit stdenv; })
               boost
               catch2
-              clang
               clang-tools
               cmakeCurses
               conan
@@ -77,7 +76,11 @@
         packages = {
           default = pkgs.icecream-cpp;
         };
-        devShells.default = dev-env { inherit pkgs; };
+        devShells = rec {
+          gcc = dev-env { inherit pkgs; stdenv = pkgs.stdenv; };
+          clang = dev-env { inherit pkgs; stdenv = pkgs.libcxxStdenv; };
+          default = gcc;
+        };
       }
     );
 }
