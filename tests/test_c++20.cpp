@@ -37,10 +37,12 @@ TEST_CASE("ranges view")
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}};
         auto v0 = arr | rv::transform([](auto i){return i.second;}) | IC_V();
         for (auto i : v0){}
-      #if defined(__clang__)
+      #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         REQUIRE(str == "ic| range_view_38:76[0]: 10\nic| range_view_38:76[1]: 11\n");
-      #else
+      #elif defined(ICECREAM_SOURCE_LOCATION)
         REQUIRE(str == "ic| range_view_38:71[0]: 10\nic| range_view_38:71[1]: 11\n");
+      #else
+        REQUIRE(str == "ic| range_view_38[0]: 10\nic| range_view_38[1]: 11\n");
       #endif
     }
 
@@ -52,10 +54,12 @@ TEST_CASE("ranges view")
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | rv::drop(2) | IC_V([](auto i){return i.second;});
         for (auto i : v0){}
-      #if defined(__clang__)
-        REQUIRE(str == "ic| range_view_53:72[0]: 12\n");
+      #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
+        REQUIRE(str == "ic| range_view_55:72[0]: 12\n");
+      #elif defined(ICECREAM_SOURCE_LOCATION)
+        REQUIRE(str == "ic| range_view_55:39[0]: 12\n");
       #else
-        REQUIRE(str == "ic| range_view_53:39[0]: 12\n");
+        REQUIRE(str == "ic| range_view_55[0]: 12\n");
       #endif
     }
 
@@ -65,16 +69,20 @@ TEST_CASE("ranges view")
         IC_CONFIG.output(str);
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}};
-        auto v0 = arr | IC_FV(":#x", [](auto i){return i.second;}) | rv::drop(0);
+        auto v0 = arr | IC_FV(":#x", [](auto i){return i.second;}) | rv::drop(0); //68
         for (auto i : v0){}
-      #if defined(__clang__)
+      #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         auto const result =
-            "ic| range_view_68:66[0]: 0xa\n"
-            "ic| range_view_68:66[1]: 0xb\n";
+            "ic| range_view_72:66[0]: 0xa\n"
+            "ic| range_view_72:66[1]: 0xb\n";
+      #elif defined(ICECREAM_SOURCE_LOCATION)
+        auto const result =
+            "ic| range_view_72:25[0]: 0xa\n"
+            "ic| range_view_72:25[1]: 0xb\n";
       #else
         auto const result =
-            "ic| range_view_68:25[0]: 0xa\n"
-            "ic| range_view_68:25[1]: 0xb\n";
+            "ic| range_view_72[0]: 0xa\n"
+            "ic| range_view_72[1]: 0xb\n";
       #endif
         REQUIRE(str == result);
     }

@@ -36,7 +36,7 @@ TEST_CASE("dump_string")
             {&i0},
         };
 
-      #if defined(_LIBCPP_VERSION)
+      #if !defined(__APPLE__) && defined(_LIBCPP_VERSION)
         auto const result = "ic\\| v0: \\{integers: \\[(0x)*[0-9a-fA-F]+, \\(nil\\)\\]\\}\n";
       #else
         auto const result = "ic\\| v0: \\{integers: \\[(0x)*[0-9a-fA-F]+, (0x)*0\\]\\}\n";
