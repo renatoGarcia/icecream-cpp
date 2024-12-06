@@ -48,7 +48,8 @@
 #include <utility>
 #include <vector>
 
-#if !(defined(__APPLE__) && defined(__clang__))
+
+#if !defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 15000
     #define ICECREAM_CUCHAR_HEADER
     #include <cuchar>
 #endif
