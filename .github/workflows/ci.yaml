@@ -104,11 +104,11 @@ jobs:
 
   macos:
     name: Xcode C++${{ matrix.cpp }}
-    runs-on: macos-12
+    runs-on: macos-14
     strategy:
       fail-fast: false
       matrix:
-        cpp: [11, 14, 17]
+        cpp: [11, 14, 17, 20]
         include:
           - range_v3: ON
           - range_v3: OFF

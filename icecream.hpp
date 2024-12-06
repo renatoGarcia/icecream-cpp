@@ -49,7 +49,7 @@
 #include <vector>
 
 
-#if !defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 15000
+#if !defined(__APPLE__) && (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 15000)
     #define ICECREAM_CUCHAR_HEADER
     #include <cuchar>
 #endif
@@ -82,8 +82,11 @@
     #endif
 #endif
 
-#if defined(__has_include) && __has_include(<source_location>)
+#if !defined(__APPLE__) && defined(__has_include) && __has_include(<source_location>)
     #include <source_location>
+    #if defined(__cpp_lib_source_location)
+        #define ICECREAM_SOURCE_LOCATION
+    #endif
 #endif
 
 #if defined(ICECREAM_RANGE_V3)                                                  \
@@ -4234,7 +4237,7 @@ namespace detail {
             int line,
             std::string file,
             std::string function
-          #if defined(__cpp_lib_source_location)
+          #if defined(ICECREAM_SOURCE_LOCATION)
             ,std::source_location const location = std::source_location::current()
           #endif
         ) -> RangeViewArgs&
@@ -4244,7 +4247,7 @@ namespace detail {
             this->file_ = file;
             this->function_ = function;
 
-          #if defined(__cpp_lib_source_location)
+          #if defined(ICECREAM_SOURCE_LOCATION)
             (void)line;
             this->src_location =
                 std::to_string(location.line()) + ":" + std::to_string(location.column());

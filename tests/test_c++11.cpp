@@ -712,7 +712,7 @@ TEST_CASE("pointer_like")
 
         float* v0 = nullptr;
         IC(v0);
-      #if defined(_LIBCPP_VERSION)
+      #if !defined(__APPLE__) && defined(_LIBCPP_VERSION)
         REQUIRE(str == "ic| v0: (nil)\n");
       #else
         REQUIRE_THAT(str, Catch::Matches("ic\\| v0: (0x)*0+\n"));
@@ -726,7 +726,7 @@ TEST_CASE("pointer_like")
 
         auto v0 = std::unique_ptr<double> {};
         IC(v0);
-      #if defined(_LIBCPP_VERSION)
+      #if !defined(__APPLE__) && defined(_LIBCPP_VERSION)
         REQUIRE(str == "ic| v0: (nil)\n");
       #else
         REQUIRE_THAT(str, Catch::Matches("ic\\| v0: (0x)*0+\n"));
