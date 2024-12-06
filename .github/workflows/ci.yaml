@@ -28,16 +28,22 @@ jobs:
       fail-fast: false
       matrix:
         version: [gcc6, gcc9, gcc14, clang8, clang19]
-        cpp: [11, 14, 17, 20]
+        cpp: [11, 14, 17, 20, 23]
         exclude:
           - version: gcc6
             cpp: 17
           - version: gcc6
             cpp: 20
+          - version: gcc6
+            cpp: 23
           - version: gcc9
             cpp: 20
+          - version: gcc9
+            cpp: 23
           - version: clang8
             cpp: 20
+          - version: clang8
+            cpp: 23
         include:
           - range_v3: ON
           - range_v3: OFF
@@ -75,10 +81,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2022, windows-2019]
-        cpp: [14, 17, 20]
+        cpp: [14, 17, 20, 23]
         exclude:
           - os: windows-2019
             cpp: 20
+          - os: windows-2019
+            cpp: 23
         include:
           - os: windows-2022
             name: vs2022
@@ -108,7 +116,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cpp: [11, 14, 17, 20]
+        cpp: [11, 14, 17, 20, 23]
         include:
           - range_v3: ON
           - range_v3: OFF

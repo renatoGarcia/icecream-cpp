@@ -25,12 +25,7 @@ function(declare_test name)
     endif()
 endfunction()
 
-if (
-    CMAKE_CXX_STANDARD EQUAL 11
-    OR CMAKE_CXX_STANDARD EQUAL 14
-    OR CMAKE_CXX_STANDARD EQUAL 17
-    OR CMAKE_CXX_STANDARD EQUAL 20
-)
+if (CMAKE_CXX_STANDARD GREATER_EQUAL 11)
     declare_test(c++11)
     declare_test(strings_c++11)
     declare_test(config)
@@ -40,12 +35,12 @@ if (
     endif()
 endif()
 
-if (CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20)
+if (CMAKE_CXX_STANDARD GREATER_EQUAL 17)
     declare_test(c++17)
     declare_test(strings_c++17)
 endif()
 
-if (CMAKE_CXX_STANDARD EQUAL 20)
+if (CMAKE_CXX_STANDARD GREATER_EQUAL 20)
     declare_test(c++20)
     declare_test(strings_c++20)
 endif()
