@@ -841,11 +841,12 @@ namespace icecream{ namespace detail
 namespace detail {
 
     class PrintingNode;
+    class StringView;
 
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) ->
         typename std::enable_if<
             has_insertion<T>::value
@@ -861,39 +862,39 @@ namespace detail {
     // Print C string
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type;
 
     // Print std::string
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type;
 
   #if defined(ICECREAM_STRING_VIEW_HEADER)
     // Print std::string_view
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type;
   #endif
 
     // Print character
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type;
 
     // Print signed and unsigned char
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type;
 
     // Print smart pointers without an operator<<(ostream&) overload.
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<
         is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -902,14 +903,14 @@ namespace detail {
     // Print weak pointer classes
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type;
 
   #if defined(ICECREAM_OPTIONAL_HEADER)
     // Print std::optional<> classes
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<
         is_optional<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -919,7 +920,7 @@ namespace detail {
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<
         is_variant<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -928,7 +929,7 @@ namespace detail {
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<
         is_tuple<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -937,7 +938,7 @@ namespace detail {
     // Print all elements of a range
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<
         (
             is_range<T>::value
@@ -952,7 +953,7 @@ namespace detail {
     // Print classes deriving from only std::exception and not from boost::exception
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
@@ -963,7 +964,7 @@ namespace detail {
     // Print classes deriving from both std::exception and boost::exception
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
@@ -976,7 +977,7 @@ namespace detail {
     // when the elements type shoud be printed using clang dump_struct.
     template <typename T>
     auto make_printing_branch(
-        T&&, std::string const&, Config const&
+        T&&, StringView, Config const&
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type;
   #endif
 
@@ -1005,6 +1006,150 @@ namespace detail {
             return std::forward<T>(t);
         }
     };
+
+    // -------------------------------------------------- min
+
+    template <typename T>
+    auto min(T const& lho, T const& rho) -> T const&
+    {
+        return (rho < lho) ? rho : lho;
+    }
+
+
+    // -------------------------------------------------- StringView
+    class StringView
+    {
+    public:
+        static constexpr size_t npos = size_t(-1);
+
+        using value_type = char;
+
+        using iterator = char const*;
+
+        using reverse_iterator = std::reverse_iterator<iterator>;
+
+        StringView() = default;
+
+        StringView(char const* s, size_t count)
+            : s_{s}
+            , count_{count}
+        {}
+
+        StringView(char const* s)
+            : s_{s}
+            , count_{std::char_traits<char>::length(s)}
+        {}
+
+        StringView(std::string const& s)
+            : s_{s.data()}
+            , count_{s.size()}
+        {}
+
+        StringView(iterator first, iterator last)
+            : s_{first}
+            , count_{static_cast<size_t>(last - first)}
+        {}
+
+        auto empty() const -> bool
+        {
+            return this->count_ == 0;
+        }
+
+        auto size() const -> size_t
+        {
+            return this->count_;
+        }
+
+        auto begin() const -> iterator
+        {
+            return this->s_;
+        }
+
+        auto end() const -> iterator
+        {
+            return this->s_ + this->count_;
+        }
+
+        auto rbegin() const -> reverse_iterator
+        {
+            return reverse_iterator(this->s_ + this->count_);
+        }
+
+        auto rend() const -> reverse_iterator
+        {
+            return reverse_iterator(this->s_);
+        }
+
+        auto operator[](size_t idx) const -> char
+        {
+            return this->s_[idx];
+        }
+
+        friend auto operator==(StringView lho, StringView rho) -> bool
+        {
+            if (lho.count_ != rho.count_) return false;
+            return std::char_traits<char>::compare(lho.s_, rho.s_, lho.count_) == 0;
+        }
+
+        auto substr(size_t pos = 0, size_t count = npos) const -> StringView
+        {
+            return StringView(this->s_ + pos, min(count, this->count_ - pos));
+        }
+
+        auto find(char const* s, size_t pos = npos) const -> size_t
+        {
+            if (*s == '\0')
+            {
+                return 0;  // Empty string is always found at index 0
+            }
+
+            for (auto i = size_t{0}; i < this->count_; ++i)
+            {
+                if (this->s_[i] == s[0])
+                {
+                    auto j = size_t{1};
+                    while (i + j < this->count_ && this->s_[i + j] == s[j] && s[j] != '\0')
+                    {
+                        ++j;
+                    }
+
+                    // If we reached the end of input string s it was found
+                    if (s[j] == '\0')
+                    {
+                        return i;  // Return the starting index
+                    }
+                }
+            }
+
+            return npos; // if not found
+        }
+
+        auto rfind(char ch, size_t pos = npos) const -> size_t
+        {
+            auto const size = this->count_;
+
+            if (size == 0) return npos;
+
+            auto idx = pos < size ? pos : size;
+
+            for (++idx; idx-- > 0;)
+            {
+                if (this->s_[idx] == ch) return idx;
+            }
+
+            return npos;
+        }
+
+        auto to_string() const -> std::string
+        {
+            return std::string(this->s_, this->count_);
+        }
+
+    private:
+        char const* s_ = nullptr;
+        size_t count_ = 0;
+    };
+
 
     // -------------------------------------------------- Character transcoders
 
@@ -1223,10 +1368,10 @@ namespace detail {
         return result;
     }
 
-    inline auto count_utf8_code_point(std::string const& str) -> size_t
+    inline auto count_utf8_code_point(StringView str) -> size_t
     {
         auto result = size_t{0};
-        auto const n_bytes = str.length();
+        auto const n_bytes = str.size();
         for (size_t idx = 0; idx < n_bytes; ++idx, ++result)
         {
             auto const c = static_cast<uint8_t>(str[idx]);
@@ -1337,7 +1482,7 @@ namespace detail {
         {}
 
         // Expects `str` in "output encoding".
-        auto operator()(std::string const& str) -> void
+        auto operator()(StringView str) -> void
         {
             for (auto const& c : str)
             {
@@ -2070,7 +2215,7 @@ namespace detail {
     // -------------------------------------------------- Tree
 
     // Builds an ostringstream and sets its state accordingly to `fmt` string
-    inline auto build_ostream(std::string const& fmt) -> Optional<std::ostringstream>
+    inline auto build_ostream(StringView fmt) -> Optional<std::ostringstream>
     {
         // format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
         // fill        ::=  <a character>
@@ -2285,14 +2430,14 @@ namespace detail {
             std::vector<PrintingNode> children;
 
             Stem(
-                std::string&& open_,
-                std::string&& separator_,
-                std::string&& close_,
+                StringView open_,
+                StringView separator_,
+                StringView close_,
                 std::vector<PrintingNode>&& children_
             )
-                : open(std::move(open_))
-                , separator(std::move(separator_))
-                , close(std::move(close_))
+                : open(open_.to_string())
+                , separator(separator_.to_string())
+                , close(close_.to_string())
                 , children(std::move(children_))
             {}
 
@@ -2308,7 +2453,7 @@ namespace detail {
             return this->content.index() == 0;
         }
 
-        auto get_leaf() const -> std::string const&
+        auto get_leaf() const -> StringView
         {
             return get<std::string>(this->content);
         }
@@ -2345,25 +2490,20 @@ namespace detail {
             return *this;
         }
 
-        explicit PrintingNode(std::string leaf)
-            : content(std::move(leaf))
+        explicit PrintingNode(StringView leaf)
+            : content(leaf.to_string())
             , n_code_unit(this->get_leaf().size())
             , n_code_point(count_utf8_code_point(this->get_leaf()))
         {}
 
         PrintingNode(
-            std::string open,
-            std::string separator,
-            std::string close,
+            StringView open,
+            StringView separator,
+            StringView close,
             std::vector<PrintingNode> children
         )
             : content(
-                Stem(
-                    std::move(open),
-                    std::move(separator),
-                    std::move(close),
-                    std::move(children)
-                )
+                Stem(open, separator, close, std::move(children))
             )
             , n_code_unit{
                 [this]()
@@ -2422,7 +2562,7 @@ namespace detail {
 
         // Search among the children of `this` Tree, by a Tree having `key` as its
         // content. Returns `nullptr` if no child has been found.
-        auto find_leaf(std::string const& key) -> PrintingNode*
+        auto find_leaf(StringView key) -> PrintingNode*
         {
             auto to_visit = std::vector<PrintingNode*>{this};
             while (!to_visit.empty())
@@ -2454,7 +2594,7 @@ namespace detail {
 
             if (this->is_leaf())
             {
-                result = this->get_leaf();
+                result = this->get_leaf().to_string();
             }
             else
             {
@@ -2489,7 +2629,7 @@ namespace detail {
             // length, since there is no children to be split.
             if (this->is_leaf())
             {
-                result = this->get_leaf();
+                result = this->get_leaf().to_string();
             }
             else
             {
@@ -2537,7 +2677,7 @@ namespace detail {
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const&
+        T&& value, StringView fmt, Config const&
     ) ->
         typename std::enable_if<
             has_insertion<T>::value
@@ -2563,7 +2703,7 @@ namespace detail {
     // Print C string
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
@@ -2598,7 +2738,7 @@ namespace detail {
     // Print std::string
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
@@ -2615,7 +2755,7 @@ namespace detail {
     // Print std::string_view
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type
     {
         using String = std::basic_string<typename remove_cvref_t<T>::value_type>;
@@ -2626,7 +2766,7 @@ namespace detail {
     // Print character
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
     {
         using C = remove_cvref_t<T>;
@@ -2685,7 +2825,7 @@ namespace detail {
     // Print signed and unsigned char
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const&
+        T&& value, StringView fmt, Config const&
     ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type
     {
         using T0 =
@@ -2706,7 +2846,7 @@ namespace detail {
     // Print smart pointers without an operator<<(ostream&) overload.
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<
         // On C++20 unique_ptr will have a << overload.
         is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
@@ -2721,7 +2861,7 @@ namespace detail {
     // Print weak pointer classes
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type
     {
         return value.expired() ?
@@ -2732,7 +2872,7 @@ namespace detail {
     // Print std::optional<> classes
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<
         is_optional<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -2745,7 +2885,7 @@ namespace detail {
 
     struct Visitor
     {
-        Visitor(std::string const& fmt, Config const& config)
+        Visitor(StringView fmt, Config const& config)
             : fmt_(fmt)
             , config_(config)
         {}
@@ -2756,14 +2896,14 @@ namespace detail {
             return make_printing_branch(arg, this->fmt_, this->config_);
         }
 
-        std::string const& fmt_;
+        StringView fmt_;
         Config const& config_;
     };
 
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<
         is_variant<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -2774,7 +2914,7 @@ namespace detail {
 
     template<typename T, size_t N = std::tuple_size<T>::value-1>
     static auto tuple_traverser(
-        T const& t, std::string const& fmt, Config const& config
+        T const& t, StringView fmt, Config const& config
     ) -> std::vector<PrintingNode>
     {
         auto result = N > 0 ?
@@ -2788,7 +2928,7 @@ namespace detail {
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<
         is_tuple<T>::value && !has_insertion<T>::value,
         PrintingNode
@@ -2809,7 +2949,7 @@ namespace detail {
 
         // Receives a slicing string, like "[:-2:2]" and returns an instance of `Slice`
         // class that represents it. If the string is an invalid slicing, returns nothing.
-        static auto build(std::string const& fmt) -> Optional<Slice>
+        static auto build(StringView fmt) -> Optional<Slice>
         {
             if (fmt.empty())
             {
@@ -3194,7 +3334,7 @@ namespace detail {
     // Receives a range formatting string, "[:3]:#x" for instance, and splits it in a
     // pair: the range formatting itself ("[:3]") and the elements formatting ("#x"). The
     // cut point is the leftmost colon that is outside of a square bracket pair.
-    inline auto split_range_fmt_string(std::string const& fmt) -> std::tuple<std::string, std::string>
+    inline auto split_range_fmt_string(StringView fmt) -> std::tuple<StringView, StringView>
     {
         auto is_inside_square_brackets = false;
         for (auto it = fmt.begin(); it != fmt.end(); ++it)
@@ -3226,7 +3366,7 @@ namespace detail {
     // Print all elements of a range
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<
         (
             is_range<T>::value
@@ -3238,8 +3378,8 @@ namespace detail {
         PrintingNode
     >::type
     {
-        auto range_fmt = std::string{};
-        auto elements_fmt = std::string{};
+        auto range_fmt = StringView{};
+        auto elements_fmt = StringView{};
         std::tie(range_fmt, elements_fmt) = split_range_fmt_string(fmt);
 
         auto const mb_slice = Slice::build(range_fmt);
@@ -3269,7 +3409,7 @@ namespace detail {
             mb_element = slice_functor();
         }
 
-        auto const opening = range_fmt.empty() ? "[" : range_fmt + "->[";
+        auto const opening = range_fmt.empty() ? "[" : range_fmt.to_string() + "->[";
         return PrintingNode(opening, ", ", "]", std::move(children));
     }
 
@@ -3278,7 +3418,7 @@ namespace detail {
     // Print classes deriving from only std::exception and not from boost::exception
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const&, Config const&
+        T&& value, StringView, Config const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
@@ -3292,7 +3432,7 @@ namespace detail {
     // Print classes deriving from both std::exception and boost::exception
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const&, Config const&
+        T&& value, StringView, Config const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
@@ -3312,7 +3452,7 @@ namespace detail {
   #if defined(ICECREAM_DUMP_STRUCT_CLANG)
     static auto ds_this = static_cast<PrintingNode*>(nullptr);
     static auto ds_delayed_structs = std::vector<std::pair<std::string, std::function<void()>>>{};
-    static auto ds_fmt_ref = static_cast<std::string const*>(nullptr);
+    static auto ds_fmt_ref = StringView{};
     static auto ds_config_ref = static_cast<Config const*>(nullptr);
     static auto ds_call_count = int{0};
     template<typename... T> auto parse_dump_struct(char const* format, T&& ...args) -> int;
@@ -3320,7 +3460,7 @@ namespace detail {
     // Print classes using clang's __builtin_dump_struct (clang >= 15).
     template <typename T>
     auto make_printing_branch(
-        T&& value, std::string const& fmt, Config const& config
+        T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type
     {
         // If this is the outermost class being printed
@@ -3329,7 +3469,7 @@ namespace detail {
             auto branch_node = PrintingNode("");
 
             ds_this = &branch_node;  // Put `this` on scope to be assigned inside `parse_dump_struct`
-            ds_fmt_ref = &fmt;
+            ds_fmt_ref = fmt;
             ds_config_ref = &config;
             __builtin_dump_struct(&value, &parse_dump_struct);  // Print the outermost class
 
@@ -3393,11 +3533,11 @@ namespace detail {
     {
         if (deref)
         {
-            return make_printing_branch(*t, *ds_fmt_ref, *ds_config_ref);
+            return make_printing_branch(*t, ds_fmt_ref, *ds_config_ref);
         }
         else
         {
-            return make_printing_branch(t, *ds_fmt_ref, *ds_config_ref);
+            return make_printing_branch(t, ds_fmt_ref, *ds_config_ref);
         }
     }
 
@@ -3405,7 +3545,7 @@ namespace detail {
     template<typename T>
     auto build_tree(bool, T const& t) -> PrintingNode
     {
-        return make_printing_branch(t, *ds_fmt_ref, *ds_config_ref);
+        return make_printing_branch(t, ds_fmt_ref, *ds_config_ref);
     }
 
     // Receives all the variadic inputs from parse_dump_struct and returns a pair with the
@@ -3569,7 +3709,7 @@ namespace detail {
         decltype(
             make_printing_branch(
                 std::declval<T const&>(),
-                std::declval<std::string const&>(),
+                std::declval<StringView>(),
                 std::declval<Config const&>()
             ),
             std::true_type{}
@@ -3693,24 +3833,24 @@ namespace detail {
     template <typename T>
     struct PrintingArgument
     {
-        std::string const& name;
-        std::string const& fmt;
+        StringView name;
+        StringView fmt;
         T&& value;
     };
 
 
     // Print a forest that fits into a single line.
     inline auto print_one_line_forest(
-        std::string const& prefix,
-        std::string const& context,
-        std::string const& delimiter,
-        std::vector<std::tuple<std::string, PrintingNode>> const& forest
+        StringView prefix,
+        StringView context,
+        StringView delimiter,
+        std::vector<std::tuple<StringView, PrintingNode>> const& forest
     ) -> std::string
     {
-        auto result = prefix;
+        auto result = prefix.to_string();
         if (!context.empty())
         {
-            result += context + delimiter;
+            result += context.to_string() + delimiter.to_string();
         }
 
         for (auto it = forest.begin(); it != forest.end(); ++it)
@@ -3718,7 +3858,7 @@ namespace detail {
             auto const& arg_name = std::get<0>(*it);
             auto const& tree = std::get<1>(*it);
 
-            result += arg_name + ": " + tree.print();
+            result += arg_name.to_string() + ": " + tree.print();
 
             if (it+1 != forest.end())
             {
@@ -3731,16 +3871,16 @@ namespace detail {
 
     // Print a forest that will be broken on multiple lines.
     inline auto print_multi_line_forest(
-        std::string const& prefix,
-        std::string const& context,
-        std::vector<std::tuple<std::string, PrintingNode>> const& forest,
+        StringView prefix,
+        StringView context,
+        std::vector<std::tuple<StringView, PrintingNode>> const& forest,
         size_t const line_wrap_width
     ) -> std::string
     {
-        auto result = prefix;
+        auto result = prefix.to_string();
         if (!context.empty())
         {
-            result += context;
+            result += context.to_string();
         }
         result +=  + "\n";
 
@@ -3749,7 +3889,7 @@ namespace detail {
             auto const& arg_name = std::get<0>(*it);
             auto const& tree = std::get<1>(*it);
 
-            result += std::string(Config::INDENT_BASE, ' ') + arg_name + ": ";
+            result += std::string(Config::INDENT_BASE, ' ') + arg_name.to_string() + ": ";
             if (count_utf8_code_point(result) + tree.code_point_length() < line_wrap_width)
             {
                 result += tree.print();
@@ -3771,9 +3911,9 @@ namespace detail {
     template <typename... Ts>
     auto build_forest(
         Config const& config, PrintingArgument<Ts>&... args
-    ) -> std::vector<std::tuple<std::string, PrintingNode>>
+    ) -> std::vector<std::tuple<StringView, PrintingNode>>
     {
-        auto forest = std::vector<std::tuple<std::string, PrintingNode>>{};
+        auto forest = std::vector<std::tuple<StringView, PrintingNode>>{};
         (void) std::initializer_list<int>{
             (
                 (void) forest.emplace_back(
@@ -3789,9 +3929,9 @@ namespace detail {
     template <typename... Ts>
     auto print_args(
         Config const& config,
-        std::string const& file,
+        StringView file,
         int line,
-        std::string const& function,
+        StringView function,
         PrintingArgument<Ts>... args
     ) -> typename std::enable_if<
             detail::conjunction<detail::is_printable<Ts>...>::value
@@ -3817,7 +3957,13 @@ namespace detail {
                   #else
                     auto const n = file.rfind('/');
                   #endif
-                    return file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
+                    return
+                        file.substr(n+1).to_string()
+                        + ":"
+                        + std::to_string(line)
+                        + " in \""
+                        + function.to_string()
+                        + '"';
                 }
                 else
                 {
@@ -3875,9 +4021,9 @@ namespace detail {
     // Handles the printing of a nullary IC() call.
     inline auto print_nullary(
         Config const& config,
-        std::string const& file,
+        StringView file,
         int line,
-        std::string const& function
+        StringView function
     ) -> void
     {
         if (!config.is_enabled()) return;
@@ -3892,7 +4038,13 @@ namespace detail {
                 auto const n = file.rfind('/');
               #endif
 
-                return file.substr(n+1) + ":" + std::to_string(line) + " in \"" + function + '"';
+                return
+                    file.substr(n+1).to_string()
+                    + ":"
+                    + std::to_string(line)
+                    + " in \""
+                    + function.to_string()
+                    + '"';
             }();
 
         auto const str = prefix + context + "\n";
@@ -3902,9 +4054,9 @@ namespace detail {
     /** This function will receive a string as "foo, bar, baz" and return a vector with
      * all the arguments split, such as ["foo", "bar", "baz"].
      */
-    inline auto split_arguments(std::string const& all_names) -> std::vector<std::string>
+    inline auto split_arguments(StringView all_names) -> std::vector<StringView>
     {
-        auto result = std::vector<std::string>{};
+        auto result = std::vector<StringView>{};
 
         if (all_names.empty())
         {
@@ -3913,9 +4065,9 @@ namespace detail {
 
         // Check if the '>' char is the closing of a template arguments listing. It will
         // be a template closing at `std::is_same<int, int>::value` but not at `5 > 2`
-        using crev_it = std::string::const_reverse_iterator;
+        using rev_it = StringView::reverse_iterator;
         auto is_closing_template =
-            [](crev_it left_it, crev_it right_it) -> bool
+            [](rev_it left_it, rev_it right_it) -> bool
             {
                 if (*left_it != '>' || left_it == right_it)
                 {
@@ -3940,9 +4092,9 @@ namespace detail {
                 return *left_it == ':' && (left_it != right_it) && *(left_it-1) == ':';
             };
 
-        auto right_cut = all_names.crbegin();
-        auto left_cut = all_names.crbegin();
-        auto const left_end = all_names.crend();
+        auto right_cut = all_names.rbegin();
+        auto left_cut = all_names.rbegin();
+        auto const left_end = all_names.rend();
         auto parenthesis_count = int{0};
         auto angle_bracket_count = int{0};
 
@@ -4065,13 +4217,13 @@ namespace detail {
     }
 
     template <typename T>
-    auto get_fmt(T const&, std::string const& default_format) -> std::string
+    auto get_fmt(T const&, StringView default_format) -> StringView
     {
         return default_format;
     }
 
     template <typename T>
-    auto get_fmt(FormattingArgument<T> const& t, std::string const&) -> std::string
+    auto get_fmt(FormattingArgument<T> const& t, StringView) -> StringView
     {
         return t.fmt;
     }
@@ -4084,8 +4236,11 @@ namespace detail {
     // when used with no arguments would expand to one of:
     //
     // print("foo.cpp", 42, "void bar()", "",)
-    //
     // print("foo.cpp", 42, "void bar()", ,)
+    //
+    // A trailing comma is invalid when calling a function with parentheses, but allowed
+    // when constructing an object with braces.
+    //
     class Dispatcher
     {
     public:
@@ -4094,11 +4249,11 @@ namespace detail {
         Dispatcher(
             bool is_ic_apply,
             Config const& config,
-            std::string const& file,
+            StringView file,
             int line,
-            std::string const& function,
-            std::string const& default_format,
-            std::string const& arg_names
+            StringView function,
+            StringView default_format,
+            StringView arg_names
         )
             : is_ic_apply_(is_ic_apply)
             , config_(config)
@@ -4114,10 +4269,10 @@ namespace detail {
         Dispatcher(
             bool is_ic_apply,
             Config const& config,
-            std::string const& file,
+            StringView file,
             int line,
-            std::string const& function,
-            std::string const& default_format
+            StringView function,
+            StringView default_format
         )
             : Dispatcher(is_ic_apply, config, file, line, function, default_format, "")
         {}
@@ -4148,12 +4303,12 @@ namespace detail {
             // mixed on that `IC_` call as a whole, and the argument name will need to be
             // extracted from there.
             auto pick_argument_name =
-                [](std::string const& ic_argument) -> std::string
+                [](StringView ic_argument) -> StringView
                 {
-                    char constexpr prefix[] = "IC_(";
-                    auto constexpr n_prefix = sizeof(prefix);
+                    constexpr char prefix[] = "IC_(";
+                    constexpr auto n_prefix = sizeof(prefix);
 
-                    if (ic_argument.find(prefix) == std::string::npos)
+                    if (ic_argument.find(prefix) == StringView::npos)
                     {
                         return ic_argument;
                     }
@@ -4165,7 +4320,7 @@ namespace detail {
                     }
                 };
 
-            auto arg_names = std::vector<std::string>{};
+            auto arg_names = std::vector<StringView>{};
             for (auto const& argument : split_arguments(this->arg_names_))
             {
                 arg_names.push_back(pick_argument_name(argument));
@@ -4201,11 +4356,11 @@ namespace detail {
 
         bool is_ic_apply_;
         Config const& config_;
-        std::string const file_;
+        StringView file_;
         int line_;
-        std::string const function_;
-        std::string const default_format_;
-        std::string const arg_names_;
+        StringView function_;
+        StringView default_format_;
+        StringView arg_names_;
     };
 
     // --------------------------------------------------- Range View
@@ -4227,8 +4382,10 @@ namespace detail {
             : mb_name(name)
             , proj(proj)
         {
-            auto view_fmt = std::string{};
-            std::tie(view_fmt, this->elements_fmt) = split_range_fmt_string(fmt);
+            auto view_fmt = StringView{};
+            auto elements_fmt_ = StringView{};
+            std::tie(view_fmt, elements_fmt_) = split_range_fmt_string(fmt);
+            this->elements_fmt = elements_fmt_.to_string();
             this->mb_slice = Slice::build(view_fmt);
         }
 
@@ -4408,6 +4565,7 @@ namespace detail {
         auto operator()(T&& element) -> T&&
         {
             auto const idx = this->current_idx++;
+            auto const arg_name = this->name + "[" + std::to_string(idx) + "]";
             auto dispatcher = Dispatcher{
                 false,
                 this->config,
@@ -4415,7 +4573,7 @@ namespace detail {
                 this->line,
                 this->function,
                 this->elements_fmt,
-                this->name + "[" + std::to_string(idx) + "]"
+                arg_name
             };
 
             if (this->slice_error)
