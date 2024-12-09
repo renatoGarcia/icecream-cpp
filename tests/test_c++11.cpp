@@ -527,9 +527,9 @@ TEST_CASE("tuples")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto s0 = std::make_tuple(10, 20);
-        IC_F("x", s0);
-        REQUIRE(str == "ic| s0: (a, 14)\n");
+        auto s0 = std::make_tuple(10, 20, 30, 40);
+        IC_F("|x||d|", s0);
+        REQUIRE(str == "ic| s0: (a, 20, 30, 40)\n");
     }
 
     {
@@ -540,6 +540,36 @@ TEST_CASE("tuples")
         auto s0 = std::make_tuple(10, std::make_tuple(20, 1.1));
         IC(s0);
         REQUIRE(str == "ic| s0: (10, (20, 1.1))\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto s0 = std::make_tuple(10, 20);
+        IC_F("m:x:x", s0);
+        REQUIRE(str == "ic| s0: a: 14\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto s0 = std::make_tuple(1, 2, 3);
+        IC_F("n", s0);
+        REQUIRE(str == "ic| s0: 1, 2, 3\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto s0 = std::make_tuple(10, 20);
+        IC_F("|x||", s0);
+        REQUIRE(str == "ic| s0: <*Error*: expected 2 element formatting specifiers>\n");
     }
 }
 

@@ -1091,6 +1091,12 @@ namespace detail {
             return std::char_traits<char>::compare(lho.s_, rho.s_, lho.count_) == 0;
         }
 
+        auto remove_prefix(size_t n) -> void
+        {
+            this->s_ += n;
+            this->count_ -= n;
+        }
+
         auto substr(size_t pos = 0, size_t count = npos) const -> StringView
         {
             return StringView(this->s_ + pos, min(count, this->count_ - pos));
@@ -1383,6 +1389,31 @@ namespace detail {
         }
         return result;
     };
+
+
+    // -------------------------------------------------- Split
+
+    // Split the `whole` string in pieces, cutting at the indexes within `cut_idxs`. The
+    // chars at the cutting indexes won't be at the result pieces.
+    inline auto split(
+        StringView whole, std::vector<size_t> const& cut_idxs
+    ) -> std::vector<StringView>
+    {
+        auto result = std::vector<StringView>{};
+
+        if (cut_idxs.empty()) return result;
+
+        auto cut_a = size_t{0};
+        for (auto cut_b : cut_idxs)
+        {
+            result.push_back(whole.substr(cut_a, cut_b - cut_a));
+            cut_a = cut_b + 1;
+        }
+
+        result.push_back(whole.substr(cut_a, StringView::npos));
+
+        return result;
+    }
 
     // -------------------------------------------------- Prefix
 
@@ -2912,16 +2943,25 @@ namespace detail {
         return visit(Visitor(fmt, config), value);
     }
 
-    template<typename T, size_t N = std::tuple_size<T>::value-1>
-    static auto tuple_traverser(
-        T const& t, StringView fmt, Config const& config
+    template <int... N, typename T>
+    inline auto tuple_traverser(
+        int_sequence<N...>,
+        T const& t,
+        std::vector<StringView> const& fmt,
+        Config const& config
     ) -> std::vector<PrintingNode>
     {
-        auto result = N > 0 ?
-            tuple_traverser<T, (N > 0) ? N-1 : 0>(t, fmt, config)
-            : std::vector<PrintingNode>{};
+        auto result = std::vector<PrintingNode>{};
 
-        result.push_back(make_printing_branch(std::get<N>(t), fmt, config));
+        (void) std::initializer_list<int>{
+            (
+                result.push_back(
+                    make_printing_branch(std::get<N>(t), fmt[N], config)
+                ),
+                0
+            )...
+        };
+
         return result;
     }
 
@@ -2934,7 +2974,74 @@ namespace detail {
         PrintingNode
     >::type
     {
-        return PrintingNode("(", ", ", ")", tuple_traverser(value, fmt, config));
+        auto const tuple_size = std::tuple_size<remove_cvref_t<T>>::value;
+
+        auto opening = std::string{"("};
+        auto separator = std::string{", "};
+        auto closing = std::string{")"};
+
+        if (!fmt.empty() && fmt[0] == 'n')
+        {
+            opening = "";
+            separator = ", ";
+            closing = "";
+            fmt.remove_prefix(1);
+        }
+        else if (!fmt.empty() && fmt[0] == 'm')
+        {
+            if (tuple_size != 2)
+            {
+                return PrintingNode(
+                    "<*Error*: the `m` specifier is only valid for pairs or 2-tuples>"
+                );
+            }
+            opening = "";
+            separator = ": ";
+            closing = "";
+            fmt.remove_prefix(1);
+        }
+
+        auto cut_idxs = std::vector<size_t>{};
+        if (!fmt.empty())
+        {
+            auto const sep = fmt[0];
+            fmt.remove_prefix(1);
+            for (auto i = size_t{0}; i < fmt.size(); ++i)
+            {
+                if (fmt[i] == sep)
+                {
+                    cut_idxs.push_back(i);
+                }
+            }
+        }
+
+        auto elements_fmt = split(fmt, cut_idxs);
+        if (elements_fmt.empty())
+        {
+            // No element specifications is equivalent to all them having an empty string
+            elements_fmt.insert(elements_fmt.end(), tuple_size, StringView{});
+        }
+
+        if (elements_fmt.size() != tuple_size)
+        {
+            return PrintingNode(
+                "<*Error*: expected "
+                + std::to_string(tuple_size)
+                + " element formatting specifiers>"
+            );
+        }
+
+        return PrintingNode(
+            opening,
+            separator,
+            closing,
+            tuple_traverser(
+                make_int_sequence<tuple_size>(),
+                value,
+                elements_fmt,
+                config
+            )
+        );
     }
 
 
