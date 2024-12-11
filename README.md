@@ -1126,6 +1126,56 @@ will print:
 ic| v0: (10, 3.14), v1: (7, 6.28, "bla")
 ```
 
+##### Tuple like format string
+
+The tuple like formatting specification is based on the syntax suggested in the
+[Formatting
+Ranges](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2022/p2286r8.html#pair-and-tuple-specifiers)
+paper. Since that part hasn't done to the proposal, with any future change we may revisit
+it here too.
+
+```
+tuple_spec  ::= [casing][content]
+casing      ::= "n" | "m"
+content     ::= (delimiter element_fmt){N}
+delimiter   ::= <a character, the same to all N expansions>
+element_fmt ::= <format specification of the element type>
+```
+
+Where the number `N` of repetitions in `content` rule is the tuple size.
+
+The code:
+
+```C++
+auto v0 = std::make_tuple(20, "foo", 0.0123);
+IC_F("n|#x||.3e", v0);
+```
+
+will print:
+
+```
+ic| ic| v0: 0x14, "foo", 1.230e-02
+```
+
+###### casing
+
+Controls the tuple enclosing characters and separator. If not used, the default behavior
+is to enclose the values between `"("` and `")"`, and separated by `", "`.
+
+If `n` is used, the tuple won't be enclosed by parentheses. If `m` is used the tuple will
+be printed "map value like", i.e.: not enclosed by parentheses and using `": "` as
+separator. The `m` specifier is valid just to a *pair* or *2-tuple*.
+
+###### content
+
+The formatting string of each tuple element, separated by a `delimiter` character. This
+can be any character, which value will be defined by the fist read `char` when parsing
+this rule.
+
+Each `element_fmt` string will be forwarded to the respective tuple element when printing
+it, so it must follow the formatting specification of that particular element type.
+
+
 #### Optional types
 
 A `std::optional<T>` typed variable will print its value, if it has one, or *nullopt*
