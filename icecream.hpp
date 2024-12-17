@@ -1060,6 +1060,11 @@ namespace detail {
             return this->count_;
         }
 
+        auto data() const -> char const*
+        {
+            return this->s_;
+        }
+
         auto begin() const -> iterator
         {
             return this->s_;
@@ -1085,6 +1090,16 @@ namespace detail {
             return this->s_[idx];
         }
 
+        auto front() const -> char
+        {
+            return this->s_[0];
+        }
+
+        auto back() const -> char
+        {
+            return this->s_[this->count_ - 1];
+        }
+
         friend auto operator==(StringView lho, StringView rho) -> bool
         {
             if (lho.count_ != rho.count_) return false;
@@ -1094,6 +1109,11 @@ namespace detail {
         auto remove_prefix(size_t n) -> void
         {
             this->s_ += n;
+            this->count_ -= n;
+        }
+
+        auto remove_suffix(size_t n) -> void
+        {
             this->count_ -= n;
         }
 
@@ -1145,6 +1165,38 @@ namespace detail {
 
             return npos;
         }
+
+        auto trim() -> void
+        {
+            if (this->count_ == 0) return;
+
+            auto* c0 = this->s_;
+            auto* c1 = this->s_ + this->count_;
+
+            while (
+                c0 < c1
+                && (*c0 == ' ' || *c0 == '\t' || *c0 == '\n' || *c0 == '\r' || *c0 == '\f' || *c0 == '\v')
+            ){
+                ++c0;
+            }
+
+            while (
+                c1 > c0
+                && (
+                    c1[-1] == ' '
+                    || c1[-1] == '\t'
+                    || c1[-1] == '\n'
+                    || c1[-1] == '\r'
+                    || c1[-1] == '\f'
+                    || c1[-1] == '\v'
+                )
+            ){
+                --c1;
+            }
+
+            this->s_ = c0;
+            this->count_ = c1 - c0;
+        };
 
         auto to_string() const -> std::string
         {
@@ -1401,13 +1453,31 @@ namespace detail {
     {
         auto result = std::vector<StringView>{};
 
-        if (cut_idxs.empty()) return result;
-
         auto cut_a = size_t{0};
         for (auto cut_b : cut_idxs)
         {
             result.push_back(whole.substr(cut_a, cut_b - cut_a));
             cut_a = cut_b + 1;
+        }
+
+        result.push_back(whole.substr(cut_a, StringView::npos));
+
+        return result;
+    }
+
+    // Split the `whole` string in pieces, cutting at the places where `sep` is.
+    inline auto split(StringView whole, char sep) -> std::vector<StringView>
+    {
+        auto result = std::vector<StringView>{};
+
+        auto cut_a = size_t{0};
+        for (auto i = size_t{0}; i < whole.size(); ++i)
+        {
+            if (whole[i] == sep)
+            {
+                result.push_back(whole.substr(cut_a, i - cut_a));
+                cut_a = i + 1;
+            }
         }
 
         result.push_back(whole.substr(cut_a, StringView::npos));
@@ -3001,26 +3071,19 @@ namespace detail {
             fmt.remove_prefix(1);
         }
 
-        auto cut_idxs = std::vector<size_t>{};
-        if (!fmt.empty())
-        {
-            auto const sep = fmt[0];
-            fmt.remove_prefix(1);
-            for (auto i = size_t{0}; i < fmt.size(); ++i)
+        auto const elements_fmt =
+            [&]() -> std::vector<StringView>
             {
-                if (fmt[i] == sep)
+                if (fmt.empty())
                 {
-                    cut_idxs.push_back(i);
+                    // No element specifications is equivalent to all them having an empty string
+                    return std::vector<StringView>(tuple_size, StringView{});
                 }
-            }
-        }
 
-        auto elements_fmt = split(fmt, cut_idxs);
-        if (elements_fmt.empty())
-        {
-            // No element specifications is equivalent to all them having an empty string
-            elements_fmt.insert(elements_fmt.end(), tuple_size, StringView{});
-        }
+                auto const sep = fmt[0];
+                fmt.remove_prefix(1);
+                return split(fmt, sep);
+            }();
 
         if (elements_fmt.size() != tuple_size)
         {
@@ -3063,65 +3126,58 @@ namespace detail {
                 return Slice{{}, {}, {}};
             }
 
-            auto it = fmt.begin();
-            auto const it_end = fmt.end() - 1;
-
             // All iterable slicings must start with '[' and finish with ']'
-            if (*it != '[' || *it_end != ']')
+            if (fmt.front() != '[' || fmt.back() != ']')
             {
                 return {};
             }
+
+            // Remove the opening '[' and the closing ']'
+            fmt.remove_prefix(1);
+            fmt.remove_suffix(1);
 
             // An empty '[]' slicing is invalid
-            if (it+1 == it_end)
+            if (fmt.empty())
             {
                 return {};
             }
 
-            // At here, `it` points to the opening '[' and `it_end` points to the closing ']'
-
             auto indexes = std::vector<Optional<ptrdiff_t>>{};
-            auto idx_begin_it = it;
-            for (; it != fmt.end(); ++it)
+            for (auto idx_string : split(fmt, ':'))
             {
-                if (*it == ']' || *it == ':')
+                idx_string.trim();
+
+                if (idx_string.empty())
                 {
-                    auto const idx_string = std::string(idx_begin_it+1, it);
-                    if (idx_string.empty())
-                    {
-                        indexes.push_back({});
-                    }
-                    else
-                    {
-                        auto end = static_cast<char*>(nullptr);
-                        auto const lnum = strtol(idx_string.data(), &end, 10);
-                        if (
-                            // if no characters were converted
-                            end == idx_string.data()
-
-                            // or if there is an overflow on long int
-                            || (
-                                (
-                                 lnum == std::numeric_limits<long>::max()
-                                 || lnum == std::numeric_limits<long>::lowest()
-                                )
-                                && errno == ERANGE
-                            )
-
-                            // or if there is an overflow to convert from long to ptrdiff
-                            || (
-                                lnum > std::numeric_limits<ptrdiff_t>::max()
-                                || lnum < std::numeric_limits<ptrdiff_t>::lowest()
-                            )
-                        ) {
-                            return {};
-                        }
-
-                        indexes.push_back(lnum);
-                    }
-
-                    idx_begin_it = it;
+                    indexes.push_back({});
+                    continue;
                 }
+
+                auto end = static_cast<char*>(nullptr);
+                auto const lnum = strtol(idx_string.data(), &end, 10);
+                if (
+                    // if idx_string in its whole isn't a number
+                    end != (idx_string.data() + idx_string.size())
+
+                    // or if there is an overflow on long int
+                    || (
+                        (
+                         lnum == std::numeric_limits<long>::max()
+                         || lnum == std::numeric_limits<long>::lowest()
+                        )
+                        && errno == ERANGE
+                    )
+
+                    // or if there is an overflow to convert from long to ptrdiff
+                    || (
+                        lnum > std::numeric_limits<ptrdiff_t>::max()
+                        || lnum < std::numeric_limits<ptrdiff_t>::lowest()
+                    )
+                ) {
+                    return {};
+                }
+
+                indexes.push_back(lnum);
             }
 
             // If indexing an element ("[3]") instead of a proper slicing.
@@ -3444,23 +3500,20 @@ namespace detail {
     inline auto split_range_fmt_string(StringView fmt) -> std::tuple<StringView, StringView>
     {
         auto is_inside_square_brackets = false;
-        for (auto it = fmt.begin(); it != fmt.end(); ++it)
+        for (auto i = size_t{0}; i < fmt.size(); ++i)
         {
-            if (*it == '[')
+            if (fmt[i] == '[')
             {
                 is_inside_square_brackets = true;
             }
-            else if (*it == ']')
+            else if (fmt[i] == ']')
             {
                 is_inside_square_brackets = false;
             }
-            else if (!is_inside_square_brackets && *it == ':')
+            else if (!is_inside_square_brackets && fmt[i] == ':')
             {
-                auto const colon_idx = static_cast<size_t>(it - fmt.begin());
-                auto const iterable_fmt = fmt.substr(0, colon_idx);
-                auto const element_fmt_size = fmt.size() - colon_idx + 1;
-                auto const element_fmt = fmt.substr(colon_idx+1, element_fmt_size);
-
+                auto const iterable_fmt = fmt.substr(0, i);
+                auto const element_fmt = fmt.substr(i + 1, StringView::npos);
                 return {iterable_fmt, element_fmt};
             }
         }
@@ -4163,141 +4216,114 @@ namespace detail {
      */
     inline auto split_arguments(StringView all_names) -> std::vector<StringView>
     {
-        auto result = std::vector<StringView>{};
-
         if (all_names.empty())
         {
-            return result;
+            return {};
         }
 
         // Check if the '>' char is the closing of a template arguments listing. It will
         // be a template closing at `std::is_same<int, int>::value` but not at `5 > 2`
-        using rev_it = StringView::reverse_iterator;
         auto is_closing_template =
-            [](rev_it left_it, rev_it right_it) -> bool
+            [&all_names](size_t idx, size_t const last_idx) -> bool
             {
-                if (*left_it != '>' || left_it == right_it)
+                auto curr_char = all_names[idx];
+                if (curr_char != '>' || idx == last_idx)
                 {
                     return false;
                 }
 
-                --left_it; // move to right
-                while (
-                    left_it != right_it
+                do
+                {
+                    ++idx;
+                    curr_char = all_names[idx];
+                } while (
+                    idx != last_idx
                     && (
-                        *left_it == ' '
-                        || *left_it == '\t'
-                        || *left_it == '\n'
-                        || *left_it == '\r'
-                        || *left_it == '\f'
-                        || *left_it == '\v'
+                        curr_char == ' '
+                        || curr_char == '\t'
+                        || curr_char == '\n'
+                        || curr_char == '\r'
+                        || curr_char == '\f'
+                        || curr_char == '\v'
                     )
-                ){
-                    --left_it; // move to right
-                }
+                );
 
-                return *left_it == ':' && (left_it != right_it) && *(left_it-1) == ':';
+                return curr_char == ':' && idx != last_idx && all_names[idx + 1] == ':';
             };
 
-        auto right_cut = all_names.rbegin();
-        auto left_cut = all_names.rbegin();
-        auto const left_end = all_names.rend();
         auto parenthesis_count = int{0};
         auto angle_bracket_count = int{0};
+        auto is_within_double_quote = false;
+        auto is_within_single_quote = false;
 
         // Parse the arguments string backward. It is easier this way to check if a '<' or
         // '>' character is either a comparison operator, or a opening and closing of
         // templates arguments.
-        while (true)
+        auto comma_idxs = std::vector<size_t>{};
+        auto last_idx = all_names.size() - 1;
+        for (auto idx = all_names.size(); idx-- > 0;)
         {
-            if (left_cut != left_end && (left_cut+1) != left_end)
+            auto const curr_char = all_names[idx];
+            auto const prev_char = idx > 0 ? all_names[idx-1] : '\0';
+
+            if (is_within_double_quote)
             {
-                // Ignore commas inside quotations (single and double)
-
-                if (*left_cut == '"' && *(left_cut+1) != '\\')
-                {
-                    // Don't split anything inside a string
-
-                    ++left_cut;
-                    while (
-                        !(  // Will iterate with left_cut until the stop condition:
-                            (left_cut+1) == left_end                        // The next position is the end iterator
-                            || (*left_cut == '"' && *(left_cut+1) != '\\')  // The current char the closing quotation
-                        )
-                    ) {
-                        ++left_cut;
-                    }
-                    ++left_cut;
-                }
-                else if (*left_cut == '\'' && *(left_cut+1) != '\\')
-                {
-                    // Don't split a ',' (a comma between single quotation marks)
-
-                    ++left_cut;
-                    while (
-                        !(  // Will iterate with left_cut until the stop condition:
-                            (left_cut+1) == left_end                         // The next position is the end iterator
-                            || (*left_cut == '\'' && *(left_cut+1) != '\\')  // The current char is the closing quotation
-                        )
-                    ) {
-                        ++left_cut;
-                    }
-                    ++left_cut;
-                }
+                // if current char is the left double quote
+                if (curr_char == '"' && prev_char != '\\') is_within_double_quote = false;
             }
 
-            if (
-                left_cut == left_end
-                || (*left_cut == ',' && parenthesis_count == 0 && angle_bracket_count == 0)
-            ){
-                // If it have found the comma separating two arguments, or the left ending
-                // of the leftmost argument.
+            else if (is_within_single_quote)
+            {
+                // if current char is the left single quote
+                if (curr_char == '\'' && prev_char != '\\') is_within_single_quote = false;
+            }
 
-                // Remove the leading spaces
-                auto e_it = left_cut - 1;
-                while (*e_it == ' ') --e_it;
-                ++e_it;
+            else if (curr_char == '"' && prev_char != '\\')
+            {
+                is_within_double_quote = true;
+            }
 
-                // Remove the trailing spaces
-                while (*right_cut == ' ') ++right_cut;
+            else if (curr_char == '\'' && prev_char != '\\')
+            {
+                is_within_single_quote = true;
+            }
 
-                result.emplace(result.begin(), e_it.base(), right_cut.base());
-                if (left_cut != left_end)
-                {
-                    right_cut = left_cut + 1;
-                }
+            // If it have found the comma separating two arguments
+            else if (curr_char == ',' && parenthesis_count == 0 && angle_bracket_count == 0)
+            {
+                comma_idxs.push_back(idx);
+                last_idx = idx - 1;
             }
 
             // It won't cut on a comma within parentheses, such as when the argument is a
             // function call, as in IC(foo(1, 2))
-            else if (*left_cut == ')')
+            else if (curr_char == ')')
             {
                 ++parenthesis_count;
             }
-            else if (*left_cut == '(')
+
+            else if (curr_char == '(')
             {
                 --parenthesis_count;
             }
 
             // It won't cut on a comma within a template argument list, such as in
             // IC(std::is_same<int, int>::value)
-            else if (is_closing_template(left_cut, right_cut))
+            else if (is_closing_template(idx, last_idx))
             {
                 ++angle_bracket_count;
             }
-            else if (*left_cut == '<' && angle_bracket_count > 0)
+
+            else if (curr_char == '<' && angle_bracket_count > 0)
             {
                 --angle_bracket_count;
             }
+        }
 
-            if (left_cut == left_end)
-            {
-                break;
-            }
-            else
-            {
-                ++left_cut;
-            }
+        auto result = split(all_names, {comma_idxs.rbegin(), comma_idxs.rend()});
+        for (auto& name : result)
+        {
+            name.trim();
         }
 
         return result;
