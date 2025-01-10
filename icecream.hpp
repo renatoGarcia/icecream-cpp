@@ -89,11 +89,21 @@
     #endif
 #endif
 
-#if defined(ICECREAM_RANGE_V3)                                                  \
-    || (defined(__has_include) && __has_include(<range/v3/view/transform.hpp>)) \
-    || defined(RANGE_V3_VERSION)
+// ICECREAM_RANGE_V3 is the macro which the user may define to enable range-v3 support
+// regardless of any other condition.
+//
+// The "defined()" test for RANGES_V3_DETAIL_CONFIG_HPP macro is an attempt to check if
+// any range-v3 header was "#included" before the including of this icecream-cpp header.
+// If so, the range-v3 support will be enabled.
+#if defined(ICECREAM_RANGE_V3) || defined(RANGES_V3_DETAIL_CONFIG_HPP)
+    // The RANGES_V3_DETAIL_CONFIG_HPP is the include guard of the header
+    // <range/v3/detail/config.hpp>. This header is present in all range-v3 releases, and
+    // is direct or indirectly included by all other range-v3 headers, excepting a few
+    // ones like <range/v3/version.hpp>. Because of that, checking by the definition of
+    // RANGES_V3_DETAIL_CONFIG_HPP is a good way to determine if any range-v3 header was
+    // previouly included .
 
-    #define ICECREAM_RANGE_V3
+    #define ICECREAM_RANGE_V3_ENABLED
     #include <range/v3/version.hpp>
     #include <range/v3/view/transform.hpp>
 
@@ -4776,7 +4786,7 @@ namespace detail {
   #endif
 
 
-  #if defined(ICECREAM_RANGE_V3)
+  #if defined(ICECREAM_RANGE_V3_ENABLED)
     // View | IC_V
     template <typename T, typename Proj>
     auto operator|(T&& t, RangeViewArgs<Proj> view_args)

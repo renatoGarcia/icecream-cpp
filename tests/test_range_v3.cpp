@@ -1,9 +1,9 @@
-#include "icecream.hpp"
-
 #include <range/v3/view.hpp>
 #include <range/v3/version.hpp>
 #include <vector>
 #include <forward_list>
+
+#include "icecream.hpp"
 
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>

@@ -243,11 +243,12 @@ each iteration in the `for` loop one line will be printed, until we have the out
     ic| range_view_61:53[2]: (2, 'c')
 
 > [!NOTE]
-> IceCream-Cpp will try to detect if the Range-v3 library is installed, and if so, the
-> support to it will be automatically enabled. When using C++11 and C++14 however, there
-> is a chance of having Range-v3 in the system, but IceCream not finding it. To make sure
-> that the support to Range-v3 is enabled, just define the macro `ICECREAM_RANGE_V3`
-> before including the `icecream.hpp` header
+> The Icecream-cpp will search the current scope trying to detect any "#included" range-v3
+> header. If any is dectected, the support to range-v3 will be automatically enabled.
+> While convenient, that requires that the Icecream-cpp header be included at a line below
+> some range-v3 header. To make sure that the support to range-v3 is enabled regardless of
+> that header detection, you can define a macro `ICECREAM_RANGE_V3` before including the
+> `icecream.hpp` header
 
 The `IC_V` function has two optional parameters, `IC_V(name, projection)`.
 
