@@ -14,6 +14,7 @@ class CompressorRecipe(ConanFile):
 
         self.requires("boost/1.86.0")
         self.requires("catch2/2.13.10")
+        self.requires("fmt/11.0.2")
 
         if (
             (compiler == "gcc" and version > "6" and cppstd >= 14)

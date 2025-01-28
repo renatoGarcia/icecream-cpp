@@ -89,7 +89,32 @@
     #endif
 #endif
 
-// ICECREAM_RANGE_V3 is the macro which the user may define to enable range-v3 support
+#if defined(__has_include) && __has_include(<format>)
+    #include <format>
+    #if defined(__cpp_lib_format) || (_LIBCPP_VERSION >= 170000 && __cplusplus >= 202002L)
+        // libc++ just defines the '__cpp_lib_format' macro start from version 19. However
+        // from version 17 it already implemens all functionalities that we need.
+        #define ICECREAM_STL_FORMAT
+    #endif
+    #if defined(__cpp_lib_format_ranges)
+        #define ICECREAM_STL_FORMAT_RANGES
+    #endif
+#endif
+
+// ICECREAM_FMT is the macro which can be defined to enable {fmt} support regardless of
+// any other condition.
+//
+// The "defined()" test for FMT_VERSION macro is an attempt to check if any {fmt} header
+// was "#included" before the including of this Icecream-cpp header. If so, the {fmt}
+// support will be enabled.
+#if defined(ICECREAM_FMT) || defined(FMT_VERSION)
+    // All the {fmt} headers from supoorted versions (5.0 and newer) will directly or
+    // indirectly include a source file where FMT_VERSION is defined.
+    #include <fmt/format.h>
+    #define ICECREAM_FMT_ENABLED
+#endif
+
+// ICECREAM_RANGE_V3 is the macro which can be defined to enable range-v3 support
 // regardless of any other condition.
 //
 // The "defined()" test for RANGES_V3_DETAIL_CONFIG_HPP macro is an attempt to check if
@@ -101,7 +126,7 @@
     // is direct or indirectly included by all other range-v3 headers, excepting a few
     // ones like <range/v3/version.hpp>. Because of that, checking by the definition of
     // RANGES_V3_DETAIL_CONFIG_HPP is a good way to determine if any range-v3 header was
-    // previouly included .
+    // previously included.
 
     #define ICECREAM_RANGE_V3_ENABLED
     #include <range/v3/version.hpp>
@@ -605,28 +630,73 @@ namespace icecream{ namespace detail
     using has_push_back_T = decltype(has_push_back_T_impl<C, T>(0));
 
 
-    // -------------------------------------------------- has_insertion
+    // --------------------------------------------------is_streamable
 
-    // Checks if T has an insertion overload, i.e.: std::ostream& << T const&
+    // Checks if T has an insertion overload, i.e.: std::ostream& << T&
     template <typename T>
-    auto has_insertion_impl(int) ->
-        decltype (
-            std::declval<std::ostream&>() << std::declval<T const&>(),
+    auto is_streamable_impl(int) ->
+        decltype(
+            std::declval<std::ostream&>() << std::declval<T&>(),
             std::true_type{}
         );
 
     template <typename T>
-    auto has_insertion_impl(...) -> std::false_type;
+    auto is_streamable_impl(...) -> std::false_type;
 
     template <typename T>
-    using has_insertion = decltype(has_insertion_impl<T>(0));
+    using is_streamable = decltype(is_streamable_impl<T>(0));
+
+
+    // --------------------------------------------------is_stl_formattable
+
+  #if defined(ICECREAM_STL_FORMAT)
+    template <class T>
+    auto is_stl_formattable_impl(int) ->
+        decltype(
+            std::formatter<T, char>{},
+            std::true_type{}
+        );
+  #endif
+
+    template <class T>
+    auto is_stl_formattable_impl(...) -> std::false_type ;
+
+    template <class T>
+    using is_stl_formattable = decltype(is_stl_formattable_impl<remove_cvref_t<T>>(0));
+
+
+    // --------------------------------------------------is_fmt_formattable
+
+  #if defined(ICECREAM_FMT_ENABLED)
+    template <class T>
+    auto is_fmt_formattable_impl(int) ->
+        decltype(
+            fmt::formatter<T, char>{},
+            std::true_type{}
+        );
+  #endif
+
+    template <class T>
+    auto is_fmt_formattable_impl(...) -> std::false_type ;
+
+    template <class T>
+    using is_fmt_formattable = decltype(is_fmt_formattable_impl<remove_cvref_t<T>>(0));
+
+
+    // --------------------------------------------------is_baseline_printable
+
+    template <typename T>
+    using is_baseline_printable =
+        typename disjunction<
+            is_streamable<T>, is_stl_formattable<T>, is_fmt_formattable<T>
+        >::type;
 
 
     // -------------------------------------------------- has_to_string
 
     template <typename T>
     auto has_to_string_impl(int) ->
-        decltype (
+        decltype(
             to_string(std::declval<T&>()),
             std::true_type{}
         );
@@ -794,7 +864,7 @@ namespace icecream{ namespace detail
             is_c_string<typename std::decay<T>::type>,
             conjunction<
                 is_invocable<T>,
-                has_insertion<returned_type<T>>
+                is_streamable<returned_type<T>>
             >
         >::type;
 
@@ -830,7 +900,7 @@ namespace icecream{ namespace detail
                 is_string_view<T>,
                 is_variant<T>,
                 is_optional<T>,
-                has_insertion<T>,
+                is_baseline_printable<T>,
                 is_character<T>,
                 is_c_string<T>,
                 std::is_base_of<std::exception, remove_cvref_t<T>>,
@@ -859,7 +929,9 @@ namespace detail {
         T&&, StringView, Config const&
     ) ->
         typename std::enable_if<
-            has_insertion<T>::value
+            is_streamable<T>::value
+            && !is_stl_formattable<T>::value
+            && !is_fmt_formattable<T>::value
             && !is_c_string<T>::value
             && !is_character<T>::value
             && !is_xsig_char<T>::value
@@ -868,6 +940,43 @@ namespace detail {
             && !std::is_array<remove_cvref_t<T>>::value,
             PrintingNode
         >::type;
+
+  #if defined(ICECREAM_STL_FORMAT)
+    // Print any class that specializes std::formatter<T, char>
+    template <typename T>
+    auto make_printing_branch(
+        T&&, StringView, Config const&
+    ) ->
+        typename std::enable_if<
+            is_stl_formattable<T>::value
+            && !is_fmt_formattable<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type;
+  #endif
+
+  #if defined(ICECREAM_FMT_ENABLED)
+    // Print any class that specializes fmt::formatter<T, char>
+    template <typename T>
+    auto make_printing_branch(
+        T&&, StringView, Config const&
+    ) ->
+        typename std::enable_if<
+            is_fmt_formattable<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type;
+  #endif
 
     // Print C string
     template <typename T>
@@ -906,7 +1015,7 @@ namespace detail {
     auto make_printing_branch(
         T&&, StringView, Config const&
     ) -> typename std::enable_if<
-        is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
+        is_unstreamable_ptr<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -922,7 +1031,7 @@ namespace detail {
     auto make_printing_branch(
         T&&, StringView, Config const&
     ) -> typename std::enable_if<
-        is_optional<T>::value && !has_insertion<T>::value,
+        is_optional<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
   #endif
@@ -932,16 +1041,42 @@ namespace detail {
     auto make_printing_branch(
         T&&, StringView, Config const&
     ) -> typename std::enable_if<
-        is_variant<T>::value && !has_insertion<T>::value,
+        is_variant<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
+
+    template <typename T>
+    auto do_print_tuple(
+        T&&, StringView, Config const&
+    ) -> typename std::enable_if<!is_tuple<T>::value, PrintingNode>::type;
+
+    template <typename T>
+    auto do_print_tuple(
+        T&&, StringView, Config const&
+    ) -> typename std::enable_if<is_tuple<T>::value, PrintingNode>::type;
 
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
         T&&, StringView, Config const&
     ) -> typename std::enable_if<
-        is_tuple<T>::value && !has_insertion<T>::value,
+        is_tuple<T>::value && !is_baseline_printable<T>::value,
+        PrintingNode
+    >::type;
+
+    template <typename T>
+    auto do_print_range(
+        T&&, StringView, Config const&
+    ) -> typename std::enable_if<
+        is_range<T>::value,
+        PrintingNode
+    >::type;
+
+    template <typename T>
+    auto do_print_range(
+        T&&, StringView, Config const&
+    ) -> typename std::enable_if<
+        !is_range<T>::value,
         PrintingNode
     >::type;
 
@@ -952,9 +1087,9 @@ namespace detail {
     ) -> typename std::enable_if<
         (
             is_range<T>::value
-            && !has_insertion<T>::value
             && !is_std_string<T>::value
             && !is_string_view<T>::value
+            && !is_baseline_printable<T>::value
         )
         || std::is_array<remove_cvref_t<T>>::value,
         PrintingNode
@@ -967,7 +1102,7 @@ namespace detail {
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
-        && !has_insertion<T>::value,
+        && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -978,7 +1113,7 @@ namespace detail {
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
-        && !has_insertion<T>::value,
+        && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -2064,6 +2199,31 @@ namespace detail {
             return *this;
         }
 
+        auto force_range_strategy() const -> bool
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->force_range_strategy_.value();
+        }
+
+        auto force_range_strategy(bool value) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->force_range_strategy_ = value;
+            return *this;
+        }
+
+        auto force_tuple_strategy() const -> bool
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->force_tuple_strategy_.value();
+        }
+
+        auto force_tuple_strategy(bool value) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->force_tuple_strategy_ = value;
+            return *this;
+        }
         auto wide_string_transcoder() const ->
             std::function<std::string(wchar_t const*, size_t)>
         {
@@ -2254,6 +2414,10 @@ namespace detail {
 
         detail::Hereditary<bool> show_c_string_{true};
 
+        detail::Hereditary<bool> force_range_strategy_{true};
+
+        detail::Hereditary<bool> force_tuple_strategy_{true};
+
         detail::Hereditary<std::function<std::string(wchar_t const*, size_t)>>
         wide_string_transcoder_{
             [](wchar_t const* str, size_t count) -> std::string
@@ -2330,7 +2494,7 @@ namespace detail {
     {
         // format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
         // fill        ::=  <a character>
-        // align       ::=  "<" | ">" | "v"
+        // align       ::=  "<" | ">" | "^"
         // sign        ::=  "+" | "-"
         // width       ::=  integer
         // precision   ::=  integer
@@ -2348,10 +2512,10 @@ namespace detail {
         // [[fill]align]
         {
             auto fill_char = os.fill();
-            if (*it != '<' && *it != '>' && *it != 'v')
+            if (*it != '<' && *it != '>' && *it != '^')
             {
                 auto la_it = it+1;
-                if (la_it != end_it && (*la_it == '<' || *la_it == '>' || *la_it == 'v'))
+                if (la_it != end_it && (*la_it == '<' || *la_it == '>' || *la_it == '^'))
                 {
                     fill_char = *it;
                     ++it;
@@ -2367,7 +2531,7 @@ namespace detail {
                 os << std::right << std::setfill(fill_char);
                 ++it;
             }
-            else if (it != end_it && *it == 'v')
+            else if (it != end_it && *it == '^')
             {
                 os << std::internal << std::setfill(fill_char);
                 ++it;
@@ -2785,13 +2949,16 @@ namespace detail {
         }
     };
 
+
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
         T&& value, StringView fmt, Config const&
     ) ->
         typename std::enable_if<
-            has_insertion<T>::value
+            is_streamable<T>::value
+            && !is_stl_formattable<T>::value
+            && !is_fmt_formattable<T>::value
             && !is_c_string<T>::value
             && !is_character<T>::value
             && !is_xsig_char<T>::value
@@ -2810,6 +2977,151 @@ namespace detail {
         *mb_ostrm << value;
         return PrintingNode(mb_ostrm->str());
     }
+
+  #if defined(ICECREAM_STL_FORMAT_RANGES)
+
+    // This class will wrap a range T, signaling it as "hijacked" to avoid a circular
+    // inheritance in the `std::formatter` specialization below.
+    template <std::ranges::forward_range T>
+    struct HijackTag
+    {
+        T const& value;
+
+        HijackTag(T const& t)
+            : value(t)
+        {}
+
+        auto begin() const
+        {
+            return std::begin(value);
+        }
+
+        auto end() const
+        {
+            return std::end(value);
+        }
+    };
+
+}} namespace std {
+
+    // Starting from C++23 the formatting library has a concept specialization to print
+    // any *range*. Because of this any *range* that Icecream-cpp could try to print would
+    // be handled by the STL's Formatting function overload of the *baseline printable*
+    // strategy.
+    //
+    // We would like that the generic range case would continue being handled by the
+    // *range types* strategy, but other than that, any `formatter` struct further
+    // specializing a range should take precedence and the *baseline printable* strategy
+    // be the one used. For example, when printing a `std::vector<int>` the *range types*
+    // strategy should be used, but if there exist a `std::formatter<std::vector<T>>`
+    // specialization, the *baseline printable* strategy should be used instead.
+    //
+    // Here we will hijack any instantiation of the generic range specialization, inherit
+    // from the hijacked STL version so that we have the required methods implemented, and
+    // insert an `Hijacked` typedef to signalize that this specialization was used, so
+    // that Icecream-cpp knows that the type `T` is a range, and is free to delegate the
+    // printing of `T` to the ranges strategy.
+    template< ranges::forward_range T>
+    requires (format_kind<remove_cvref_t<T>> != range_format::disabled) &&
+        formattable<ranges::range_reference_t<T>, char>
+        && (!::icecream::detail::is_instantiation<::icecream::detail::HijackTag, remove_cvref_t<T>>::value)
+        && (!::icecream::detail::is_c_string<remove_cvref_t<T>>::value)
+        && (!::icecream::detail::is_std_string<remove_cvref_t<T>>::value)
+        && (!::icecream::detail::is_string_view<remove_cvref_t<T>>::value)
+        && (!std::is_array<remove_cvref_t<T>>::value)
+    struct formatter<T, char>
+        : public formatter<::icecream::detail::HijackTag<remove_cvref_t<T>>, char>
+    {
+        using Hijacked = int;
+    };
+
+} namespace icecream { namespace detail {
+
+  #endif  // defined(ICECREAM_STL_FORMAT_RANGES)
+
+  #if defined(ICECREAM_STL_FORMAT)
+    template <typename T, typename = void>
+    struct has_hijacked_tag : std::false_type {};
+
+    template <typename T>
+    struct has_hijacked_tag<
+        T,
+        typename std::enable_if<
+            !std::is_void<typename std::formatter<remove_cvref_t<T>>::Hijacked>::value
+        >::type
+    > : std::true_type {};
+
+    // Print any class that specializes std::formatter<T, char>
+    template <typename T>
+    auto make_printing_branch(
+        T&& value, StringView fmt, Config const& config
+    ) ->
+        typename std::enable_if<
+            is_stl_formattable<T>::value
+            && !is_fmt_formattable<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type
+    {
+
+        if (config.force_range_strategy() && has_hijacked_tag<T>::value)
+        {
+            return do_print_range(std::forward<T>(value), fmt, config);
+        }
+        else if (config.force_tuple_strategy() && is_tuple<T>::value)
+        {
+            return do_print_tuple(std::forward<T>(value), fmt, config);
+        }
+
+        try
+        {
+            return PrintingNode(
+                std::vformat("{:" + fmt.to_string() + "}", std::make_format_args(value))
+            );
+        }
+        catch (std::format_error const&)
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+    }
+  #endif // defined(ICECREAM_STL_FORMAT)
+
+  #if defined(ICECREAM_FMT_ENABLED)
+    // Print any class that specializes fmt::formatter<T, char>
+    template <typename T>
+    auto make_printing_branch(
+        T&& value, StringView fmt, Config const& config
+    ) ->
+        typename std::enable_if<
+            is_fmt_formattable<T>::value
+            && !is_c_string<T>::value
+            && !is_character<T>::value
+            && !is_xsig_char<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !std::is_array<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type
+    {
+        if (config.force_range_strategy() && is_range<remove_cvref_t<T>>::value)
+        {
+            return do_print_range(std::forward<T>(value), fmt, config);
+        }
+        else if (config.force_tuple_strategy() && is_tuple<T>::value)
+        {
+            return do_print_tuple(std::forward<T>(value), fmt, config);
+        }
+
+        return PrintingNode(
+            fmt::vformat("{:" + fmt.to_string() + "}", fmt::make_format_args(value))
+        );
+    }
+  #endif
 
     // Print C string
     template <typename T>
@@ -2960,7 +3272,7 @@ namespace detail {
         T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<
         // On C++20 unique_ptr will have a << overload.
-        is_unstreamable_ptr<T>::value && !has_insertion<T>::value,
+        is_unstreamable_ptr<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -2985,7 +3297,7 @@ namespace detail {
     auto make_printing_branch(
         T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<
-        is_optional<T>::value && !has_insertion<T>::value,
+        is_optional<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -3016,7 +3328,7 @@ namespace detail {
     auto make_printing_branch(
         T&& value, StringView fmt, Config const& config
     ) -> typename std::enable_if<
-        is_variant<T>::value && !has_insertion<T>::value,
+        is_variant<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -3045,14 +3357,19 @@ namespace detail {
         return result;
     }
 
-    // Print tuple like classes
     template <typename T>
-    auto make_printing_branch(
+    auto do_print_tuple(
+        T&&, StringView, Config const&
+    ) -> typename std::enable_if<!is_tuple<T>::value, PrintingNode>::type
+    {
+        ICECREAM_UNREACHABLE;
+        return PrintingNode("");
+    }
+
+    template <typename T>
+    auto do_print_tuple(
         T&& value, StringView fmt, Config const& config
-    ) -> typename std::enable_if<
-        is_tuple<T>::value && !has_insertion<T>::value,
-        PrintingNode
-    >::type
+    ) -> typename std::enable_if<is_tuple<T>::value, PrintingNode>::type
     {
         auto const tuple_size = std::tuple_size<remove_cvref_t<T>>::value;
 
@@ -3115,6 +3432,18 @@ namespace detail {
                 config
             )
         );
+    }
+
+    // Print tuple like classes
+    template <typename T>
+    auto make_printing_branch(
+        T&& value, StringView fmt, Config const& config
+    ) -> typename std::enable_if<
+        is_tuple<T>::value && !is_baseline_printable<T>::value,
+        PrintingNode
+    >::type
+    {
+        return do_print_tuple(std::forward<T>(value), fmt, config);
     }
 
 
@@ -3533,20 +3862,20 @@ namespace detail {
         return {fmt, ""};
     }
 
-    // Print all elements of a range
+    // --------------------------------------------------
+
     template <typename T>
-    auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
-    ) -> typename std::enable_if<
-        (
-            is_range<T>::value
-            && !has_insertion<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-        )
-        || std::is_array<remove_cvref_t<T>>::value,
-        PrintingNode
-    >::type
+    auto do_print_range(
+        T&&, StringView, Config const&
+    ) -> typename std::enable_if<!is_range<T>::value, PrintingNode>::type
+    {
+        ICECREAM_UNREACHABLE;
+        return PrintingNode("");
+    }
+
+    template <typename T>
+    auto do_print_range(T&& value, StringView fmt, Config const& config//) -> PrintingNode
+    ) -> typename std::enable_if<is_range<T>::value, PrintingNode>::type
     {
         auto range_fmt = StringView{};
         auto elements_fmt = StringView{};
@@ -3558,11 +3887,7 @@ namespace detail {
             return PrintingNode("<invalid range slicing>");
         }
 
-        auto const slice = *mb_slice;
-
-        auto children = std::vector<PrintingNode>{};
-
-        auto mb_slice_functor = maybe_make_slice_functor(value, slice);
+        auto mb_slice_functor = maybe_make_slice_functor(value, *mb_slice);
 
         // If there was any error while creating the SliceFunctor
         if (mb_slice_functor.index() == 0)
@@ -3572,6 +3897,7 @@ namespace detail {
 
         auto slice_functor = get<SliceFunctor<T const>>(mb_slice_functor);
 
+        auto children = std::vector<PrintingNode>{};
         auto mb_element = slice_functor();
         while (mb_element)
         {
@@ -3583,6 +3909,24 @@ namespace detail {
         return PrintingNode(opening, ", ", "]", std::move(children));
     }
 
+    // Print all elements of a range
+    template <typename T>
+    auto make_printing_branch(
+        T&& value, StringView fmt, Config const& config
+    ) -> typename std::enable_if<
+        (
+            is_range<T>::value
+            && !is_std_string<T>::value
+            && !is_string_view<T>::value
+            && !is_baseline_printable<T>::value
+        )
+        || std::is_array<remove_cvref_t<T>>::value,
+        PrintingNode
+    >::type
+    {
+        return do_print_range(std::forward<T>(value), fmt, config);
+    }
+
     // ---------------------------------------------------------------------------------------------
 
     // Print classes deriving from only std::exception and not from boost::exception
@@ -3592,7 +3936,7 @@ namespace detail {
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
-        && !has_insertion<T>::value,
+        && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -3606,7 +3950,7 @@ namespace detail {
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
-        && !has_insertion<T>::value,
+        && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {

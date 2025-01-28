@@ -24,6 +24,8 @@ and forward.
      * [output](#output)
      * [prefix](#prefix)
      * [show_c_string](#show_c_string)
+     * [force_range_strategy](#force_range_strategy)
+     * [force_tuple_strategy](#force_tuple_strategy)
      * [wide_string_transcoder](#wide_string_transcoder)
      * [unicode_transcoder](#unicode_transcoder)
      * [output_transcoder](#output_transcoder)
@@ -34,7 +36,7 @@ and forward.
      * [C strings](#c-strings)
      * [Wide strings](#wide-strings)
      * [Unicode strings](#unicode-strings)
-     * [Streamable types](#streamable-types)
+     * [Baseline printable types](#baseline-printable-types)
      * [Pointer like types](#pointer-like-types)
      * [Range types](#range-types)
      * [Tuple like types](#tuple-like-types)
@@ -42,6 +44,7 @@ and forward.
      * [Variant types](#variant-types)
      * [Exception types](#exception-types)
      * [Not streamable types](#not-streamable-types-clang-only)
+  * [Third-party libraries](#third-party-libraries)
 * [Pitfalls](#pitfalls)
 
 With IceCream, an execution inspection:
@@ -219,12 +222,14 @@ formatting string](#output-formatting) as its first argument.
 
 ### Range views pipeline
 
-To print the data flowing through a range views pipeline (both [STL
+To print the data flowing through a range views pipeline (both with [STL
 ranges](https://en.cppreference.com/w/cpp/header/ranges) and
-[Range-v3](https://ericniebler.github.io/range-v3/)), we use the `IC_V` function, which
-will print any input it receives from the previous view. Since the `IC_V` function is
-within a range views pipeline, the printing will be done lazily, while each element is
-generated. For instance:
+[Range-v3](https://ericniebler.github.io/range-v3/)), we can use either the `IC_V` or
+`IC_FV` functions, which will lazily print any input they receive from the previous view.
+The `IC_VF` function behaves the same as `IC_V`, but accepts a [format
+string](#output-formatting) as defined to the [range types](#range-format-string) as its
+first argument. Since these functions will be placed within a range views pipeline, the
+printing will be done lazily, as each element is generated. For instance:
 
 ```C++
 namespace vws = std::views;
@@ -235,22 +240,26 @@ for (auto e : v0)
 }
 ```
 
-In this code nothing will be printed when `v0` is created, just when iterating over it. At
-each iteration in the `for` loop one line will be printed, until we have the output:
+In this code nothing will be immediately printed when `v0` is created, just when iterating
+over it. At each `for` loop iteration one line will be printed, until we have the output:
 
     ic| range_view_61:53[0]: (0, 'a')
     ic| range_view_61:53[1]: (1, 'b')
     ic| range_view_61:53[2]: (2, 'c')
 
 > [!NOTE]
-> The Icecream-cpp will search the current scope trying to detect any "#included" range-v3
-> header. If any is dectected, the support to range-v3 will be automatically enabled.
-> While convenient, that requires that the Icecream-cpp header be included at a line below
-> some range-v3 header. To make sure that the support to range-v3 is enabled regardless of
-> that header detection, you can define a macro `ICECREAM_RANGE_V3` before including the
-> `icecream.hpp` header
+> The Icecream-cpp will enable its support to Range-v3 types either if the "icecream.hpp"
+> header is included some lines after any Range-v3 header, or if the `ICECREAM_RANGE_V3`
+> macro was declared before the "icecream.hpp" header inclusion. This is discussed in
+> details at the ["third-party libraries"](#third-party-libraries) section.
 
-The `IC_V` function has two optional parameters, `IC_V(name, projection)`.
+The `IC_V` function has the signature `IC_V(name, projection)`, and the `IC_FV` function
+`IC_FV(fmt, name, projection)`. In both them, the `name` and `projection` parameters as
+optional.
+
+#### fmt
+
+The same syntax as described at [range types format string](#range-format-string).
 
 #### name
 
@@ -290,9 +299,6 @@ when iterated over will print:
 > The `IC_V` function will still forward to the next view an unchanged input element,
 > exactly as it was received from the previous view. None action done by the `projection`
 > function will have any effect on that.
-
-The variant `IC_FV` has the same behavior as the `IC_V` function, but accepts an [output
-formatting string](#output-formatting) as its first argument.
 
 
 ### Return value and IceCream apply macro
@@ -700,6 +706,49 @@ ic| flavor: "mango";
 ic| flavor: 0x55587b6f5410
 ```
 
+#### force_range_strategy
+
+Controls if a range type `T` will be printed using the [range type](#range-types) strategy
+even when the [STL formatting](https://en.cppreference.com/w/cpp/utility/format) or
+[{fmt}](https://fmt.dev) libraries would be able to print it. As stated at the [baseline
+printable](#baseline-printable-types) strategy section: if able to print a type, it should
+be the strategy taking precedence. Nonetheless we force the *range type* strategy here
+because it supports more useful formatting options that would be available otherwise if
+using the *baseline* strategy.
+
+This option has a default value of `true`.
+
+- get:
+    ```C++
+    auto force_range_strategy() const -> bool;
+    ```
+- set:
+    ```C++
+    auto force_range_strategy(bool value) -> Config&;
+    ```
+
+#### force_tuple_strategy
+
+Controls if a tuple like type `T` will be printed using the [tuple like
+types](#tuple-like-types) strategy even when the [STL
+formatting](https://en.cppreference.com/w/cpp/utility/format) or [{fmt}](https://fmt.dev)
+libraries would be able to print it. As stated at the [baseline
+printable](#baseline-printable-types) strategy section: if able to print a type, it should
+be the strategy taking precedence. Nonetheless we force the *range type* strategy here
+because it supports more useful formatting options that would be available otherwise if
+using the *baseline* strategy.
+
+This option has a default value of `true`.
+
+- get:
+    ```C++
+    auto force_tuple_strategy() const -> bool;
+    ```
+- set:
+    ```C++
+    auto force_tuple_strategy(bool value) -> Config&;
+    ```
+
 #### wide_string_transcoder
 
 Function that transcodes a `wchar_t` string, from a system defined encoding to a `char`
@@ -889,28 +938,58 @@ transcoder function for doing that, but is possible to customize it by setting t
 [unicode_transcoder](#unicode_transcoder) option.
 
 
-#### Streamable types
+#### Baseline printable types
 
-A type `T` is *streamable* if an overloading function `operator<<(std::ostream&, T)`is
-defined.  This is the printing strategy with the highest priority, so if that overload
-exists to a type `T`, it will be the used strategy.
+A type `T` is *baseline printable* if it is printable through any one of [STL
+IOStream](https://en.cppreference.com/w/cpp/io), [STL
+formatting](https://en.cppreference.com/w/cpp/utility/format), or [{fmt}](https://fmt.dev)
+libraries.
 
+The IOStream and formatting libraries as part of the C++ standard library, and will be
+used if available at the current C++ version. The {fmt} library however is a third-party
+library, and need be available and enabled to be supported by Icecream-cpp. An explanation
+on this is at ["third-party libraries"](#third-party-libraries) section.
 
-##### Streamable format string
+There are more subtlety to it, that can be better checked at the official documentations,
+but roughly speaking a type `T` is formattable by: *STL IOStrea* if there exist a
+function overload [`operator<<(ostream&,
+T)`](https://en.cppreference.com/w/cpp/io/basic_ostream/operator_ltlt), by *STL formatting
+library* if there exist a struct specialization
+[`std::formatter<T>`](https://en.cppreference.com/w/cpp/utility/format/formatter), and by
+*{fmt} library* if there exist either a struct specialization
+[`fmt::formatter<T>`](https://fmt.dev/latest/api/#formatting-user-defined-types) or a
+function overload [`auto
+format_as(T)`](https://fmt.dev/latest/api/#formatting-user-defined-types).
 
-The [STL stream-based I/O](https://en.cppreference.com/w/cpp/io) hasn't the concept of a
-*formatting string*, all the configurations are done using
+The *baseline printable* is the strategy with the highest precedence. If the type `T` is
+printable by any of the three baseline libraries, this will be the chosen strategy. If the
+type `T` is printable by more than one of the three baseline libraries, the precedence
+order from the highest to the lowest is: *{fmt} library*, *STL formatting library*, and
+*STL stream-based I/O*.
+
+There are, however, two exceptions where the printing precedence of *baseline printable*
+strategy can be surpassed, when the printing type is a *range* or a *tuple like*. Both
+exceptions are configurable by the [force_range_strategy](#force_range_strategy) and
+[force_tuple_strategy](#force_tuple_strategy) options.
+
+The *baseline printable* format string is forwarded unchanged to the *STL formatting
+library* and *{fmt} library*. The [stream-based I/O](https://en.cppreference.com/w/cpp/io)
+library, on the other hand, hasn't the concept of a *formatting string*, and when using it
+all the configurations are done with
 [manipulators](https://en.cppreference.com/w/cpp/io/manip). Because of that, we have
 created a custom formatting string syntax, strongly based on
 [{fmt}](https://fmt.dev/11.0/syntax/#format-specification-mini-language) and [STL
 Formatting](https://en.cppreference.com/w/cpp/utility/format/spec).
+
+
+##### IOStreams format string
 
 It has the following specification:
 
 ```
 format_spec ::=  [[fill]align][sign]["#"][width]["." precision][type]
 fill        ::=  <a character>
-align       ::=  "<" | ">" | "v"
+align       ::=  "<" | ">" | "^"
 sign        ::=  "+" | "-"
 width       ::=  integer
 precision   ::=  integer
@@ -929,7 +1008,7 @@ alignment options is as follows:
 |--------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `'<'`  | Left align within the available space.                                                                                                                 |
 | `'>'`  | Right align within the available space. This is the default.                                                                                           |
-| `'v'`  | Internally align the data, with the fill character being placed between the digits and either the base or sign. Applies to integer and floating-point. |
+| `'^'`  | Internally align the data, with the fill character being placed between the digits and either the base or sign. Applies to integer and floating-point. |
 
 Note that unless a minimum field width is defined, the field width will always be the same
 size as the data to fill it, so that the alignment option has no meaning in this case.
@@ -1024,28 +1103,16 @@ ic| v1: expired
 
 #### Range types
 
-A range is any type able to provide a [`begin`, `end`) iterator pair. In precise terms,
-the Icecream-cpp library is able to print a range type `R` if it fulfills the
-[`forward_range`](https://en.cppreference.com/w/cpp/ranges/forward_range) concept. In
-roughly terms, a range type `R` having an iterator type `I` and a sentinel type `S` (used
-to mark the end of the range, can be the same type as `I`) is a forward range if all the
-following operations are valid:
+Concisely, a range is any object of a type `R`, that holds a collection of elements and is
+able to provide a [`begin`, `end`) pair, where `begin` is an iterator of type `I` and
+`end` is a sentinel of type `S`. The iterator `I` is used to traverse the elements of `R`,
+and the sentinel `S` is used to signal the end of the range interval, it may or may not be
+the same type as `I`. In precise terms, the Icecream-cpp library is able to format a range
+type `R` if it fulfills the
+[`forward_range`](https://en.cppreference.com/w/cpp/ranges/forward_range) concept.
 
-```C++
-I i0 = begin(r);
-S s = end(r);
-I i1(i0);
-i0 == i1
-i0 != i1
-i0 == s
-i0 != s
-++i0;
-*i0;
-```
-
-If all that operations are valid, the type `R` is not [streamable](#streamable-types) but
-the elements inside `R` are, IceCream will print all items within `R` in place of `R`
-itself.
+If a type `R` fulfills the range requirements and its elements are *formattable* by
+IceCream, the type `R` is formattable by the range types strategy.
 
 The code:
 
@@ -1058,8 +1125,9 @@ will print:
 
     ic| v0: [10, 20, 30]
 
-Although lazily printing one item at a time, instead of the whole range at once. The
-[`IC_V`](#range-views-pipeline) function is printing a range too.
+A `view` is close concept to `ranges`. Refer to the [range views
+pipeline](#range-views-pipeline) section to see how to print them.
+
 
 ##### Range format string
 
@@ -1254,6 +1322,87 @@ IC(s);
 will print:
 ```
 ic| s: {f: 3.14, ii: [1, 2, 3]}
+```
+
+### Third-party libraries
+
+The Icecream-cpp doesn't have any dependency on external libraries besides the C++
+standard library. However, it optionally supports printing some types of
+[Boost](https://www.boost.org/) and [Range-v3](https://ericniebler.github.io/range-v3/)
+libraries, as well as using the [{fmt}](https://fmt.dev) library alongside the STL's
+[IOStreams](https://en.cppreference.com/w/cpp/io#Stream-based_I.2FO) and
+[formatting](https://en.cppreference.com/w/cpp/utility/format) libraries.
+
+None of these external libraries are necessary for Icecream-cpp to work, and no action is
+required if anyone of them is not available.
+
+#### Boost
+
+All of the supported Boost types are forward declared in Icecream-cpp header, so you can
+print them with no further work, just like all the STL types.
+
+
+#### Range-v3
+
+Icecream-cpp can optionally support the printing of Range-v3 views, at any point of a
+pipeline flow. This functionality is fully described at the ["range views
+pipeline"](#range-views-pipeline) section.
+
+The support to printing Range-v3 types can be explicitly enabled by defining the
+`ICECREAM_RANGE_V3` macro before the `icecream.hpp` header inclusion. That will work
+either by explicitly defining it:
+
+```C++
+#define ICECREAM_RANGE_V3
+#include "icecream.hpp"
+```
+
+or by using a compiler command line argument if available. In GCC for example:
+
+```Shell
+gcc -DICECREAM_RANGE_V3 source.cpp
+```
+
+Even when not explicitly defining the `ICECREAM_RANGE_V3` macro, if the inclusion of the
+`icecream.hpp` header is placed some lines below the inclusion of any Range-v3 header, it
+will be automatically detected and the support enabled. So, a code like this will work
+fine too:
+
+```C++
+#include <range/v3/view/transform.hpp>
+#include "icecream.hpp"
+```
+
+#### {ftm}
+
+Icecream-cpp can optionally use the {fmt} library to get the string representation of a
+type. When available, the {fmt} library will take precedence over the STL's formatting and
+IOStreams libraries. A thorough explanation on this can be seen in the ["baseline
+printable types"](#baseline-printable-types) section.
+
+The support to the {fmt} library can be explicitly enabled by defining the `ICECREAM_FMT`
+macro before the `icecream.hpp` header inclusion. That will work either by explicitly
+defining it:
+
+```C++
+#define ICECREAM_FMT
+#include "icecream.hpp"
+```
+
+or by using a compiler command line argument if available. In GCC for example:
+
+```Shell
+gcc -DICECREAM_FMT source.cpp
+```
+
+Even when not explicitly defining the `ICECREAM_FMT` macro, if the inclusion of the
+`icecream.hpp` header is placed some lines below the inclusion of any {fmt} header, it
+will be automatically detected and the support enabled. So, a code like this will work
+fine too:
+
+```C++
+#include <fmt/format.h>
+#include "icecream.hpp"
 ```
 
 ## Pitfalls
