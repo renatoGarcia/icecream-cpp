@@ -1063,6 +1063,10 @@ The available integer presentation types are:
 | `'x'`  | Hex format. Outputs the number in base 16, using lower-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0x" to the output value. |
 | `'X'`  | Hex format. Outputs the number in base 16, using upper-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0X" to the output value. |
 
+Integer presentation types can also be used with boolean values. Boolean values are
+formatted using textual representation, either true or false, if the presentation type is
+not specified.
+
 The available presentation types for floating-point values are:
 
 | Symbol | Meaning                                                                                                                                                                                                                                                                     |

@@ -371,6 +371,16 @@ TEST_CASE("base")
         IC(ms);
         REQUIRE(str == "ic| ms: <MutableStream 7>\n");
     }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = false;
+        IC(v0);
+        REQUIRE(str == "ic| v0: false\n");
+    }
 }
 
 
@@ -1019,6 +1029,46 @@ TEST_CASE("formatting")
         auto v0 = std::vector<int>{10,12,13};
         IC(IC_(":x", v0));
         REQUIRE(str == "ic| v0: [a, c, d]\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = true;
+        IC_F("d", v0);
+        REQUIRE(str == "ic| v0: 1\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = true;
+        IC_F("o", v0);
+        REQUIRE(str == "ic| v0: 1\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = true;
+        IC_F("x", v0);
+        REQUIRE(str == "ic| v0: 1\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = true;
+        IC_F("X", v0);
+        REQUIRE(str == "ic| v0: 1\n");
     }
 }
 
