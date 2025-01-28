@@ -98,7 +98,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Conan
-        run: pip3 install conan --upgrade
+        run: pip3 install conan==2.11.0 --upgrade
       - name: Prepare
         run: |
           conan profile detect
