@@ -2503,6 +2503,7 @@ namespace detail {
         // digit       ::=  "0"..."9"
 
         auto os = std::ostringstream{};
+        os << std::boolalpha;
 
         auto it = std::begin(fmt);
         auto end_it = std::end(fmt);
@@ -2593,7 +2594,7 @@ namespace detail {
         }
         else if (it != end_it && *it == 'd')
         {
-            os << std::dec;
+            os << std::dec << std::noboolalpha;
             ++it;
         }
         else if (it != end_it && *it == 'e')
@@ -2628,17 +2629,17 @@ namespace detail {
         }
         else if (it != end_it && *it == 'o')
         {
-            os << std::oct;
+            os << std::oct << std::noboolalpha;
             ++it;
         }
         else if (it != end_it && *it == 'x')
         {
-            os << std::hex << std::nouppercase;
+            os << std::hex << std::nouppercase << std::noboolalpha;
             ++it;
         }
         else if (it != end_it && *it == 'X')
         {
-            os << std::hex << std::uppercase;
+            os << std::hex << std::uppercase << std::noboolalpha;
             ++it;
         }
 
