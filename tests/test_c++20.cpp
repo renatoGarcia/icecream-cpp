@@ -1,5 +1,7 @@
 #include "icecream.hpp"
 
+#include "common.hpp"
+
 #include <ranges>
 #include <vector>
 #include <forward_list>
@@ -38,11 +40,11 @@ TEST_CASE("ranges view")
         auto v0 = arr | rv::transform([](auto i){return i.second;}) | IC_V();
         for (auto i : v0){}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
-        REQUIRE(str == "ic| range_view_38:76[0]: 10\nic| range_view_38:76[1]: 11\n");
+        REQUIRE(str == "ic| range_view_40:76[0]: 10\nic| range_view_40:76[1]: 11\n");
       #elif defined(ICECREAM_SOURCE_LOCATION)
-        REQUIRE(str == "ic| range_view_38:71[0]: 10\nic| range_view_38:71[1]: 11\n");
+        REQUIRE(str == "ic| range_view_40:71[0]: 10\nic| range_view_40:71[1]: 11\n");
       #else
-        REQUIRE(str == "ic| range_view_38[0]: 10\nic| range_view_38[1]: 11\n");
+        REQUIRE(str == "ic| range_view_40[0]: 10\nic| range_view_40[1]: 11\n");
       #endif
     }
 
@@ -55,11 +57,11 @@ TEST_CASE("ranges view")
         auto v0 = arr | rv::drop(2) | IC_V([](auto i){return i.second;});
         for (auto i : v0){}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
-        REQUIRE(str == "ic| range_view_55:72[0]: 12\n");
+        REQUIRE(str == "ic| range_view_57:72[0]: 12\n");
       #elif defined(ICECREAM_SOURCE_LOCATION)
-        REQUIRE(str == "ic| range_view_55:39[0]: 12\n");
+        REQUIRE(str == "ic| range_view_57:39[0]: 12\n");
       #else
-        REQUIRE(str == "ic| range_view_55[0]: 12\n");
+        REQUIRE(str == "ic| range_view_57[0]: 12\n");
       #endif
     }
 
@@ -73,16 +75,16 @@ TEST_CASE("ranges view")
         for (auto i : v0){}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         auto const result =
-            "ic| range_view_72:66[0]: 0xa\n"
-            "ic| range_view_72:66[1]: 0xb\n";
+            "ic| range_view_74:66[0]: 0xa\n"
+            "ic| range_view_74:66[1]: 0xb\n";
       #elif defined(ICECREAM_SOURCE_LOCATION)
         auto const result =
-            "ic| range_view_72:25[0]: 0xa\n"
-            "ic| range_view_72:25[1]: 0xb\n";
+            "ic| range_view_74:25[0]: 0xa\n"
+            "ic| range_view_74:25[1]: 0xb\n";
       #else
         auto const result =
-            "ic| range_view_72[0]: 0xa\n"
-            "ic| range_view_72[1]: 0xb\n";
+            "ic| range_view_74[0]: 0xa\n"
+            "ic| range_view_74[1]: 0xb\n";
       #endif
         REQUIRE(str == result);
     }
@@ -255,3 +257,71 @@ TEST_CASE("ranges")
 }
 
 
+TEST_CASE("STL formatting lib")
+{
+    {
+        // STL formatting lib printing should take precedence over IOStreams
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = IOStreamStlFormattable{42};
+
+        IC(v0);
+        REQUIRE(str == "ic| v0: <stl IOStreamStlFormattable 42>\n");
+    }
+
+    {
+        // With C++20 and earlier a range should be printed by the Icecream-cpp range
+        // strategy because there is no other way. Starting from C++23 and the "formatting
+        // ranges" feature, the range strategy will be selected when the
+        // `force_range_strategy` config option is `true` (the default value).
+
+        IC_CONFIG_SCOPE();
+        IC_CONFIG.line_wrap_width(20);
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = std::vector<int>{10, 20, 30, 40, 50, 60};
+        auto const result =
+            "ic| \n"
+            "    v0: [\n"
+            "        10, \n"
+            "        20, \n"
+            "        30, \n"
+            "        40, \n"
+            "        50, \n"
+            "        60\n"
+            "    ]\n";
+
+        IC(v0);
+        REQUIRE(str == result);
+    }
+
+    {
+        // With C++20 and earlier a tuple should be printed by the Icecream-cpp tuple
+        // strategy because there is no other way. Starting from C++23 and the "formatting
+        // ranges" feature, the tuple strategy will be selected when the
+        // `force_tuple_strategy` config option is `true` (the default value).
+
+        IC_CONFIG_SCOPE();
+        IC_CONFIG.line_wrap_width(20);
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = std::make_tuple(10, 20, 30, 40, 50, 60);
+        auto const result =
+            "ic| \n"
+            "    v0: (\n"
+            "        10, \n"
+            "        20, \n"
+            "        30, \n"
+            "        40, \n"
+            "        50, \n"
+            "        60\n"
+            "    )\n";
+
+        IC(v0);
+        REQUIRE(str == result);
+    }
+}

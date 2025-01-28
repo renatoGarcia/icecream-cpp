@@ -4,8 +4,13 @@ endif()
 
 find_package(Catch2 REQUIRED)
 find_package(Boost REQUIRED)
+
 if (ENABLE_RANGE_V3)
   find_package(range-v3 REQUIRED)
+endif()
+
+if (ENABLE_FMT)
+  find_package(fmt REQUIRED)
 endif()
 
 enable_testing()
@@ -23,6 +28,10 @@ function(declare_test name)
     if (ENABLE_RANGE_V3)
       target_link_libraries(test_${name} PRIVATE range-v3::range-v3)
     endif()
+
+    if (ENABLE_FMT)
+      target_link_libraries(test_${name} PRIVATE fmt::fmt)
+    endif()
 endfunction()
 
 if (CMAKE_CXX_STANDARD GREATER_EQUAL 11)
@@ -32,6 +41,9 @@ if (CMAKE_CXX_STANDARD GREATER_EQUAL 11)
     declare_test(slicing)
     if (ENABLE_RANGE_V3)
       declare_test(range_v3)
+    endif()
+    if (ENABLE_FMT)
+      declare_test(fmt)
     endif()
 endif()
 
@@ -43,6 +55,10 @@ endif()
 if (CMAKE_CXX_STANDARD GREATER_EQUAL 20)
     declare_test(c++20)
     declare_test(strings_c++20)
+endif()
+
+if (CMAKE_CXX_STANDARD GREATER_EQUAL 23)
+    declare_test(c++23)
 endif()
 
 if (

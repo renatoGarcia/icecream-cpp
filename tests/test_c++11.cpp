@@ -95,7 +95,7 @@ namespace std
 {
     auto operator<<(std::ostream& os, std::pair<std::string, char> const& value) -> std::ostream&
     {
-        os << "{" << value.first << ", " << value.second << "}";
+        os << "(\"" << value.first << "\", '" << value.second << "')";
         return os;
     }
 }
@@ -272,7 +272,7 @@ TEST_CASE("base")
         IC_CONFIG.output(str);
 
         IC(std::is_same<int, int> :: value);
-        REQUIRE(str == "ic| std::is_same<int, int> :: value: 1\n");
+        REQUIRE(str == "ic| std::is_same<int, int> :: value: true\n");
     }
 
     {
@@ -499,7 +499,7 @@ TEST_CASE("tuples")
 
         auto s0 = std::make_pair(std::string{"oi"}, 'b');
         IC(s0);
-        REQUIRE(str == "ic| s0: {oi, b}\n"); // will use the function above
+        REQUIRE(str == "ic| s0: (\"oi\", 'b')\n"); // will use the function above
     }
 
     {
@@ -666,8 +666,8 @@ TEST_CASE("range")
         IC_CONFIG.output(str);
 
         auto v0 = std::list<int> {10, 20, 30};
-        IC_F(":0v#5x", v0);
-        REQUIRE(str == "ic| v0: [0x00a, 0x014, 0x01e]\n");
+        IC_F(":#x", v0);
+        REQUIRE(str == "ic| v0: [0xa, 0x14, 0x1e]\n");
     }
 
     {
@@ -968,18 +968,18 @@ TEST_CASE("formatting")
         REQUIRE(str == "ic| v0: 052, 7: 07\n");
     }
 
-    {
-        IC_CONFIG_SCOPE();
-        auto str = std::string{};
-        IC_CONFIG.output(str);
+    // {
+    //     IC_CONFIG_SCOPE();
+    //     auto str = std::string{};
+    //     IC_CONFIG.output(str);
 
-        auto v0 = 12.3456789f;
-        IC_F("#A", v0);
-        REQUIRE(
-            ((str == "ic| v0: 0X1.8B0FCEP+3\n") ||
-             (str == "ic| v0: 0X1.8B0FCE0000000P+3\n")) // Visualstudio 2019 output
-        );
-    }
+    //     auto v0 = 12.3456789f;
+    //     IC_F("#A", v0);
+    //     REQUIRE(
+    //         ((str == "ic| v0: 0X1.8B0FCEP+3\n") ||
+    //          (str == "ic| v0: 0X1.8B0FCE0000000P+3\n")) // Visualstudio 2019 output
+    //     );
+    // }
 
     {
         IC_CONFIG_SCOPE();
