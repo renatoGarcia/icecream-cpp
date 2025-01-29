@@ -4608,6 +4608,7 @@ namespace detail {
 
         auto parenthesis_count = int{0};
         auto angle_bracket_count = int{0};
+        auto curly_bracket_count = int{0};
         auto is_within_double_quote = false;
         auto is_within_single_quote = false;
 
@@ -4644,8 +4645,12 @@ namespace detail {
             }
 
             // If it have found the comma separating two arguments
-            else if (curr_char == ',' && parenthesis_count == 0 && angle_bracket_count == 0)
-            {
+            else if (
+                curr_char == ','
+                && parenthesis_count == 0
+                && angle_bracket_count == 0
+                && curly_bracket_count == 0
+            ) {
                 comma_idxs.push_back(idx);
                 last_idx = idx - 1;
             }
@@ -4660,6 +4665,16 @@ namespace detail {
             else if (curr_char == '(')
             {
                 --parenthesis_count;
+            }
+
+            else if (curr_char == '}')
+            {
+                ++curly_bracket_count;
+            }
+
+            else if (curr_char == '{')
+            {
+                --curly_bracket_count;
             }
 
             // It won't cut on a comma within a template argument list, such as in
