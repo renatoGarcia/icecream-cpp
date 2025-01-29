@@ -280,6 +280,15 @@ TEST_CASE("base")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
+        IC(10, std::vector<int>{1, 2, 3}, 20);
+        REQUIRE(str == "ic| 10: 10, std::vector<int>{1, 2, 3}: [1, 2, 3], 20: 20\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
         auto const result =
             "ic| \n"
             "    7: 7,\n"
