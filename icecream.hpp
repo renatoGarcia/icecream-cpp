@@ -908,6 +908,524 @@ namespace icecream{ namespace detail
             >
         >::type;
 
+
+    // -------------------------------------------------- ensure_tuple
+
+    template <typename T>
+    auto ensure_tuple(T&& t) -> std::tuple<decltype(std::forward<T>(t))>
+    {
+        return std::forward_as_tuple(std::forward<T>(t));
+    };
+
+    template <typename... Ts>
+    auto ensure_tuple(std::tuple<Ts...>&& t) -> std::tuple<Ts...>
+    {
+        return std::move(t);
+    };
+
+    // -------------------------------------------------- Identity
+
+    struct Identity
+    {
+        template <typename T>
+        auto operator()(T&& t) const -> T&&
+        {
+            return std::forward<T>(t);
+        }
+    };
+
+    // -------------------------------------------------- min
+
+    template <typename T>
+    auto min(T const& lho, T const& rho) -> T const&
+    {
+        return (rho < lho) ? rho : lho;
+    }
+
+
+    // -------------------------------------------------- StringView
+
+    class StringView
+    {
+    public:
+        static constexpr size_t npos = size_t(-1);
+
+        using value_type = char;
+
+        using iterator = char const*;
+
+        using reverse_iterator = std::reverse_iterator<iterator>;
+
+        StringView() = default;
+
+        StringView(char const* s, size_t count)
+            : s_{s}
+            , count_{count}
+        {}
+
+        StringView(char const* s)
+            : s_{s}
+            , count_{std::char_traits<char>::length(s)}
+        {}
+
+        StringView(std::string const& s)
+            : s_{s.data()}
+            , count_{s.size()}
+        {}
+
+        StringView(iterator first, iterator last)
+            : s_{first}
+            , count_{static_cast<size_t>(last - first)}
+        {}
+
+        auto empty() const -> bool
+        {
+            return this->count_ == 0;
+        }
+
+        auto size() const -> size_t
+        {
+            return this->count_;
+        }
+
+        auto data() const -> char const*
+        {
+            return this->s_;
+        }
+
+        auto begin() const -> iterator
+        {
+            return this->s_;
+        }
+
+        auto end() const -> iterator
+        {
+            return this->s_ + this->count_;
+        }
+
+        auto rbegin() const -> reverse_iterator
+        {
+            return reverse_iterator(this->s_ + this->count_);
+        }
+
+        auto rend() const -> reverse_iterator
+        {
+            return reverse_iterator(this->s_);
+        }
+
+        auto operator[](size_t idx) const -> char
+        {
+            return this->s_[idx];
+        }
+
+        auto front() const -> char
+        {
+            return this->s_[0];
+        }
+
+        auto back() const -> char
+        {
+            return this->s_[this->count_ - 1];
+        }
+
+        friend auto operator==(StringView lho, StringView rho) -> bool
+        {
+            if (lho.count_ != rho.count_) return false;
+            return std::char_traits<char>::compare(lho.s_, rho.s_, lho.count_) == 0;
+        }
+
+        auto remove_prefix(size_t n) -> void
+        {
+            this->s_ += n;
+            this->count_ -= n;
+        }
+
+        auto remove_suffix(size_t n) -> void
+        {
+            this->count_ -= n;
+        }
+
+        auto substr(size_t pos = 0, size_t count = npos) const -> StringView
+        {
+            return StringView(this->s_ + pos, min(count, this->count_ - pos));
+        }
+
+        auto find(char const* s, size_t pos = npos) const -> size_t
+        {
+            if (*s == '\0')
+            {
+                return 0;  // Empty string is always found at index 0
+            }
+
+            for (auto i = size_t{0}; i < this->count_; ++i)
+            {
+                if (this->s_[i] == s[0])
+                {
+                    auto j = size_t{1};
+                    while (i + j < this->count_ && this->s_[i + j] == s[j] && s[j] != '\0')
+                    {
+                        ++j;
+                    }
+
+                    // If we reached the end of input string s it was found
+                    if (s[j] == '\0')
+                    {
+                        return i;  // Return the starting index
+                    }
+                }
+            }
+
+            return npos; // if not found
+        }
+
+        auto rfind(char ch, size_t pos = npos) const -> size_t
+        {
+            auto const size = this->count_;
+
+            if (size == 0) return npos;
+
+            auto idx = pos < size ? pos : size;
+
+            for (++idx; idx-- > 0;)
+            {
+                if (this->s_[idx] == ch) return idx;
+            }
+
+            return npos;
+        }
+
+        auto trim() -> void
+        {
+            if (this->count_ == 0) return;
+
+            auto* c0 = this->s_;
+            auto* c1 = this->s_ + this->count_;
+
+            while (
+                c0 < c1
+                && (*c0 == ' ' || *c0 == '\t' || *c0 == '\n' || *c0 == '\r' || *c0 == '\f' || *c0 == '\v')
+            ){
+                ++c0;
+            }
+
+            while (
+                c1 > c0
+                && (
+                    c1[-1] == ' '
+                    || c1[-1] == '\t'
+                    || c1[-1] == '\n'
+                    || c1[-1] == '\r'
+                    || c1[-1] == '\f'
+                    || c1[-1] == '\v'
+                )
+            ){
+                --c1;
+            }
+
+            this->s_ = c0;
+            this->count_ = c1 - c0;
+        };
+
+        auto to_string() const -> std::string
+        {
+            return std::string(this->s_, this->count_);
+        }
+
+    private:
+        char const* s_ = nullptr;
+        size_t count_ = 0;
+    };
+
+
+    // -------------------------------------------------- Variant
+
+    template <typename T0, typename T1, typename T>
+    struct GetHelper;
+
+    template <typename T0, typename T1>
+    class Variant
+    {
+        template <typename U0, typename U1, typename U2>
+        friend struct GetHelper;
+
+    private:
+        std::size_t type_index;
+
+        union
+        {
+            T0 as_t0;
+            T1 as_t1;
+        };
+
+    public:
+        Variant()
+            : type_index(0)
+            , as_t0()
+        {}
+
+        Variant(T0 const& v)
+            : type_index(0)
+            , as_t0(v)
+        {}
+
+        Variant(T1 const& v)
+            : type_index(1)
+            , as_t1(v)
+        {}
+
+        Variant(T0&& v)
+            : type_index(0)
+            , as_t0(std::move(v))
+        {}
+
+        Variant(T1&& v)
+            : type_index(1)
+            , as_t1(std::move(v))
+        {}
+
+        Variant(Variant<T0, T1> const& v)
+            : type_index(v.type_index)
+        {
+            switch (this->type_index)
+            {
+            case 0:
+                new (&this->as_t0) T0(v.as_t0);
+                break;
+            case 1:
+                new (&this->as_t1) T1(v.as_t1);
+                break;
+            default:
+                ICECREAM_UNREACHABLE;
+            }
+        }
+
+        Variant(Variant<T0, T1>&& v)
+            : type_index(v.type_index)
+        {
+            switch (this->type_index)
+            {
+            case 0:
+                new (&this->as_t0) T0(std::move(v.as_t0));
+                break;
+            case 1:
+                new (&this->as_t1) T1(std::move(v.as_t1));
+                break;
+            default:
+                ICECREAM_UNREACHABLE;
+            }
+        }
+
+        ~Variant()
+        {
+            switch (this->type_index)
+            {
+            case 0:
+                this->as_t0.~T0();
+                break;
+            case 1:
+                this->as_t1.~T1();
+                break;
+            default:
+                ICECREAM_UNREACHABLE;
+            }
+        }
+
+        Variant& operator=(Variant&& other)
+        {
+            if (this != &other)
+            {
+                this->~Variant();
+                new (this) Variant(std::move(other));
+            }
+
+            return *this;
+        }
+
+        auto index() const -> std::size_t
+        {
+            return this->type_index;
+        }
+    };
+
+    template <typename T0, typename T1>
+    struct GetHelper<T0, T1, T0>
+    {
+        auto operator()(Variant<T0, T1> const& v) -> T0 const&
+        {
+            return v.as_t0;
+        }
+
+        auto operator()(Variant<T0, T1>& v) -> T0&
+        {
+            return v.as_t0;
+        }
+
+        auto operator()(Variant<T0, T1>&& v) -> T0&
+        {
+            return v.as_t0;
+        }
+    };
+
+    template <typename T0, typename T1>
+    struct GetHelper<T0, T1, T1>
+    {
+        auto operator()(Variant<T0, T1> const& v) -> T1 const&
+        {
+            return v.as_t1;
+        }
+
+        auto operator()(Variant<T0, T1>& v) -> T1&
+        {
+            return v.as_t1;
+        }
+
+        auto operator()(Variant<T0, T1>&& v) -> T1&
+        {
+            return v.as_t1;
+        }
+    };
+
+    template <typename T, typename T0, typename T1>
+    auto get(Variant<T0, T1>& v) -> T&
+    {
+        return GetHelper<T0, T1, T>()(v);
+    }
+
+    template <typename T, typename T0, typename T1>
+    auto get(Variant<T0, T1> const& v) -> T const&
+    {
+        return GetHelper<T0, T1, T>()(v);
+    }
+
+    template <typename T, typename T0, typename T1>
+    auto get(Variant<T0, T1>&& v) -> T&&
+    {
+        return GetHelper<T0, T1, T>()(std::move(v));
+    }
+
+
+    // -------------------------------------------------- Optional
+
+    template <typename T>
+    class Optional
+    {
+    public:
+        Optional() = default;
+
+        Optional(T const& v)
+            : storage(v)
+        {}
+
+        Optional(T&& v)
+            : storage(std::move(v))
+        {}
+
+        Optional(Optional<T> const& v) = default;
+
+        Optional(Optional<T>&& v) = default;
+
+        Optional& operator=(Optional&& other)
+        {
+            if (this != &other)
+            {
+                this->storage = std::move(other.storage);
+            }
+
+            return *this;
+        }
+
+        operator bool() const
+        {
+            return this->storage.index() != 0;
+        }
+
+        auto value() const -> T const&
+        {
+            return get<T>(this->storage);
+        }
+
+        auto operator*() -> T&
+        {
+            return get<T>(this->storage);
+        }
+
+        auto operator*() const -> T const&
+        {
+            return get<T>(this->storage);
+        }
+
+        auto operator->() -> T*
+        {
+            return &get<T>(this->storage);
+        }
+
+    private:
+        struct empty {};
+
+        Variant<empty, T> storage;
+    };
+
+
+    template <typename T>
+    class Optional<T&>
+    {
+    public:
+        Optional() = default;
+
+        Optional(T& v)
+            : storage(v)
+        {}
+
+        Optional(T&& v)
+            : storage(std::move(v))
+        {}
+
+        Optional(Optional<T&> const& v) = default;
+
+        Optional(Optional<T&>&& v) = default;
+
+        Optional& operator=(Optional&& other)
+        {
+            if (this != &other)
+            {
+                this->storage = std::move(other.storage);
+            }
+
+            return *this;
+        }
+
+        operator bool() const
+        {
+            return this->storage.index() != 0;
+        }
+
+        auto value() const -> T const&
+        {
+            return get<std::reference_wrapper<T>>(this->storage);
+        }
+
+        auto operator*() -> T&
+        {
+            return get<std::reference_wrapper<T>>(this->storage);
+        }
+
+        auto operator*() const -> T const&
+        {
+            return get<std::reference_wrapper<T>>(this->storage);
+        }
+
+        auto operator->() -> T*
+        {
+            return &(get<std::reference_wrapper<T>>(this->storage).get());
+        }
+
+    private:
+        struct empty {};
+
+        Variant<empty, std::reference_wrapper<T>> storage;
+    };
+
+
     // -------------------------------------------- Forward declare all make_printing_branch overloads
 
     // This is required because the declarations must be visible by some implementation
@@ -921,7 +1439,6 @@ namespace icecream{ namespace detail
 namespace detail {
 
     class PrintingNode;
-    class StringView;
 
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
@@ -1125,233 +1642,6 @@ namespace detail {
         T&&, StringView, Config const&
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type;
   #endif
-
-
-    // -------------------------------------------------- ensure_tuple
-
-    template <typename T>
-    auto ensure_tuple(T&& t) -> std::tuple<decltype(std::forward<T>(t))>
-    {
-        return std::forward_as_tuple(std::forward<T>(t));
-    };
-
-    template <typename... Ts>
-    auto ensure_tuple(std::tuple<Ts...>&& t) -> std::tuple<Ts...>
-    {
-        return std::move(t);
-    };
-
-    // -------------------------------------------------- Identity
-
-    struct Identity
-    {
-        template <typename T>
-        auto operator()(T&& t) const -> T&&
-        {
-            return std::forward<T>(t);
-        }
-    };
-
-    // -------------------------------------------------- min
-
-    template <typename T>
-    auto min(T const& lho, T const& rho) -> T const&
-    {
-        return (rho < lho) ? rho : lho;
-    }
-
-
-    // -------------------------------------------------- StringView
-    class StringView
-    {
-    public:
-        static constexpr size_t npos = size_t(-1);
-
-        using value_type = char;
-
-        using iterator = char const*;
-
-        using reverse_iterator = std::reverse_iterator<iterator>;
-
-        StringView() = default;
-
-        StringView(char const* s, size_t count)
-            : s_{s}
-            , count_{count}
-        {}
-
-        StringView(char const* s)
-            : s_{s}
-            , count_{std::char_traits<char>::length(s)}
-        {}
-
-        StringView(std::string const& s)
-            : s_{s.data()}
-            , count_{s.size()}
-        {}
-
-        StringView(iterator first, iterator last)
-            : s_{first}
-            , count_{static_cast<size_t>(last - first)}
-        {}
-
-        auto empty() const -> bool
-        {
-            return this->count_ == 0;
-        }
-
-        auto size() const -> size_t
-        {
-            return this->count_;
-        }
-
-        auto data() const -> char const*
-        {
-            return this->s_;
-        }
-
-        auto begin() const -> iterator
-        {
-            return this->s_;
-        }
-
-        auto end() const -> iterator
-        {
-            return this->s_ + this->count_;
-        }
-
-        auto rbegin() const -> reverse_iterator
-        {
-            return reverse_iterator(this->s_ + this->count_);
-        }
-
-        auto rend() const -> reverse_iterator
-        {
-            return reverse_iterator(this->s_);
-        }
-
-        auto operator[](size_t idx) const -> char
-        {
-            return this->s_[idx];
-        }
-
-        auto front() const -> char
-        {
-            return this->s_[0];
-        }
-
-        auto back() const -> char
-        {
-            return this->s_[this->count_ - 1];
-        }
-
-        friend auto operator==(StringView lho, StringView rho) -> bool
-        {
-            if (lho.count_ != rho.count_) return false;
-            return std::char_traits<char>::compare(lho.s_, rho.s_, lho.count_) == 0;
-        }
-
-        auto remove_prefix(size_t n) -> void
-        {
-            this->s_ += n;
-            this->count_ -= n;
-        }
-
-        auto remove_suffix(size_t n) -> void
-        {
-            this->count_ -= n;
-        }
-
-        auto substr(size_t pos = 0, size_t count = npos) const -> StringView
-        {
-            return StringView(this->s_ + pos, min(count, this->count_ - pos));
-        }
-
-        auto find(char const* s, size_t pos = npos) const -> size_t
-        {
-            if (*s == '\0')
-            {
-                return 0;  // Empty string is always found at index 0
-            }
-
-            for (auto i = size_t{0}; i < this->count_; ++i)
-            {
-                if (this->s_[i] == s[0])
-                {
-                    auto j = size_t{1};
-                    while (i + j < this->count_ && this->s_[i + j] == s[j] && s[j] != '\0')
-                    {
-                        ++j;
-                    }
-
-                    // If we reached the end of input string s it was found
-                    if (s[j] == '\0')
-                    {
-                        return i;  // Return the starting index
-                    }
-                }
-            }
-
-            return npos; // if not found
-        }
-
-        auto rfind(char ch, size_t pos = npos) const -> size_t
-        {
-            auto const size = this->count_;
-
-            if (size == 0) return npos;
-
-            auto idx = pos < size ? pos : size;
-
-            for (++idx; idx-- > 0;)
-            {
-                if (this->s_[idx] == ch) return idx;
-            }
-
-            return npos;
-        }
-
-        auto trim() -> void
-        {
-            if (this->count_ == 0) return;
-
-            auto* c0 = this->s_;
-            auto* c1 = this->s_ + this->count_;
-
-            while (
-                c0 < c1
-                && (*c0 == ' ' || *c0 == '\t' || *c0 == '\n' || *c0 == '\r' || *c0 == '\f' || *c0 == '\v')
-            ){
-                ++c0;
-            }
-
-            while (
-                c1 > c0
-                && (
-                    c1[-1] == ' '
-                    || c1[-1] == '\t'
-                    || c1[-1] == '\n'
-                    || c1[-1] == '\r'
-                    || c1[-1] == '\f'
-                    || c1[-1] == '\v'
-                )
-            ){
-                --c1;
-            }
-
-            this->s_ = c0;
-            this->count_ = c1 - c0;
-        };
-
-        auto to_string() const -> std::string
-        {
-            return std::string(this->s_, this->count_);
-        }
-
-    private:
-        char const* s_ = nullptr;
-        size_t count_ = 0;
-    };
 
 
     // -------------------------------------------------- Character transcoders
@@ -1741,295 +2031,6 @@ namespace detail {
         T it;
     };
 
-
-    // -------------------------------------------------- Variant and Optional
-
-    // Minimal std::variant and std::optional implementation targeting C++11 and
-    // forward. Implements just the functionalities required by Icecream-cpp.
-
-    template <typename T0, typename T1, typename T>
-    struct GetHelper;
-
-    template <typename T0, typename T1>
-    class Variant
-    {
-        template <typename U0, typename U1, typename U2>
-        friend struct GetHelper;
-
-    private:
-        std::size_t type_index;
-
-        union
-        {
-            T0 as_t0;
-            T1 as_t1;
-        };
-
-    public:
-        Variant()
-            : type_index(0)
-            , as_t0()
-        {}
-
-        Variant(T0 const& v)
-            : type_index(0)
-            , as_t0(v)
-        {}
-
-        Variant(T1 const& v)
-            : type_index(1)
-            , as_t1(v)
-        {}
-
-        Variant(T0&& v)
-            : type_index(0)
-            , as_t0(std::move(v))
-        {}
-
-        Variant(T1&& v)
-            : type_index(1)
-            , as_t1(std::move(v))
-        {}
-
-        Variant(Variant<T0, T1> const& v)
-            : type_index(v.type_index)
-        {
-            switch (this->type_index)
-            {
-            case 0:
-                new (&this->as_t0) T0(v.as_t0);
-                break;
-            case 1:
-                new (&this->as_t1) T1(v.as_t1);
-                break;
-            default:
-                ICECREAM_UNREACHABLE;
-            }
-        }
-
-        Variant(Variant<T0, T1>&& v)
-            : type_index(v.type_index)
-        {
-            switch (this->type_index)
-            {
-            case 0:
-                new (&this->as_t0) T0(std::move(v.as_t0));
-                break;
-            case 1:
-                new (&this->as_t1) T1(std::move(v.as_t1));
-                break;
-            default:
-                ICECREAM_UNREACHABLE;
-            }
-        }
-
-        ~Variant()
-        {
-            switch (this->type_index)
-            {
-            case 0:
-                this->as_t0.~T0();
-                break;
-            case 1:
-                this->as_t1.~T1();
-                break;
-            default:
-                ICECREAM_UNREACHABLE;
-            }
-        }
-
-        Variant& operator=(Variant&& other)
-        {
-            if (this != &other)
-            {
-                this->~Variant();
-                new (this) Variant(std::move(other));
-            }
-
-            return *this;
-        }
-
-        auto index() const -> std::size_t
-        {
-            return this->type_index;
-        }
-    };
-
-    template <typename T0, typename T1>
-    struct GetHelper<T0, T1, T0>
-    {
-        auto operator()(Variant<T0, T1> const& v) -> T0 const&
-        {
-            return v.as_t0;
-        }
-
-        auto operator()(Variant<T0, T1>& v) -> T0&
-        {
-            return v.as_t0;
-        }
-
-        auto operator()(Variant<T0, T1>&& v) -> T0&
-        {
-            return v.as_t0;
-        }
-    };
-
-    template <typename T0, typename T1>
-    struct GetHelper<T0, T1, T1>
-    {
-        auto operator()(Variant<T0, T1> const& v) -> T1 const&
-        {
-            return v.as_t1;
-        }
-
-        auto operator()(Variant<T0, T1>& v) -> T1&
-        {
-            return v.as_t1;
-        }
-
-        auto operator()(Variant<T0, T1>&& v) -> T1&
-        {
-            return v.as_t1;
-        }
-    };
-
-    template <typename T, typename T0, typename T1>
-    auto get(Variant<T0, T1>& v) -> T&
-    {
-        return GetHelper<T0, T1, T>()(v);
-    }
-
-    template <typename T, typename T0, typename T1>
-    auto get(Variant<T0, T1> const& v) -> T const&
-    {
-        return GetHelper<T0, T1, T>()(v);
-    }
-
-    template <typename T, typename T0, typename T1>
-    auto get(Variant<T0, T1>&& v) -> T&&
-    {
-        return GetHelper<T0, T1, T>()(std::move(v));
-    }
-
-
-    template <typename T>
-    class Optional
-    {
-    public:
-        Optional() = default;
-
-        Optional(T const& v)
-            : storage(v)
-        {}
-
-        Optional(T&& v)
-            : storage(std::move(v))
-        {}
-
-        Optional(Optional<T> const& v) = default;
-
-        Optional(Optional<T>&& v) = default;
-
-        Optional& operator=(Optional&& other)
-        {
-            if (this != &other)
-            {
-                this->storage = std::move(other.storage);
-            }
-
-            return *this;
-        }
-
-        operator bool() const
-        {
-            return this->storage.index() != 0;
-        }
-
-        auto value() const -> T const&
-        {
-            return get<T>(this->storage);
-        }
-
-        auto operator*() -> T&
-        {
-            return get<T>(this->storage);
-        }
-
-        auto operator*() const -> T const&
-        {
-            return get<T>(this->storage);
-        }
-
-        auto operator->() -> T*
-        {
-            return &get<T>(this->storage);
-        }
-
-    private:
-        struct empty {};
-
-        Variant<empty, T> storage;
-    };
-
-
-    template <typename T>
-    class Optional<T&>
-    {
-    public:
-        Optional() = default;
-
-        Optional(T& v)
-            : storage(v)
-        {}
-
-        Optional(T&& v)
-            : storage(std::move(v))
-        {}
-
-        Optional(Optional<T&> const& v) = default;
-
-        Optional(Optional<T&>&& v) = default;
-
-        Optional& operator=(Optional&& other)
-        {
-            if (this != &other)
-            {
-                this->storage = std::move(other.storage);
-            }
-
-            return *this;
-        }
-
-        operator bool() const
-        {
-            return this->storage.index() != 0;
-        }
-
-        auto value() const -> T const&
-        {
-            return get<std::reference_wrapper<T>>(this->storage);
-        }
-
-        auto operator*() -> T&
-        {
-            return get<std::reference_wrapper<T>>(this->storage);
-        }
-
-        auto operator*() const -> T const&
-        {
-            return get<std::reference_wrapper<T>>(this->storage);
-        }
-
-        auto operator->() -> T*
-        {
-            return &(get<std::reference_wrapper<T>>(this->storage).get());
-        }
-
-    private:
-        struct empty {};
-
-        Variant<empty, std::reference_wrapper<T>> storage;
-    };
 
     // -------------------------------------------------- Hereditary
 
