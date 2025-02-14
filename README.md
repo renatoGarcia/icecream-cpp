@@ -608,17 +608,13 @@ ic| 3: 3
 Sets where the serialized textual data will be printed. By default that data will be
 printed on the standard error output, the same as `std::cerr`.
 
-- get:
-    ```C++
-    auto output() const -> std::function<void(std::string const&)>;
-    ```
 - set:
     ```C++
     template <typename T>
     auto output(T&& t) -> Config&;
     ```
 
-Where the type `T` can be any of:
+Where the type `T` must be one of:
 - A class inheriting from `std::ostream`.
 - A class having a method `push_back(char)`.
 - An output iterator that accepts the operation `*it = 'c'`
@@ -639,17 +635,13 @@ Will print the output `"ic| 1: 1, 2: 2\n"` on the `str` string.
 
 A function that generate the text that will be printed before each output.
 
-- get:
-    ```C++
-    auto prefix() const -> std::function<std::string()>;
-    ```
 - set:
     ```C++
     template <typename... Ts>
     auto prefix(Ts&& ...values) -> Config&;
     ```
 
-Where the types `Ts` can be any of:
+Where each one of the types `Ts` must be one of:
 - A string,
 - A callable `T() -> U`, where `U` has an overload of `operator<<(ostream&, U)`.
 
@@ -754,10 +746,6 @@ This option has a default value of `true`.
 Function that transcodes a `wchar_t` string, from a system defined encoding to a `char`
 string in the system "execution encoding".
 
-- get:
-    ```C++
-    auto wide_string_transcoder() const -> std::function<std::string(wchar_t const*, std::size_t)>;
-    ```
 - set:
     ```C++
     auto wide_string_transcoder(std::function<std::string(wchar_t const*, std::size_t)> transcoder) -> Config&;
@@ -778,10 +766,6 @@ to the byte size of `wchar_t`), and transcoded it to UTF-8.
 Function that transcodes a `char32_t` string, from a UTF-32 encoding to a `char` string in
 the system "execution encoding".
 
-- get:
-    ```C++
-    auto unicode_transcoder() const -> std::function<std::string(char32_t const*, std::size_t)>;
-    ```
 - set:
     ```C++
     auto unicode_transcoder(std::function<std::string(char32_t const*, std::size_t)> transcoder) -> Config&;
@@ -805,10 +789,6 @@ to a `char32_t` string, before being sent as input to this function.
 Function that transcodes a `char` string, from the system "execution encoding" to a `char`
 string in the system "output encoding", as expected by the configured [output](#output).
 
-- get:
-    ```C++
-    auto output_transcoder() const -> std::function<std::string(char const*, std::size_t)>;
-    ```
 - set:
     ```C++
     auto output_transcoder(std::function<std::string(char const*, std::size_t)> transcoder) -> Config&;

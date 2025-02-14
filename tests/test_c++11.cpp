@@ -1086,37 +1086,37 @@ TEST_CASE("Tree char count")
 {
     {
         auto v0 = std::string {"str"};
-        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
+        auto tree = icecream::detail::make_printing_branch(v0, "", icecream_config_5f803a3bcdb4);
         REQUIRE(tree.code_point_length() == 5); // 3 chars (str) plus 2 char (quotes)
     }
 
     {
         auto v0 = std::string {"\xce\xb1"}; // Greek small letter alpha
-        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
+        auto tree = icecream::detail::make_printing_branch(v0, "", icecream_config_5f803a3bcdb4);
         REQUIRE(tree.code_point_length() == 3); // 1 chars plus 2 char (quotes)
     }
 
     {
         auto v0 = std::string {"\xF0\x9F\x90\xA7"}; // Penguin
-        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
+        auto tree = icecream::detail::make_printing_branch(v0, "", icecream_config_5f803a3bcdb4);
         REQUIRE(tree.code_point_length() == 3); // 1 chars plus 2 char (quotes)
     }
 
     {
         auto v0 = std::wstring {L"wstr"};
-        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
+        auto tree = icecream::detail::make_printing_branch(v0, "", icecream_config_5f803a3bcdb4);
         REQUIRE(tree.code_point_length() == 6);
     }
 
     {
         auto v0 = std::u16string {u"u16\u03B1"}; // Greek small letter alpha
-        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
+        auto tree = icecream::detail::make_printing_branch(v0, "", icecream_config_5f803a3bcdb4);
         REQUIRE(tree.code_point_length() == 6);
     }
 
     {
         auto v0 = std::u32string {U"abcd\U0001F427"}; // Penguin
-        auto tree = icecream::detail::make_printing_branch(v0, "", IC_CONFIG);
+        auto tree = icecream::detail::make_printing_branch(v0, "", icecream_config_5f803a3bcdb4);
         REQUIRE(tree.code_point_length() == 7);
     }
 }
