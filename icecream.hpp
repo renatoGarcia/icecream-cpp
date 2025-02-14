@@ -217,7 +217,7 @@
 
 #define ICECREAM_DISPATCH(is_ic_apply, fmt, argument_names, ...)                           \
     ::icecream::detail::Dispatcher{                                                        \
-        is_ic_apply, IC_CONFIG, __FILE__, __LINE__, ICECREAM_FUNCTION, fmt, argument_names \
+        is_ic_apply, icecream_config_5f803a3bcdb4, __FILE__, __LINE__, ICECREAM_FUNCTION, fmt, argument_names \
     }.ret(__VA_ARGS__)
 
 #if defined(ICECREAM_LONG_NAME)
@@ -227,12 +227,13 @@
     #define ICECREAM_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
-    #define ICECREAM_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(ICECREAM_CONFIG, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define ICECREAM_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(ICECREAM_CONFIG, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define ICECREAM_CONFIG_SCOPE()                                                            \
-        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
-        ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
-    #define ICECREAM_CONFIG icecream_config_5f803a3bcdb4
+    #define ICECREAM_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define ICECREAM_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define ICECREAM_CONFIG_SCOPE()                                                                    \
+        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4;         \
+        ::icecream::detail::Config_ icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
+        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_config_5f803a3bcdb4;
+    #define ICECREAM_CONFIG icecream_public_config_5f803a3bcdb4
 #else
     #define IC(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__, __VA_ARGS__)
     #define IC0() ICECREAM_DISPATCH(false, "", "")
@@ -240,12 +241,13 @@
     #define IC_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
-    #define IC_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(IC_CONFIG, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define IC_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(IC_CONFIG, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define IC_CONFIG_SCOPE()                                                                  \
-        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4; \
-        ::icecream::Config icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4);
-    #define IC_CONFIG icecream_config_5f803a3bcdb4
+    #define IC_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define IC_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define IC_CONFIG_SCOPE()                                                                          \
+        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4;         \
+        ::icecream::detail::Config_ icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
+        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_config_5f803a3bcdb4;
+    #define IC_CONFIG icecream_public_config_5f803a3bcdb4
 #endif
 
 
@@ -1434,16 +1436,13 @@ namespace icecream{ namespace detail
     // be called, then it will delegate the printing to the tuple overload, then finally
     // it will delegate the printing to the operator<<(std::ostream&, T) overload.
 
-} // namespace detail
-    class Config;
-namespace detail {
-
+    class Config_;
     class PrintingNode;
 
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) ->
         typename std::enable_if<
             is_streamable<T>::value
@@ -1462,7 +1461,7 @@ namespace detail {
     // Print any class that specializes std::formatter<T, char>
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) ->
         typename std::enable_if<
             is_stl_formattable<T>::value
@@ -1481,7 +1480,7 @@ namespace detail {
     // Print any class that specializes fmt::formatter<T, char>
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) ->
         typename std::enable_if<
             is_fmt_formattable<T>::value
@@ -1498,39 +1497,39 @@ namespace detail {
     // Print C string
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type;
 
     // Print std::string
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type;
 
   #if defined(ICECREAM_STRING_VIEW_HEADER)
     // Print std::string_view
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type;
   #endif
 
     // Print character
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type;
 
     // Print signed and unsigned char
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type;
 
     // Print smart pointers without an operator<<(ostream&) overload.
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         is_unstreamable_ptr<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
@@ -1539,14 +1538,14 @@ namespace detail {
     // Print weak pointer classes
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type;
 
   #if defined(ICECREAM_OPTIONAL_HEADER)
     // Print std::optional<> classes
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         is_optional<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
@@ -1556,7 +1555,7 @@ namespace detail {
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         is_variant<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
@@ -1564,18 +1563,18 @@ namespace detail {
 
     template <typename T>
     auto do_print_tuple(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<!is_tuple<T>::value, PrintingNode>::type;
 
     template <typename T>
     auto do_print_tuple(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_tuple<T>::value, PrintingNode>::type;
 
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         is_tuple<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
@@ -1583,7 +1582,7 @@ namespace detail {
 
     template <typename T>
     auto do_print_range(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         is_range<T>::value,
         PrintingNode
@@ -1591,7 +1590,7 @@ namespace detail {
 
     template <typename T>
     auto do_print_range(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         !is_range<T>::value,
         PrintingNode
@@ -1600,7 +1599,7 @@ namespace detail {
     // Print all elements of a range
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         (
             is_range<T>::value
@@ -1615,7 +1614,7 @@ namespace detail {
     // Print classes deriving from only std::exception and not from boost::exception
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
@@ -1626,7 +1625,7 @@ namespace detail {
     // Print classes deriving from both std::exception and boost::exception
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
@@ -1639,7 +1638,7 @@ namespace detail {
     // when the elements type shoud be printed using clang dump_struct.
     template <typename T>
     auto make_printing_branch(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type;
   #endif
 
@@ -2094,17 +2093,12 @@ namespace detail {
 
 } // namespace detail
 
-    // -------------------------------------------------- Config
 
-    namespace detail{
-        auto global_config() -> Config&;
-    }
+    // -------------------------------------------------- Config
 
     class Config
     {
     public:
-
-        constexpr static size_t INDENT_BASE = 4;
 
         explicit Config(Config const* parent)
             : enabled_(parent->enabled_)
@@ -2139,16 +2133,6 @@ namespace detail {
             return *this;
         }
 
-        auto output() const -> std::function<void(std::string const&)>
-        {
-            std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            auto const& output = this->output_.value();
-            return [&output](std::string const& str) -> void
-            {
-                return output(str);
-            };
-        }
-
         // Gatekeeper function to emmit better error messages in invalid input.
         template <typename T>
         auto output(T&& t) ->
@@ -2163,16 +2147,6 @@ namespace detail {
         {
             this->set_output(std::forward<T>(t));
             return *this;
-        }
-
-        auto prefix() const -> std::function<std::string()>
-        {
-            std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            auto const& prefix = this->prefix_.value();
-            return [&prefix]() -> std::string
-            {
-                return prefix();
-            };
         }
 
         template <typename... Ts>
@@ -2225,12 +2199,6 @@ namespace detail {
             this->force_tuple_strategy_ = value;
             return *this;
         }
-        auto wide_string_transcoder() const ->
-            std::function<std::string(wchar_t const*, size_t)>
-        {
-            std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            return this->wide_string_transcoder_.value();
-        }
 
         auto wide_string_transcoder(
             std::function<std::string(wchar_t const*, size_t)>&& transcoder
@@ -2256,12 +2224,6 @@ namespace detail {
         }
       #endif
 
-        auto unicode_transcoder() const -> std::function<std::string(char32_t const*, size_t)>
-        {
-            std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            return this->unicode_transcoder_.value();
-        }
-
         auto unicode_transcoder(
             std::function<std::string(char32_t const*, size_t)>&& transcoder
         ) -> Config&
@@ -2285,12 +2247,6 @@ namespace detail {
             return *this;
         }
       #endif
-
-        auto output_transcoder() const -> std::function<std::string(char const*, size_t)>
-        {
-            std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            return this->output_transcoder_.value();
-        }
 
         auto output_transcoder(
             std::function<std::string(char const*, size_t)>&& transcoder
@@ -2353,14 +2309,7 @@ namespace detail {
             return *this;
         }
 
-    private:
-        friend auto detail::global_config() -> Config&;
-
-        static auto global() -> Config&
-        {
-            static Config global_{};
-            return global_;
-        }
+    protected:
 
         Config() = default;
 
@@ -2481,12 +2430,70 @@ namespace detail {
         detail::Hereditary<std::string> context_delimiter_{"- "};
     };
 
+
 namespace detail {
 
-    inline auto global_config() -> Config&
+    // Inherits from icecream::Config, and implements access to attributes which shoud not
+    // be exposed to public.
+    class Config_
+        : public ::icecream::Config
     {
-        return Config::global();
-    }
+    public:
+
+        using Config::Config;
+
+        constexpr static size_t INDENT_BASE = 4;
+
+        static auto global() -> Config_&
+        {
+            static Config_ global_{};
+            return global_;
+        }
+
+        auto output() const -> std::function<void(std::string const&)>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            auto const& output = this->output_.value();
+            return [&output](std::string const& str) -> void
+            {
+                return output(str);
+            };
+        }
+
+        auto prefix() const -> std::function<std::string()>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            auto const& prefix = this->prefix_.value();
+            return [&prefix]() -> std::string
+            {
+                return prefix();
+            };
+        }
+
+        auto wide_string_transcoder() const ->
+            std::function<std::string(wchar_t const*, size_t)>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->wide_string_transcoder_.value();
+        }
+
+        auto unicode_transcoder() const -> std::function<std::string(char32_t const*, size_t)>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->unicode_transcoder_.value();
+        }
+
+        auto output_transcoder() const -> std::function<std::string(char const*, size_t)>
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->output_transcoder_.value();
+        }
+
+    private:
+
+        Config_() = default;
+    };
+
 
     // -------------------------------------------------- Tree
 
@@ -2655,14 +2662,14 @@ namespace detail {
     }
 
     // char -> char
-    inline auto transcoder_dispatcher(Config const&, char const* str, size_t count) -> std::string
+    inline auto transcoder_dispatcher(Config_ const&, char const* str, size_t count) -> std::string
     {
         return std::string(str, count);
     }
 
     // wchar_t -> char
     inline auto transcoder_dispatcher(
-        Config const& config, wchar_t const* str, size_t count
+        Config_ const& config, wchar_t const* str, size_t count
     ) -> std::string
     {
         return config.wide_string_transcoder()(str, count);
@@ -2671,7 +2678,7 @@ namespace detail {
   #if defined(__cpp_char8_t)
     // char8_t -> char
     inline auto transcoder_dispatcher(
-        Config const& config, char8_t const* str, size_t count
+        Config_ const& config, char8_t const* str, size_t count
     ) -> std::string
     {
         auto const utf32_str = to_utf32(str, count);
@@ -2681,7 +2688,7 @@ namespace detail {
 
     // char16_t -> char
     inline auto transcoder_dispatcher(
-        Config const& config, char16_t const* str, size_t count
+        Config_ const& config, char16_t const* str, size_t count
     ) -> std::string
     {
         auto const utf32_str = to_utf32(str, count);
@@ -2690,7 +2697,7 @@ namespace detail {
 
     // char32_t -> char
     inline auto transcoder_dispatcher(
-        Config const& config, char32_t const* str, size_t count
+        Config_ const& config, char32_t const* str, size_t count
     ) -> std::string
     {
         return config.unicode_transcoder()(str, count);
@@ -2913,12 +2920,12 @@ namespace detail {
                 result = this->get_stem().open;
                 result += "\n";
 
-                auto const indent_lenght = indent_level * Config::INDENT_BASE ;
+                auto const indent_lenght = indent_level * Config_::INDENT_BASE ;
                 for (
                     auto it = this->get_stem().children.cbegin();
                     it != this->get_stem().children.cend();
                 ){
-                    result += std::string(indent_level * Config::INDENT_BASE, ' ');
+                    result += std::string(indent_level * Config_::INDENT_BASE, ' ');
 
                     if (indent_lenght + it->n_code_point <= line_wrap_width)
                     {
@@ -2943,7 +2950,7 @@ namespace detail {
                 }
 
                 result +=
-                    std::string((indent_level-1) * Config::INDENT_BASE, ' ')
+                    std::string((indent_level-1) * Config_::INDENT_BASE, ' ')
                     + this->get_stem().close;
             }
 
@@ -2955,7 +2962,7 @@ namespace detail {
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const&
+        T&& value, StringView fmt, Config_ const&
     ) ->
         typename std::enable_if<
             is_streamable<T>::value
@@ -3056,7 +3063,7 @@ namespace detail {
     // Print any class that specializes std::formatter<T, char>
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) ->
         typename std::enable_if<
             is_stl_formattable<T>::value
@@ -3097,7 +3104,7 @@ namespace detail {
     // Print any class that specializes fmt::formatter<T, char>
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) ->
         typename std::enable_if<
             is_fmt_formattable<T>::value
@@ -3128,7 +3135,7 @@ namespace detail {
     // Print C string
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
@@ -3163,7 +3170,7 @@ namespace detail {
     // Print std::string
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type
     {
         auto mb_ostrm = build_ostream(fmt);
@@ -3180,7 +3187,7 @@ namespace detail {
     // Print std::string_view
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type
     {
         using String = std::basic_string<typename remove_cvref_t<T>::value_type>;
@@ -3191,7 +3198,7 @@ namespace detail {
     // Print character
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
     {
         using C = remove_cvref_t<T>;
@@ -3250,7 +3257,7 @@ namespace detail {
     // Print signed and unsigned char
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const&
+        T&& value, StringView fmt, Config_ const&
     ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type
     {
         using T0 =
@@ -3271,7 +3278,7 @@ namespace detail {
     // Print smart pointers without an operator<<(ostream&) overload.
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
         // On C++20 unique_ptr will have a << overload.
         is_unstreamable_ptr<T>::value && !is_baseline_printable<T>::value,
@@ -3286,7 +3293,7 @@ namespace detail {
     // Print weak pointer classes
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type
     {
         return value.expired() ?
@@ -3297,7 +3304,7 @@ namespace detail {
     // Print std::optional<> classes
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
         is_optional<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
@@ -3310,7 +3317,7 @@ namespace detail {
 
     struct Visitor
     {
-        Visitor(StringView fmt, Config const& config)
+        Visitor(StringView fmt, Config_ const& config)
             : fmt_(fmt)
             , config_(config)
         {}
@@ -3322,13 +3329,13 @@ namespace detail {
         }
 
         StringView fmt_;
-        Config const& config_;
+        Config_ const& config_;
     };
 
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
         is_variant<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
@@ -3342,7 +3349,7 @@ namespace detail {
         int_sequence<N...>,
         T const& t,
         std::vector<StringView> const& fmt,
-        Config const& config
+        Config_ const& config
     ) -> std::vector<PrintingNode>
     {
         auto result = std::vector<PrintingNode>{};
@@ -3361,7 +3368,7 @@ namespace detail {
 
     template <typename T>
     auto do_print_tuple(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<!is_tuple<T>::value, PrintingNode>::type
     {
         ICECREAM_UNREACHABLE;
@@ -3370,7 +3377,7 @@ namespace detail {
 
     template <typename T>
     auto do_print_tuple(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_tuple<T>::value, PrintingNode>::type
     {
         auto const tuple_size = std::tuple_size<remove_cvref_t<T>>::value;
@@ -3439,7 +3446,7 @@ namespace detail {
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
         is_tuple<T>::value && !is_baseline_printable<T>::value,
         PrintingNode
@@ -3868,7 +3875,7 @@ namespace detail {
 
     template <typename T>
     auto do_print_range(
-        T&&, StringView, Config const&
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<!is_range<T>::value, PrintingNode>::type
     {
         ICECREAM_UNREACHABLE;
@@ -3876,7 +3883,7 @@ namespace detail {
     }
 
     template <typename T>
-    auto do_print_range(T&& value, StringView fmt, Config const& config//) -> PrintingNode
+    auto do_print_range(T&& value, StringView fmt, Config_ const& config//) -> PrintingNode
     ) -> typename std::enable_if<is_range<T>::value, PrintingNode>::type
     {
         auto range_fmt = StringView{};
@@ -3914,7 +3921,7 @@ namespace detail {
     // Print all elements of a range
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
         (
             is_range<T>::value
@@ -3934,7 +3941,7 @@ namespace detail {
     // Print classes deriving from only std::exception and not from boost::exception
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView, Config const&
+        T&& value, StringView, Config_ const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && !std::is_base_of<boost::exception, remove_cvref_t<T>>::value
@@ -3948,7 +3955,7 @@ namespace detail {
     // Print classes deriving from both std::exception and boost::exception
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView, Config const&
+        T&& value, StringView, Config_ const&
     ) -> typename std::enable_if<
         std::is_base_of<std::exception, remove_cvref_t<T>>::value
         && std::is_base_of<boost::exception, remove_cvref_t<T>>::value
@@ -3969,14 +3976,14 @@ namespace detail {
     static auto ds_this = static_cast<PrintingNode*>(nullptr);
     static auto ds_delayed_structs = std::vector<std::pair<std::string, std::function<void()>>>{};
     static auto ds_fmt_ref = StringView{};
-    static auto ds_config_ref = static_cast<Config const*>(nullptr);
+    static auto ds_config_ref = static_cast<Config_ const*>(nullptr);
     static auto ds_call_count = int{0};
     template<typename... T> auto parse_dump_struct(char const* format, T&& ...args) -> int;
 
     // Print classes using clang's __builtin_dump_struct (clang >= 15).
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config const& config
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_handled_by_clang_dump_struct<T>::value, PrintingNode>::type
     {
         // If this is the outermost class being printed
@@ -4226,7 +4233,7 @@ namespace detail {
             make_printing_branch(
                 std::declval<T const&>(),
                 std::declval<StringView>(),
-                std::declval<Config const&>()
+                std::declval<Config_ const&>()
             ),
             std::true_type{}
         );
@@ -4405,7 +4412,7 @@ namespace detail {
             auto const& arg_name = std::get<0>(*it);
             auto const& tree = std::get<1>(*it);
 
-            result += std::string(Config::INDENT_BASE, ' ') + arg_name.to_string() + ": ";
+            result += std::string(Config_::INDENT_BASE, ' ') + arg_name.to_string() + ": ";
             if (count_utf8_code_point(result) + tree.code_point_length() < line_wrap_width)
             {
                 result += tree.print();
@@ -4426,7 +4433,7 @@ namespace detail {
 
     template <typename... Ts>
     auto build_forest(
-        Config const& config, PrintingArgument<Ts>&... args
+        Config_ const& config, PrintingArgument<Ts>&... args
     ) -> std::vector<std::tuple<StringView, PrintingNode>>
     {
         auto forest = std::vector<std::tuple<StringView, PrintingNode>>{};
@@ -4444,7 +4451,7 @@ namespace detail {
 
     template <typename... Ts>
     auto print_args(
-        Config const& config,
+        Config_ const& config,
         StringView file,
         int line,
         StringView function,
@@ -4536,7 +4543,7 @@ namespace detail {
 
     // Handles the printing of a nullary IC() call.
     inline auto print_nullary(
-        Config const& config,
+        Config_ const& config,
         StringView file,
         int line,
         StringView function
@@ -4752,7 +4759,7 @@ namespace detail {
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, ""}
         Dispatcher(
             bool is_ic_apply,
-            Config const& config,
+            Config_ const& config,
             StringView file,
             int line,
             StringView function,
@@ -4772,7 +4779,7 @@ namespace detail {
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, }
         Dispatcher(
             bool is_ic_apply,
-            Config const& config,
+            Config_ const& config,
             StringView file,
             int line,
             StringView function,
@@ -4859,7 +4866,7 @@ namespace detail {
         }
 
         bool is_ic_apply_;
-        Config const& config_;
+        Config_ const& config_;
         StringView file_;
         int line_;
         StringView function_;
@@ -4876,7 +4883,7 @@ namespace detail {
         Proj proj;
         std::string elements_fmt;
         Optional<Slice> mb_slice;
-        Config const* config_ = nullptr;
+        Config_ const* config_ = nullptr;
         int line_;
         std::string src_location;
         std::string file_;
@@ -4894,7 +4901,7 @@ namespace detail {
         }
 
         auto complete(
-            Config& config,
+            Config_& config,
             int line,
             std::string file,
             std::string function
@@ -4966,7 +4973,7 @@ namespace detail {
         Proj proj;
         Optional<Slice> mb_slice;
         std::string elements_fmt;
-        Config const& config;
+        Config_ const& config;
         int line;
         std::string file;
         std::string function;
@@ -5218,7 +5225,8 @@ namespace detail {
 
 
 namespace {
-    auto& icecream_config_5f803a3bcdb4 = icecream::detail::global_config();
+    auto& icecream_config_5f803a3bcdb4 = icecream::detail::Config_::global();
+    auto& icecream_public_config_5f803a3bcdb4 = static_cast<::icecream::Config&>(icecream_config_5f803a3bcdb4);
 }
 
 #endif // ICECREAM_HPP_INCLUDED
