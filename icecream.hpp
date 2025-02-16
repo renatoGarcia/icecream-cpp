@@ -947,38 +947,40 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- StringView
 
-    class StringView
+    template <typename CharT>
+    class BasicStringView
     {
     public:
         static constexpr size_t npos = size_t(-1);
 
-        using value_type = char;
-
-        using iterator = char const*;
-
+        using traits_type = std::char_traits<CharT>;
+        using value_type = CharT;
+        using iterator = CharT const*;
         using reverse_iterator = std::reverse_iterator<iterator>;
 
-        StringView() = default;
+        BasicStringView() = default;
 
-        StringView(char const* s, size_t count)
+        BasicStringView(value_type const* s, size_t count)
             : s_{s}
             , count_{count}
         {}
 
-        StringView(char const* s)
+        BasicStringView(value_type const* s)
             : s_{s}
-            , count_{std::char_traits<char>::length(s)}
+            , count_{traits_type::length(s)}
         {}
 
-        StringView(std::string const& s)
+        BasicStringView(std::basic_string<CharT> const& s)
             : s_{s.data()}
             , count_{s.size()}
         {}
 
-        StringView(iterator first, iterator last)
+        BasicStringView(iterator first, iterator last)
             : s_{first}
             , count_{static_cast<size_t>(last - first)}
         {}
+
+        BasicStringView& operator=(BasicStringView const& other) = default;
 
         auto empty() const -> bool
         {
@@ -990,7 +992,7 @@ namespace icecream{ namespace detail
             return this->count_;
         }
 
-        auto data() const -> char const*
+        auto data() const -> value_type const*
         {
             return this->s_;
         }
@@ -1015,25 +1017,25 @@ namespace icecream{ namespace detail
             return reverse_iterator(this->s_);
         }
 
-        auto operator[](size_t idx) const -> char
+        auto operator[](size_t idx) const -> value_type
         {
             return this->s_[idx];
         }
 
-        auto front() const -> char
+        auto front() const -> value_type
         {
             return this->s_[0];
         }
 
-        auto back() const -> char
+        auto back() const -> value_type
         {
             return this->s_[this->count_ - 1];
         }
 
-        friend auto operator==(StringView lho, StringView rho) -> bool
+        friend auto operator==(BasicStringView lho, BasicStringView rho) -> bool
         {
             if (lho.count_ != rho.count_) return false;
-            return std::char_traits<char>::compare(lho.s_, rho.s_, lho.count_) == 0;
+            return traits_type::compare(lho.s_, rho.s_, lho.count_) == 0;
         }
 
         auto remove_prefix(size_t n) -> void
@@ -1047,19 +1049,19 @@ namespace icecream{ namespace detail
             this->count_ -= n;
         }
 
-        auto substr(size_t pos = 0, size_t count = npos) const -> StringView
+        auto substr(size_t pos = 0, size_t count = npos) const -> BasicStringView
         {
-            return StringView(this->s_ + pos, min(count, this->count_ - pos));
+            return BasicStringView(this->s_ + pos, min(count, this->count_ - pos));
         }
 
-        auto find(char const* s, size_t pos = npos) const -> size_t
+        auto find(value_type const* s, size_t pos = 0) const -> size_t
         {
             if (*s == '\0')
             {
                 return 0;  // Empty string is always found at index 0
             }
 
-            for (auto i = size_t{0}; i < this->count_; ++i)
+            for (auto i = pos; i < this->count_; ++i)
             {
                 if (this->s_[i] == s[0])
                 {
@@ -1080,7 +1082,7 @@ namespace icecream{ namespace detail
             return npos; // if not found
         }
 
-        auto rfind(char ch, size_t pos = npos) const -> size_t
+        auto rfind(value_type ch, size_t pos = npos) const -> size_t
         {
             auto const size = this->count_;
 
@@ -1128,15 +1130,23 @@ namespace icecream{ namespace detail
             this->count_ = c1 - c0;
         };
 
-        auto to_string() const -> std::string
+        auto to_string() const -> std::basic_string<CharT>
         {
             return std::string(this->s_, this->count_);
         }
 
     private:
-        char const* s_ = nullptr;
+        value_type const* s_ = nullptr;
         size_t count_ = 0;
     };
+
+    using StringView = BasicStringView<char>;
+    using WStringView = BasicStringView<wchar_t>;
+  #if defined(__cpp_char8_t)
+    using U8StringView = BasicStringView<char8_t>;
+  #endif
+    using U16StringView = BasicStringView<char16_t>;
+    using U32StringView = BasicStringView<char32_t>;
 
 
     // -------------------------------------------------- Variant
@@ -1647,11 +1657,11 @@ namespace icecream{ namespace detail
 
     // Transcode a UTF-16 string with char16_t code units to a UTF-32 string with char32_t
     // code units.
-    inline auto to_utf32(char16_t const* input, size_t count) -> std::u32string
+    inline auto to_utf32(U16StringView input) -> std::u32string
     {
         auto result = std::u32string{};
 
-        for (auto i = size_t{0}; i < count;)
+        for (auto i = size_t{0}; i < input.size();)
         {
             if ((input[i] - 0xD800u) >= 2048u)  // is not surrogate
             {
@@ -1660,7 +1670,7 @@ namespace icecream{ namespace detail
             }
             else if (
                 (input[i] & 0xFFFFFC00u) == 0xD800u  // is high surrogate
-                && (i + 1) < count
+                && (i + 1) < input.size()
                 && (input[i+1] & 0xFFFFFC00u) == 0xDC00u  // is low surrogate
             ){
                 auto const high = uint32_t{input[i]};
@@ -1741,12 +1751,12 @@ namespace icecream{ namespace detail
 
     // Transcode a UTF-8 string with char8_t code units to a UTF-32 string with char32_t
     // code units.
-    inline auto to_utf32(char8_t const* input, size_t count) -> std::u32string
+    inline auto to_utf32(U8StringView input) -> std::u32string
     {
         auto result = std::u32string{};
 
-        auto const* input_next = input;
-        auto const* input_end = input + count;
+        auto const* input_next = input.data();
+        auto const* input_end = input.data() + input.size();
 
         // Each call to utf8_decode must have at least 4 more readable elements on input.
         // Here we make sure that they are available.
@@ -1800,11 +1810,11 @@ namespace icecream{ namespace detail
 
     // Transcode a UTF-32 string with char32_t code units to a UTF-8 string with char code
     // units.
-    inline auto to_utf8_string(char32_t const* input, size_t count) -> std::string
+    inline auto to_utf8_string(U32StringView input) -> std::string
     {
         auto result = std::string{};
 
-        for (auto i = size_t{0}; i < count; ++i)
+        for (auto i = size_t{0}; i < input.size(); ++i)
         {
             if (input[i] < 0x80)
             {
@@ -1838,16 +1848,19 @@ namespace icecream{ namespace detail
         return result;
     }
 
+    // Converts a wide string to a "execution encoded" narrow multibyte char string, using
+    // the appropriate std::*rtomb function. This function will be used when the running
+    // program has set the current locale.
     template<typename CharT, size_t(*tomb)(char*, CharT, mbstate_t*)>
-    auto xrtomb(CharT const* str, size_t count) -> std::string
+    auto xrtomb(BasicStringView<CharT> str) -> std::string
     {
         auto result = std::string{};
 
         auto state = std::mbstate_t{};
-        for (auto i = size_t{0}; i <= count; ++i)
+        for (auto c : str)
         {
             auto mb = std::string(MB_CUR_MAX, '\0');
-            if (tomb(&mb[0], str[i], &state) == static_cast<size_t>(-1))
+            if (tomb(&mb[0], c, &state) == static_cast<size_t>(-1))
             {
                 result.append("<?>");
             }
@@ -2205,7 +2218,11 @@ namespace icecream{ namespace detail
         ) -> Config&
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            this->wide_string_transcoder_ = std::move(transcoder);
+            this->wide_string_transcoder_ =
+                [transcoder](detail::WStringView str) -> std::string
+                {
+                    return transcoder(str.data(), str.size());
+                };
             return *this;
         }
 
@@ -2216,9 +2233,9 @@ namespace icecream{ namespace detail
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
             this->wide_string_transcoder_ =
-                [transcoder](wchar_t const* str, size_t count) -> std::string
+                [transcoder](detail::WStringView str) -> std::string
                 {
-                    return transcoder({str, count});
+                    return transcoder({str.data(), str.size()});
                 };
             return *this;
         }
@@ -2229,7 +2246,11 @@ namespace icecream{ namespace detail
         ) -> Config&
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            this->unicode_transcoder_ = std::move(transcoder);
+            this->unicode_transcoder_ =
+                [transcoder](detail::U32StringView str) -> std::string
+                {
+                    return transcoder(str.data(), str.size());
+                };
             return *this;
         }
 
@@ -2240,9 +2261,9 @@ namespace icecream{ namespace detail
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
             this->unicode_transcoder_ =
-                [transcoder](char32_t const* str, size_t count) -> std::string
+                [transcoder](detail::U32StringView str) -> std::string
                 {
-                    return transcoder({str, count});
+                    return transcoder({str.data(), str.size()});
                 };
             return *this;
         }
@@ -2253,7 +2274,11 @@ namespace icecream{ namespace detail
         ) -> Config&
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            this->output_transcoder_ = std::move(transcoder);
+            this->output_transcoder_ =
+                [transcoder](detail::StringView str) -> std::string
+                {
+                    return transcoder(str.data(), str.size());
+                };
             return *this;
         }
 
@@ -2262,9 +2287,9 @@ namespace icecream{ namespace detail
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
             this->output_transcoder_ =
-                [transcoder](char const* str, size_t count) -> std::string
+                [transcoder](detail::StringView str) -> std::string
                 {
-                    return transcoder({str, count});
+                    return transcoder({str.data(), str.size()});
                 };
             return *this;
         }
@@ -2368,14 +2393,13 @@ namespace icecream{ namespace detail
 
         detail::Hereditary<bool> force_tuple_strategy_{true};
 
-        detail::Hereditary<std::function<std::string(wchar_t const*, size_t)>>
-        wide_string_transcoder_{
-            [](wchar_t const* str, size_t count) -> std::string
+        detail::Hereditary<std::function<std::string(detail::WStringView)>> wide_string_transcoder_{
+            [](detail::WStringView str) -> std::string
             {
                 auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
                 if (c_locale != "C" && c_locale != "POSIX")
                 {
-                    return detail::xrtomb<wchar_t, std::wcrtomb>(str, count);
+                    return detail::xrtomb<wchar_t, std::wcrtomb>(str);
                 }
                 else
                 {
@@ -2384,11 +2408,19 @@ namespace icecream{ namespace detail
                     case 2:
                         {
                             auto const utf32_str =
-                                detail::to_utf32(reinterpret_cast<char16_t const*>(str), count);
-                            return detail::to_utf8_string(utf32_str.data(), utf32_str.size());
+                                detail::to_utf32(
+                                    detail::U16StringView(
+                                        reinterpret_cast<char16_t const*>(str.data()), str.size()
+                                    )
+                                );
+                            return detail::to_utf8_string(utf32_str);
                         }
                     case 4:
-                        return detail::to_utf8_string(reinterpret_cast<char32_t const*>(str), count);
+                        return detail::to_utf8_string(
+                            detail::U32StringView(
+                                reinterpret_cast<char32_t const*>(str.data()), str.size()
+                            )
+                        );
                     default:
                         return "<?>";
                     }
@@ -2396,30 +2428,28 @@ namespace icecream{ namespace detail
             }
         };
 
-        detail::Hereditary<std::function<std::string(char32_t const*, size_t)>>
-        unicode_transcoder_{
-            [](char32_t const* str, size_t count) -> std::string
+        detail::Hereditary<std::function<std::string(detail::U32StringView str)>> unicode_transcoder_{
+            [](detail::U32StringView str) -> std::string
             {
               #ifdef ICECREAM_CUCHAR_HEADER
                 auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
                 if (c_locale != "C" && c_locale != "POSIX")
                 {
-                    return detail::xrtomb<char32_t, std::c32rtomb>(str, count);
+                    return detail::xrtomb<char32_t, std::c32rtomb>(str);
                 }
                 else
               #endif
                 {
-                    return detail::to_utf8_string(str, count);
+                    return detail::to_utf8_string(str);
                 }
             }
         };
 
         // Function to convert a string in "execution encoding" to "output encoding"
-        detail::Hereditary<std::function<std::string(char const*, size_t)>>
-        output_transcoder_{
-            [](char const* str, size_t count) -> std::string
+        detail::Hereditary<std::function<std::string(detail::StringView)>> output_transcoder_{
+            [](detail::StringView str) -> std::string
             {
-                return std::string(str, count);
+                return str.to_string();
             }
         };
 
@@ -2470,20 +2500,19 @@ namespace detail {
             };
         }
 
-        auto wide_string_transcoder() const ->
-            std::function<std::string(wchar_t const*, size_t)>
+        auto wide_string_transcoder() const -> std::function<std::string(WStringView)>
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
             return this->wide_string_transcoder_.value();
         }
 
-        auto unicode_transcoder() const -> std::function<std::string(char32_t const*, size_t)>
+        auto unicode_transcoder() const -> std::function<std::string(U32StringView)>
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
             return this->unicode_transcoder_.value();
         }
 
-        auto output_transcoder() const -> std::function<std::string(char const*, size_t)>
+        auto output_transcoder() const -> std::function<std::string(StringView)>
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
             return this->output_transcoder_.value();
@@ -2662,45 +2691,35 @@ namespace detail {
     }
 
     // char -> char
-    inline auto transcoder_dispatcher(Config_ const&, char const* str, size_t count) -> std::string
+    inline auto transcoder_dispatcher(Config_ const&, StringView str) -> std::string
     {
-        return std::string(str, count);
+        return str.to_string();
     }
 
     // wchar_t -> char
-    inline auto transcoder_dispatcher(
-        Config_ const& config, wchar_t const* str, size_t count
-    ) -> std::string
+    inline auto transcoder_dispatcher(Config_ const& config, WStringView str) -> std::string
     {
-        return config.wide_string_transcoder()(str, count);
+        return config.wide_string_transcoder()(str);
     }
 
   #if defined(__cpp_char8_t)
     // char8_t -> char
-    inline auto transcoder_dispatcher(
-        Config_ const& config, char8_t const* str, size_t count
-    ) -> std::string
+    inline auto transcoder_dispatcher(Config_ const& config, U8StringView str) -> std::string
     {
-        auto const utf32_str = to_utf32(str, count);
-        return config.unicode_transcoder()(utf32_str.data(), utf32_str.size());
+        return config.unicode_transcoder()(to_utf32(str));
     }
   #endif
 
     // char16_t -> char
-    inline auto transcoder_dispatcher(
-        Config_ const& config, char16_t const* str, size_t count
-    ) -> std::string
+    inline auto transcoder_dispatcher(Config_ const& config, U16StringView str) -> std::string
     {
-        auto const utf32_str = to_utf32(str, count);
-        return config.unicode_transcoder()(utf32_str.data(), utf32_str.size());
+        return config.unicode_transcoder()(to_utf32(str));
     }
 
     // char32_t -> char
-    inline auto transcoder_dispatcher(
-        Config_ const& config, char32_t const* str, size_t count
-    ) -> std::string
+    inline auto transcoder_dispatcher(Config_ const& config, U32StringView str) -> std::string
     {
-        return config.unicode_transcoder()(str, count);
+        return config.unicode_transcoder()(str);
     }
 
     class PrintingNode
@@ -3153,11 +3172,7 @@ namespace detail {
                     >::type
                 >::type;
 
-            *mb_ostrm << '"'
-                << transcoder_dispatcher(
-                    config, value, std::char_traits<CharT>::length(value)
-                )
-                << '"';
+            *mb_ostrm << '"' << transcoder_dispatcher(config, value) << '"';
         }
         else
         {
@@ -3179,7 +3194,7 @@ namespace detail {
             return PrintingNode("*Error* on formatting string");
         }
 
-        *mb_ostrm << '"' << transcoder_dispatcher(config, value.data(), value.size()) << '"';
+        *mb_ostrm << '"' << transcoder_dispatcher(config, value) << '"';
         return PrintingNode(mb_ostrm->str());
     }
 
@@ -3245,7 +3260,7 @@ namespace detail {
             break;
 
         default:
-            str = transcoder_dispatcher(config, &value, 1);
+            str = transcoder_dispatcher(config, BasicStringView<C>(&value, 1));
             break;
         }
 
@@ -4462,12 +4477,6 @@ namespace detail {
     {
         if (!config.is_enabled()) return;
 
-        auto const output_transcoder =
-            [&config](std::string const& str) -> std::string
-            {
-                return config.output_transcoder()(str.data(), str.size());
-            };
-
         auto const prefix = config.prefix()();
         auto const context =
             [&]() -> std::string
@@ -4524,7 +4533,7 @@ namespace detail {
         if (one_line_forest_n_code_points > config.line_wrap_width())
         {
             config.output()(
-                output_transcoder(
+                config.output_transcoder()(
                     print_multi_line_forest(prefix, context, forest, config.line_wrap_width())
                 )
             );
@@ -4532,13 +4541,13 @@ namespace detail {
         else
         {
             config.output()(
-                output_transcoder(
+                config.output_transcoder()(
                     print_one_line_forest(prefix, context, delimiter, forest)
                 )
             );
         }
 
-        config.output()(output_transcoder("\n"));
+        config.output()(config.output_transcoder()("\n"));
     }
 
     // Handles the printing of a nullary IC() call.
@@ -4571,7 +4580,7 @@ namespace detail {
             }();
 
         auto const str = prefix + context + "\n";
-        config.output()(config.output_transcoder()(str.data(), str.size()));
+        config.output()(config.output_transcoder()(str));
     }
 
     /** This function will receive a string as "foo, bar, baz" and return a vector with
