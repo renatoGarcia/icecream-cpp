@@ -18,6 +18,7 @@ and forward.
   * [Range views pipeline](#range-views-pipeline)
   * [Return value and IceCream apply macro](#return-value-and-icecream-apply-macro)
   * [Output formatting](#output-formatting)
+  * [C strings](#c-strings)
   * [Character Encoding](#character-encoding)
   * [Configuration](#configuration)
      * [enable/disable](#enabledisable)
@@ -33,17 +34,17 @@ and forward.
      * [include_context](#include_context)
      * [context_delimiter](#context_delimiter)
   * [Printing strategies](#printing-strategies)
-     * [C strings](#c-strings)
-     * [Wide strings](#wide-strings)
-     * [Unicode strings](#unicode-strings)
-     * [Baseline printable types](#baseline-printable-types)
+     * [IOStreams](#iostreams)
+     * [Formatting library](#formatting-library)
+     * [{fmt}](#fmt-1)
+     * [Characters](#characters)
      * [Pointer like types](#pointer-like-types)
      * [Range types](#range-types)
      * [Tuple like types](#tuple-like-types)
      * [Optional types](#optional-types)
      * [Variant types](#variant-types)
      * [Exception types](#exception-types)
-     * [Not streamable types](#not-streamable-types-clang-only)
+     * [Clang dump struct](#clang-dump-struct)
   * [Third-party libraries](#third-party-libraries)
 * [Pitfalls](#pitfalls)
 
@@ -454,6 +455,52 @@ To `IC_FV`, the formatting syntax if the same as the [Range format
 string](#range-format-string).
 
 
+### C strings
+
+C strings are ambiguous. Should a `char* foo` variable be interpreted as a pointer to a
+single `char` or as a null-terminated string? Likewise, is the `char bar[]` variable an
+array of single characters or a null-terminated string? Is `char baz[3]` an array with
+three single characters or is it a string of size two plus a `'\0'`?
+
+Each one of those interpretations of `foo`, `bar`, and `baz` would be printed in a
+distinct way. To the code:
+
+```C++
+char flavor[] = "pistachio";
+IC(flavor);
+```
+
+all three outputs below are correct, each one having a distinct interpretation of what
+should be the `flavor` variable.
+
+```
+ic| flavor: 0x55587b6f5410
+ic| flavor: ['p', 'i', 's', 't', 'a', 'c', 'h', 'i', 'o', '\0']
+ic| flavor: "pistachio"
+```
+
+The Icecream-cpp policy is to handle any bounded `char` array (i.e.: array with a known
+size) as an array of single characters. So the code:
+
+```C++
+char flavor[] = "chocolate";
+IC(flavor);
+```
+
+will print:
+
+```
+ic| flavor: ['c', 'h', 'o', 'c', 'o', 'l', 'a', 't', 'e', '\0']
+```
+
+unbounded `char[]` arrays (i.e.: array with an unknown size) will decay to `char*`
+pointers, and will be printed either as a string or a pointer as configured by the
+[show_c_string](#show_c_string) option.
+
+The exact same logic as above applies to C strings of all character types, namely `char`,
+`wchar_t`, `char8_t`, `char16_t`, and `char32_t`.
+
+
 ### Character Encoding
 
 Character encoding in C++ is messy.
@@ -701,12 +748,10 @@ ic| flavor: 0x55587b6f5410
 #### force_range_strategy
 
 Controls if a range type `T` will be printed using the [range type](#range-types) strategy
-even when the [STL formatting](https://en.cppreference.com/w/cpp/utility/format) or
-[{fmt}](https://fmt.dev) libraries would be able to print it. As stated at the [baseline
-printable](#baseline-printable-types) strategy section: if able to print a type, it should
-be the strategy taking precedence. Nonetheless we force the *range type* strategy here
-because it supports more useful formatting options that would be available otherwise if
-using the *baseline* strategy.
+even when the [Formatting](https://en.cppreference.com/w/cpp/utility/format) or
+[{fmt}](https://fmt.dev) libraries would be able to print it. We force the use of *range
+type* strategy here because it supports more useful formatting options that would be
+available otherwise if using some *baseline strategy*.
 
 This option has a default value of `true`.
 
@@ -722,13 +767,11 @@ This option has a default value of `true`.
 #### force_tuple_strategy
 
 Controls if a tuple like type `T` will be printed using the [tuple like
-types](#tuple-like-types) strategy even when the [STL
-formatting](https://en.cppreference.com/w/cpp/utility/format) or [{fmt}](https://fmt.dev)
-libraries would be able to print it. As stated at the [baseline
-printable](#baseline-printable-types) strategy section: if able to print a type, it should
-be the strategy taking precedence. Nonetheless we force the *range type* strategy here
+types](#tuple-like-types) strategy even when the
+[Formatting](https://en.cppreference.com/w/cpp/utility/format) or [{fmt}](https://fmt.dev)
+libraries would be able to print it. We force the use of *tuple like types* strategy here
 because it supports more useful formatting options that would be available otherwise if
-using the *baseline* strategy.
+using some *baseline strategy*.
 
 This option has a default value of `true`.
 
@@ -845,124 +888,34 @@ The string separating the context text from the variables values. Default value 
 
 ### Printing strategies
 
-In order to be printable, a type `T` must satisfy one of the strategies described in the
-next sections. If it happens that multiple strategies are satisfied, the one with the
-higher precedence will be chosen.
+In order to be printable, a type `T` must satisfy at least one of the strategies described
+in the next sections. If a type `T` is not printable, it can be mended by adding support
+to one of the "baseline strategies": [IOStreams](#iostreams), [Formatting
+library](#formatting-library), and [{fmt}](#fmt-1).
 
-The strategy with the highest precedence is to use the [STL stream-based
-I/O](https://en.cppreference.com/w/cpp/io). Consequently, when printing an object of type
-`T`, if there exist an overloaded function `operator<<(ostream&, T)`, it will be used.
-
-
-#### C strings
-
-C strings are ambiguous. Should a `char* foo` variable be interpreted as a pointer to a
-single `char` or as a null-terminated string? Likewise, is the `char bar[]` variable an
-array of single characters or a null-terminated string? Is `char baz[3]` an array with
-three single characters or is it a string of size two plus a `'\0'`?
-
-Each one of those interpretations of `foo`, `bar`, and `baz` would be printed in a
-distinct way. To the code:
-
-```C++
-char flavor[] = "pistachio";
-IC(flavor);
-```
-
-all three outputs below are correct, each one having a distinct interpretation of what
-should be the `flavor` variable.
-
-```
-ic| flavor: 0x55587b6f5410
-ic| flavor: ['p', 'i', 's', 't', 'a', 'c', 'h', 'i', 'o', '\0']
-ic| flavor: "pistachio"
-```
-
-The IceCream-Cpp policy is handle any bounded `char` array (i.e.: array with a known size)
-as an array of single characters. So the code:
-
-```C++
-char flavor[] = "chocolate";
-IC(flavor);
-```
-
-will print:
-
-```
-ic| flavor: ['c', 'h', 'o', 'c', 'o', 'l', 'a', 't', 'e', '\0']
-```
-
-unbounded `char[]` arrays (i.e.: array with an unknown size) will decay to `char*`
-pointers, and will be printed either as a string or a pointer as configured by the
-[show_c_string](#show_c_string) option.
+If it happens that multiple strategies are simultaneously satisfied, the one with the
+higher precedence will be chosen. Within the "baseline strategies", the precedence order
+is: *{fmt}*, *Formatting library*, and *IOStreams*. The precedence criteria other than
+these are discussed in each strategy section.
 
 
-#### Wide strings
+#### IOStreams
 
-Any realization of `wchar_t` strings, like `wchar_t*`, `std::wstring`, and `std::string_view`
+Uses the [STL IOStream](https://en.cppreference.com/w/cpp/io) library to print values. A
+type `T` is eligible to this strategy if there exist a function overload
+[`operator<<(ostream&,
+<SOME_TYPE>)`](https://en.cppreference.com/w/cpp/io/basic_ostream/operator_ltlt), where a
+value of type `T` is accepted as `<SOME_TYPE>`.
 
-Since the [output](#output) expects a `char` string, we must convert the text data to that
-format, making sure that it is in "execution encoding". Icecream-cpp implements a default
-transcoder function for doing that, but is possible to customize it by setting the
-[wide_string_transcoder](#wide_string_transcoder) option.
-
-
-#### Unicode strings
-
-Any realization of `char8_t`, `char16_t`, and `char32_t` strings, like `char32_t*`,
-`std::u8string`, and `std::u16string_view`
-
-Since the [output](#output) expects a `char` string, we must convert the data to that
-format, making sure that it is in "execution encoding". Icecream-cpp implements a default
-transcoder function for doing that, but is possible to customize it by setting the
-[unicode_transcoder](#unicode_transcoder) option.
-
-
-#### Baseline printable types
-
-A type `T` is *baseline printable* if it is printable through any one of [STL
-IOStream](https://en.cppreference.com/w/cpp/io), [STL
-formatting](https://en.cppreference.com/w/cpp/utility/format), or [{fmt}](https://fmt.dev)
-libraries.
-
-The IOStream and formatting libraries as part of the C++ standard library, and will be
-used if available at the current C++ version. The {fmt} library however is a third-party
-library, and need be available and enabled to be supported by Icecream-cpp. An explanation
-on this is at ["third-party libraries"](#third-party-libraries) section.
-
-There are more subtlety to it, that can be better checked at the official documentations,
-but roughly speaking a type `T` is formattable by: *STL IOStrea* if there exist a
-function overload [`operator<<(ostream&,
-T)`](https://en.cppreference.com/w/cpp/io/basic_ostream/operator_ltlt), by *STL formatting
-library* if there exist a struct specialization
-[`std::formatter<T>`](https://en.cppreference.com/w/cpp/utility/format/formatter), and by
-*{fmt} library* if there exist either a struct specialization
-[`fmt::formatter<T>`](https://fmt.dev/latest/api/#formatting-user-defined-types) or a
-function overload [`auto
-format_as(T)`](https://fmt.dev/latest/api/#formatting-user-defined-types).
-
-The *baseline printable* is the strategy with the highest precedence. If the type `T` is
-printable by any of the three baseline libraries, this will be the chosen strategy. If the
-type `T` is printable by more than one of the three baseline libraries, the precedence
-order from the highest to the lowest is: *{fmt} library*, *STL formatting library*, and
-*STL stream-based I/O*.
-
-There are, however, two exceptions where the printing precedence of *baseline printable*
-strategy can be surpassed, when the printing type is a *range* or a *tuple like*. Both
-exceptions are configurable by the [force_range_strategy](#force_range_strategy) and
-[force_tuple_strategy](#force_tuple_strategy) options.
-
-The *baseline printable* format string is forwarded unchanged to the *STL formatting
-library* and *{fmt} library*. The [stream-based I/O](https://en.cppreference.com/w/cpp/io)
-library, on the other hand, hasn't the concept of a *formatting string*, and when using it
-all the configurations are done with
-[manipulators](https://en.cppreference.com/w/cpp/io/manip). Because of that, we have
-created a custom formatting string syntax, strongly based on
-[{fmt}](https://fmt.dev/11.0/syntax/#format-specification-mini-language) and [STL
-Formatting](https://en.cppreference.com/w/cpp/utility/format/spec).
-
+Within the "baseline strategies" the IOStreams has the lowest precedence. So if a type is
+supported either by [{fmt}](#fmt-1) or [Formatting library](#formatting-library) they will
+be used instead.
 
 ##### IOStreams format string
+
+The format string of IOStreams strategy is strongly based on the ones of [STL
+Formatting](https://en.cppreference.com/w/cpp/utility/format/spec) and
+[{fmt}](https://fmt.dev/11.0/syntax/#format-specification-mini-language).
 
 It has the following specification:
 
@@ -973,7 +926,7 @@ align       ::=  "<" | ">" | "^"
 sign        ::=  "+" | "-"
 width       ::=  integer
 precision   ::=  integer
-type        ::=  "a" | "A" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X"
+type        ::=  "a" | "A" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X" | "?"
 integer     ::=  digit+
 digit       ::=  "0"..."9"
 ```
@@ -1034,6 +987,14 @@ precision is specified.
 
 Determines how the data should be presented.
 
+The available character presentation types are:
+
+| Symbol | Meaning                                                               |
+|--------|-----------------------------------------------------------------------|
+| `'c'`  | Character format.                                                     |
+| `'?'`  | Debug format. The character is quoted and special characters escaped. |
+| none   | The same as `'?'`.                                                    |
+
 The available integer presentation types are:
 
 | Symbol | Meaning                                                                                                                                                                   |
@@ -1061,6 +1022,56 @@ The available presentation types for floating-point values are:
 | `'G'`  | General format. Same as 'g' except switches to 'E' if the number gets too large. The representations of infinity and NaN are uppercased, too.                                                                                                                               |
 
 
+#### Formatting library
+
+Uses the [STL formatting](https://en.cppreference.com/w/cpp/utility/format) library to
+print values. A type `T` is eligible to this strategy if there exist a struct
+specialization
+[`std::formatter<T>`](https://en.cppreference.com/w/cpp/utility/format/formatter).
+
+Within the "baseline strategies" the [{fmt}](#fmt-1) has precedence over [Formatting
+library](#formatting-library), so if a type is supported by both, the *{fmt}* will be used
+instead.
+
+##### Formatting library format string
+
+The format string is forwarded to the *STL Formatting* library. Its syntax can be checked
+[here](https://en.cppreference.com/w/cpp/utility/format/spec).
+
+
+#### {fmt}
+
+Uses the [{fmt}](https://fmt.dev) library to print values. A type `T` is eligible to this
+strategy if there exist either a struct specialization
+[`fmt::formatter<T>`](https://fmt.dev/latest/api/#formatting-user-defined-types) or a
+function overload [`auto
+format_as(T)`](https://fmt.dev/latest/api/#formatting-user-defined-types).
+
+{fmt} is a third-party library, so it needs to be available at the system and enabled to
+be supported by Icecream-cpp. An explanation of this is in the ["third-party
+libraries"](#third-party-libraries) section.
+
+##### {fmt} format string
+
+The format string is forwarded to the *{fmt}* library. Its syntax can be checked
+[here](https://fmt.dev/11.0/syntax/#format-specification-mini-language).
+
+
+#### Characters
+
+All character types: `char`, `wchar_t`, `char8_t`, `char16_t`, and `char32_t`. This
+strategy will [transcode](#character-encoding) any other character type to a `char`, using
+either [wide_string_transcoder](#wide_string_transcoder) or
+[unicode_transcoder](#unicode_transcoder) as appropriated, and after that it will delegate
+the actual printing to the [IOStreams](#iostreams) strategy.
+
+This strategy has higher precedence than all the "baseline strategies".
+
+##### Characters format string
+
+The same as the [IOStreams format string](#iostreams-format-string).
+
+
 #### Pointer like types
 
 The `std::unique_ptr<T>` (before C++20) and `boost::scoped_ptr<T>` types will be printed
@@ -1084,6 +1095,9 @@ will print:
 ic| v1: 0x55bcbd840ec0
 ic| v1: expired
 ```
+
+This strategy has a lower precedence than the "baseline strategies". So if the printing
+type is supported by any one of them it will used instead.
 
 #### Range types
 
@@ -1112,6 +1126,9 @@ will print:
 A `view` is close concept to `ranges`. Refer to the [range views
 pipeline](#range-views-pipeline) section to see how to print them.
 
+This strategy has a higher precedence than the "baseline strategies", so if the printing
+of a type is supported by both, this strategy will be used instead. This precedence can be
+disabled by the [force_range_strategy](#force_range_strategy) configuration.
 
 ##### Range format string
 
@@ -1178,6 +1195,10 @@ will print:
 ```
 ic| v0: (10, 3.14), v1: (7, 6.28, "bla")
 ```
+
+This strategy has a higher precedence than the "baseline strategies", so if the printing
+of a type  supported by both, this strategy will be used instead. This precedence can be
+disabled by the [Tuple like types](#tuple-like-types) configuration.
 
 ##### Tuple like format string
 
@@ -1248,6 +1269,8 @@ will print:
 ic| v0: 10, v1: nullopt
 ```
 
+This strategy has a lower precedence than the "baseline strategies". So if the printing
+type is supported by any one of them it will used instead.
 
 #### Variant types
 
@@ -1267,6 +1290,8 @@ will print:
 ic| v0: 4.2
 ```
 
+This strategy has a lower precedence than the "baseline strategies". So if the printing
+type is supported by any one of them it will used instead.
 
 #### Exception types
 
@@ -1287,7 +1312,10 @@ will print:
 ic| v0: error description
 ```
 
-#### Not streamable types (Clang only)
+This strategy has a lower precedence than the "baseline strategies". So if the printing
+type is supported by any one of them it will used instead.
+
+#### Clang dump struct
 
 If using Clang >= 15, a class will be printable even without an `operator<<(ostream&, T)` overload.
 
@@ -1308,17 +1336,20 @@ will print:
 ic| s: {f: 3.14, ii: [1, 2, 3]}
 ```
 
+This strategy has a lower precedence than the "baseline strategies". So if the printing
+type is supported by any one of them it will used instead.
+
 ### Third-party libraries
 
-The Icecream-cpp doesn't have any dependency on external libraries besides the C++
-standard library. However, it optionally supports printing some types of
+The Icecream-cpp doesn't have any required dependency on external libraries besides the
+C++ standard library. However, it optionally supports printing some types of
 [Boost](https://www.boost.org/) and [Range-v3](https://ericniebler.github.io/range-v3/)
 libraries, as well as using the [{fmt}](https://fmt.dev) library alongside the STL's
 [IOStreams](https://en.cppreference.com/w/cpp/io#Stream-based_I.2FO) and
 [formatting](https://en.cppreference.com/w/cpp/utility/format) libraries.
 
-None of these external libraries are necessary for Icecream-cpp to work, and no action is
-required if anyone of them is not available.
+None of these external libraries are necessary for Icecream-cpp to work properly, and no
+action is required if anyone of them is not available.
 
 #### Boost
 

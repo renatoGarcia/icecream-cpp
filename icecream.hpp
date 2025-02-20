@@ -1132,7 +1132,7 @@ namespace icecream{ namespace detail
 
         auto to_string() const -> std::basic_string<CharT>
         {
-            return std::string(this->s_, this->count_);
+            return std::basic_string<CharT>(this->s_, this->count_);
         }
 
     private:
@@ -1147,7 +1147,6 @@ namespace icecream{ namespace detail
   #endif
     using U16StringView = BasicStringView<char16_t>;
     using U32StringView = BasicStringView<char32_t>;
-
 
     // -------------------------------------------------- Variant
 
@@ -1476,8 +1475,8 @@ namespace icecream{ namespace detail
         typename std::enable_if<
             is_stl_formattable<T>::value
             && !is_fmt_formattable<T>::value
-            && !is_c_string<T>::value
             && !is_character<T>::value
+            && !is_c_string<T>::value
             && !is_xsig_char<T>::value
             && !is_std_string<T>::value
             && !is_string_view<T>::value
@@ -1655,161 +1654,121 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- Character transcoders
 
-    // Transcode a UTF-16 string with char16_t code units to a UTF-32 string with char32_t
-    // code units.
-    inline auto to_utf32(U16StringView input) -> std::u32string
+    // Read the next UTF-16 char16_t code units and convert them to a UTF-32 char32_t.
+    //
+    // Returns an updated StringView without the processed code units, and a char32_t if
+    // successfully converted or a char16_t with the invalid code unit otherwise.
+    inline auto to_codepoint(U16StringView input)
+        -> std::tuple<U16StringView, Variant<char32_t, char16_t>>
     {
-        auto result = std::u32string{};
-
-        for (auto i = size_t{0}; i < input.size();)
+        if ((input[0] - 0xD800u) >= 2048u)  // is not surrogate
         {
-            if ((input[i] - 0xD800u) >= 2048u)  // is not surrogate
-            {
-                result.push_back(input[i]);
-                i += 1;
-            }
-            else if (
-                (input[i] & 0xFFFFFC00u) == 0xD800u  // is high surrogate
-                && (i + 1) < input.size()
-                && (input[i+1] & 0xFFFFFC00u) == 0xDC00u  // is low surrogate
-            ){
-                auto const high = uint32_t{input[i]};
-                auto const low = uint32_t{input[i+1]};
-                auto const codepoint = char32_t{(high << 10) + low - 0x35FDC00u};
-                result.push_back(codepoint);
-                i += 2;
-            }
-            else
-            {
-                // Encoding error, print the REPLACEMENT CHARACTER
-                result.push_back(0xFFFD);
-                i += 1;
-            }
+            auto const codepoint = char32_t{input[0]};
+            return std::make_tuple(input.substr(1), codepoint);
         }
-
-        return result;
+        else if (
+            (input[0] & 0xFFFFFC00u) == 0xD800u  // is high surrogate
+            && input.size() >= 2
+            && (input[1] & 0xFFFFFC00u) == 0xDC00u  // is low surrogate
+        ){
+            auto const high = uint32_t{input[0]};
+            auto const low = uint32_t{input[1]};
+            auto const codepoint = char32_t{(high << 10) + low - 0x35FDC00u};
+            return std::make_tuple(input.substr(2), codepoint);
+        }
+        else
+        {
+            // Encoding error
+            return std::make_tuple(input.substr(1), input[0]);
+        }
     }
 
   #if defined(__cpp_char8_t)
-    /* Decode the next character, C, from BUF, reporting errors in E.
-     *
-     * Since this is a branchless decoder, four bytes will be read from the
-     * buffer regardless of the actual length of the next character. This
-     * means the buffer _must_ have at least three bytes of zero padding
-     * following the end of the data stream.
-     *
-     * Errors are reported in E, which will be non-zero if the parsed
-     * character was somehow invalid: invalid byte sequence, non-canonical
-     * encoding, or a surrogate half.
-     *
-     * The function returns a pointer to the next character. When an error
-     * occurs, this pointer will be a guess that depends on the particular
-     * error, but it will always advance at least one byte.
-     */
-    // https://nullprogram.com/blog/2017/10/06/
-    inline auto utf8_decode(char8_t const* buf, uint32_t* c, int* e) -> char8_t const*
+    // Reads the next UTF-8 char8_t code units and convert them to a UTF-32 char32_t.
+    // `input` MUST not be empty.
+    //
+    // Returns an updated StringView without the processed code units, and a char32_t if
+    // successfully converted or a char8_t with the invalid code unit otherwise.
+    inline auto to_codepoint(U8StringView input)
+        -> std::tuple<U8StringView, Variant<char32_t, char8_t>>
     {
-        static const char lengths[] = {
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 3, 3, 4, 0
-        };
-        static const int masks[]  = {0x00, 0x7f, 0x1f, 0x0f, 0x07};
-        static const uint32_t mins[] = {4194304, 0, 128, 2048, 65536};
-        static const int shiftc[] = {0, 18, 12, 6, 0};
-        static const int shifte[] = {0, 6, 4, 2, 0};
-
-        char8_t const* s = buf;
-        int len = lengths[s[0] >> 3];
-
-        /* Compute the pointer to the next character early so that the next
-         * iteration can start working on the next character. Neither Clang
-         * nor GCC figure out this reordering on their own.
-         */
-        char8_t const* next = s + len + !len;
-
-        /* Assume a four-byte character and load four bytes. Unused bits are
-         * shifted out.
-         */
-        *c  = (uint32_t)(s[0] & masks[len]) << 18;
-        *c |= (uint32_t)(s[1] & 0x3f) << 12;
-        *c |= (uint32_t)(s[2] & 0x3f) <<  6;
-        *c |= (uint32_t)(s[3] & 0x3f) <<  0;
-        *c >>= shiftc[len];
-
-        /* Accumulate the various error conditions. */
-        *e  = (*c < mins[len]) << 6; // non-canonical encoding
-        *e |= ((*c >> 11) == 0x1b) << 7;  // surrogate half?
-        *e |= (*c > 0x10FFFF) << 8;  // out of range?
-        *e |= (s[1] & 0xc0) >> 2;
-        *e |= (s[2] & 0xc0) >> 4;
-        *e |= (s[3]       ) >> 6;
-        *e ^= 0x2a; // top two bits of each tail byte correct?
-        *e >>= shifte[len];
-
-        return next;
-    }
-
-    // Transcode a UTF-8 string with char8_t code units to a UTF-32 string with char32_t
-    // code units.
-    inline auto to_utf32(U8StringView input) -> std::u32string
-    {
-        auto result = std::u32string{};
-
-        auto const* input_next = input.data();
-        auto const* input_end = input.data() + input.size();
-
-        // Each call to utf8_decode must have at least 4 more readable elements on input.
-        // Here we make sure that they are available.
-        while (input_end - input_next >= 4)
+        if ((input[0] & 0x80) == 0)  // 0xxxxxxx
         {
-            auto c = uint32_t{};
-            auto e = int{0};
-            input_next = utf8_decode(input_next, &c, &e);
-            if (e != 0)
-            {
-                // Encoding error, print the REPLACEMENT CHARACTER
-                result.push_back(0xFFFD);
-            }
-            else
-            {
-                result.push_back(c);
-            }
+            return std::make_tuple(input.substr(1), static_cast<char32_t>(input[0]));
         }
-
-        // Buffer to hold any remaining code unit from input string and \0 padding enough
-        // to make sure that all calls to utf8_decode will have at leas 4 readable
-        // elements.
-        char8_t remainder[6] = {'\0'};
-        for (auto i = 0; i < input_end - input_next; ++i)
+        else if ((input[0] & 0xE0) == 0xC0)  // 110xxxxx 10xxxxxx
         {
-            remainder[i] = input_next[i];
+            if (input.size() < 2 || (input[1] & 0xC0) != 0x80)
+            {
+                return std::make_tuple(input.substr(1), input[0]);
+            }
+            auto codepoint = static_cast<char32_t>(
+                ((input[0] & 0x1F) << 6) | (input[1] & 0x3F)
+            );
+            return std::make_tuple(input.substr(2), codepoint);
         }
-
-        auto const* rem_next = &remainder[0];
-        auto const* rem_end = rem_next + (input_end - input_next);
-
-        while (rem_next < rem_end)
+        else if ((input[0] & 0xF0) == 0xE0)  // 1110xxxx 10xxxxxx 10xxxxxx
         {
-            auto c = uint32_t{};
-            auto e = int{0};
-            rem_next = utf8_decode(rem_next, &c, &e);
-            if (e != 0)
+            if (input.size() < 3 || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80)
             {
-                // Encoding error, print the REPLACEMENT CHARACTER
-                result.push_back(0xFFFD);
+                return std::make_tuple(input.substr(1), input[0]);
             }
-            else
-            {
-                result.push_back(c);
-            }
+            auto codepoint = static_cast<char32_t>(
+                ((input[0] & 0x0F) << 12) | ((input[1] & 0x3F) << 6) | (input[2] & 0x3F)
+            );
+            return std::make_tuple(input.substr(3), codepoint);
         }
-
-        return result;
+        else if ((input[0] & 0xF8) == 0xF0)  // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+        {
+            if (
+                input.size() < 4
+                || (input[1] & 0xC0) != 0x80
+                || (input[2] & 0xC0) != 0x80
+                || (input[3] & 0xC0) != 0x80
+            ) {
+                return std::make_tuple(input.substr(1), input[0]);
+            }
+            auto codepoint = static_cast<char32_t>(
+                ((input[0] & 0x07) << 18)
+                | ((input[1] & 0x3F) << 12)
+                | ((input[2] & 0x3F) << 6)
+                | (input[3] & 0x3F)
+            );
+            return std::make_tuple(input.substr(4), codepoint);
+        }
+        else
+        {
+            return std::make_tuple(input.substr(1), input[0]);
+        }
     }
   #endif  // defined(__cpp_char8_t)
 
-    // Transcode a UTF-32 string with char32_t code units to a UTF-8 string with char code
-    // units.
+    // Transcodes an UTF-X string with a CharT code units to an UTF-32 string with
+    // char32_t code units.
+    template <typename CharT>
+    auto to_utf32_u32string(BasicStringView<CharT> input) -> std::u32string
+    {
+        auto result = std::u32string{};
+        while (!input.empty())
+        {
+            auto codepoint = Variant<char32_t, CharT>{};
+            std::tie(input, codepoint) = to_codepoint(input);
+
+            if (codepoint.index() == 0)
+            {
+                result.push_back(get<char32_t>(codepoint));
+            }
+            else
+            {
+                // Encoding error, print the REPLACEMENT CHARACTER
+                result.push_back(0xFFFD);
+            }
+        }
+        return result;
+    }
+
+    // Transcodes an UTF-32 string with char32_t code units to an UTF-8 string with char
+    // code units.
     inline auto to_utf8_string(U32StringView input) -> std::string
     {
         auto result = std::string{};
@@ -1888,6 +1847,15 @@ namespace icecream{ namespace detail
         }
         return result;
     };
+
+    // Checks if the code_unit is a valid codepoint.
+    // Returns 1 if it is a valid codepoint, returns 0 otherwise
+    inline auto is_code_point_valid(uint_least32_t const code_point) -> bool
+    {
+        // U+10FFFF is the current largest defined code point
+        // the [U+D800 - U+DFFF] interval are the surrogates
+        return code_point <= 0x10FFFF && !(0xD800 <= code_point && code_point <= 0xDFFF);
+    }
 
 
     // -------------------------------------------------- Split
@@ -2408,7 +2376,7 @@ namespace icecream{ namespace detail
                     case 2:
                         {
                             auto const utf32_str =
-                                detail::to_utf32(
+                                detail::to_utf32_u32string(
                                     detail::U16StringView(
                                         reinterpret_cast<char16_t const*>(str.data()), str.size()
                                     )
@@ -2526,6 +2494,29 @@ namespace detail {
 
     // -------------------------------------------------- Tree
 
+    enum class OstreamTypeMode : long
+    {
+        character,
+        debug,
+        integer
+    };
+
+    inline auto xidx_type_mode() -> int
+    {
+        static auto const xindex = std::ios_base::xalloc();
+        return xindex;
+    }
+
+    inline auto getOstreamTypeMode(std::ostringstream& ostrm) -> OstreamTypeMode
+    {
+        return static_cast<OstreamTypeMode>(ostrm.iword(xidx_type_mode()));
+    }
+
+    inline auto setOstreamTypeMode(std::ostringstream& ostrm, OstreamTypeMode type) -> void
+    {
+        ostrm.iword(xidx_type_mode()) = static_cast<long>(type);
+    }
+
     // Builds an ostringstream and sets its state accordingly to `fmt` string
     inline auto build_ostream(StringView fmt) -> Optional<std::ostringstream>
     {
@@ -2535,12 +2526,13 @@ namespace detail {
         // sign        ::=  "+" | "-"
         // width       ::=  integer
         // precision   ::=  integer
-        // type        ::=  "a" | "A" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X"
+        // type        ::=  "a" | "A" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X" | "?"
         // integer     ::=  digit+
         // digit       ::=  "0"..."9"
 
         auto os = std::ostringstream{};
         os << std::boolalpha;
+        setOstreamTypeMode(os, OstreamTypeMode::debug);
 
         auto it = std::begin(fmt);
         auto end_it = std::end(fmt);
@@ -2629,9 +2621,15 @@ namespace detail {
             os << std::hexfloat << std::uppercase;
             ++it;
         }
+        else if (it != end_it && *it == 'c')
+        {
+            setOstreamTypeMode(os, OstreamTypeMode::character);
+            ++it;
+        }
         else if (it != end_it && *it == 'd')
         {
             os << std::dec << std::noboolalpha;
+            setOstreamTypeMode(os, OstreamTypeMode::integer);
             ++it;
         }
         else if (it != end_it && *it == 'e')
@@ -2667,16 +2665,24 @@ namespace detail {
         else if (it != end_it && *it == 'o')
         {
             os << std::oct << std::noboolalpha;
+            setOstreamTypeMode(os, OstreamTypeMode::integer);
             ++it;
         }
         else if (it != end_it && *it == 'x')
         {
             os << std::hex << std::nouppercase << std::noboolalpha;
+            setOstreamTypeMode(os, OstreamTypeMode::integer);
             ++it;
         }
         else if (it != end_it && *it == 'X')
         {
             os << std::hex << std::uppercase << std::noboolalpha;
+            setOstreamTypeMode(os, OstreamTypeMode::integer);
+            ++it;
+        }
+        else if (it != end_it && *it == '?')
+        {
+            setOstreamTypeMode(os, OstreamTypeMode::debug);
             ++it;
         }
 
@@ -2706,14 +2712,14 @@ namespace detail {
     // char8_t -> char
     inline auto transcoder_dispatcher(Config_ const& config, U8StringView str) -> std::string
     {
-        return config.unicode_transcoder()(to_utf32(str));
+        return config.unicode_transcoder()(to_utf32_u32string(str));
     }
   #endif
 
     // char16_t -> char
     inline auto transcoder_dispatcher(Config_ const& config, U16StringView str) -> std::string
     {
-        return config.unicode_transcoder()(to_utf32(str));
+        return config.unicode_transcoder()(to_utf32_u32string(str));
     }
 
     // char32_t -> char
@@ -2978,6 +2984,8 @@ namespace detail {
     };
 
 
+    // -------------------------------------------------- make_printing_branch functions
+
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
@@ -3087,8 +3095,8 @@ namespace detail {
         typename std::enable_if<
             is_stl_formattable<T>::value
             && !is_fmt_formattable<T>::value
-            && !is_c_string<T>::value
             && !is_character<T>::value
+            && !is_c_string<T>::value
             && !is_xsig_char<T>::value
             && !is_std_string<T>::value
             && !is_string_view<T>::value
@@ -3096,7 +3104,6 @@ namespace detail {
             PrintingNode
         >::type
     {
-
         if (config.force_range_strategy() && has_hijacked_tag<T>::value)
         {
             return do_print_range(std::forward<T>(value), fmt, config);
@@ -3210,13 +3217,144 @@ namespace detail {
     }
   #endif
 
+    // Prints a character encoded in "execution encoding"
+    template <char Quote>
+    auto do_print_char(StringView code_units, Config_ const&, std::ostringstream& ostrm) -> void
+    {
+        if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
+        {
+            ostrm << code_units.data();
+        }
+        else
+        {
+            for (auto cu : code_units)
+            {
+                switch (cu)
+                {
+                case '\a':
+                    ostrm << "\\a";
+                    break;
+                case '\b':
+                    ostrm << "\\b";
+                    break;
+                case '\t':
+                    ostrm << "\\t";
+                    break;
+                case '\n':
+                    ostrm << "\\n";
+                    break;
+                case '\v':
+                    ostrm << "\\v";
+                    break;
+                case '\f':
+                    ostrm << "\\f";
+                    break;
+                case '\r':
+                    ostrm << "\\r";
+                    break;
+                case '\0':
+                    ostrm << "\\u{0}";
+                    break;
+                case Quote:
+                    ostrm << "\\" << Quote;
+                    break;
+                default:
+                    ostrm << cu;
+                }
+            }
+        }
+    }
+
+    // Prints char32_t characters
+    template <char quote>
+    auto do_print_char(
+        U32StringView code_units, Config_ const& config, std::ostringstream& ostrm
+    ) -> void
+    {
+        if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
+        {
+            ostrm << config.unicode_transcoder()(code_units);
+        }
+        else
+        {
+            for (auto cu : code_units)
+            {
+                if (is_code_point_valid(cu))
+                {
+                    do_print_char<quote>(
+                        config.unicode_transcoder()(U32StringView(&cu, 1)), config, ostrm
+                    );
+                }
+                else
+                {
+                    ostrm << "\\x{"
+                          << std::hex
+                          << std::nouppercase
+                          << std::char_traits<char32_t>::to_int_type(cu)
+                          << "}";
+                }
+            }
+        }
+    }
+
+    // Prints char8_t and char16_t characters
+    template <char quote, typename CharT>
+    auto do_print_char(
+        BasicStringView<CharT> code_units, Config_ const& config, std::ostringstream& ostrm
+    ) -> void
+    {
+        if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
+        {
+            ostrm << config.unicode_transcoder()(to_utf32_u32string(code_units));
+        }
+        else
+        {
+            while (!code_units.empty())
+            {
+                auto result = Variant<char32_t, CharT>{};
+                std::tie(code_units, result) = to_codepoint(code_units);
+
+                if (result.index() == 0)
+                {
+                    do_print_char<quote>(
+                        U32StringView(&get<char32_t>(result), 1), config, ostrm
+                    );
+                }
+                else
+                {
+                    ostrm << "\\x{"
+                          << std::hex
+                          << std::nouppercase
+                          << std::char_traits<CharT>::to_int_type(get<CharT>(result))
+                          << "}";
+                }
+            }
+        }
+    }
+
+    // Prints wchar_t characters
+    template <char quote>
+    auto do_print_char(
+        WStringView code_units, Config_ const& config, std::ostringstream& ostrm
+    ) -> void
+    {
+        if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
+        {
+            ostrm << config.wide_string_transcoder()(code_units);
+        }
+        else
+        {
+            do_print_char<quote>(config.wide_string_transcoder()(code_units), config, ostrm);
+        }
+    }
+
     // Print character
     template <typename T>
     auto make_printing_branch(
         T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
     {
-        using C = remove_cvref_t<T>;
+        using Char = remove_cvref_t<T>;
 
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
@@ -3224,47 +3362,24 @@ namespace detail {
             return PrintingNode("*Error* on formatting string");
         }
 
-        auto str = std::string{};
-        switch (value)
+        if (getOstreamTypeMode(*mb_ostrm) == OstreamTypeMode::character)
         {
-        case C{'\0'}:
-            str = "\\0";
-            break;
-
-        case C{'\a'}:
-            str = "\\a";
-            break;
-
-        case C{'\b'}:
-            str = "\\b";
-            break;
-
-        case C{'\f'}:
-            str = "\\f";
-            break;
-
-        case C{'\n'}:
-            str = "\\n";
-            break;
-
-        case C{'\r'}:
-            str = "\\r";
-            break;
-
-        case C{'\t'}:
-            str = "\\t";
-            break;
-
-        case C{'\v'}:
-            str = "\\v";
-            break;
-
-        default:
-            str = transcoder_dispatcher(config, BasicStringView<C>(&value, 1));
-            break;
+            do_print_char<'\''>(BasicStringView<Char>(&value, 1), config, *mb_ostrm);
         }
-
-        *mb_ostrm << '\'' << str << '\'';
+        else if (getOstreamTypeMode(*mb_ostrm) == OstreamTypeMode::debug)
+        {
+            *mb_ostrm << '\'';
+            do_print_char<'\''>(BasicStringView<Char>(&value, 1), config, *mb_ostrm);
+            *mb_ostrm << '\'';
+        }
+        else // if (getOstreamTypeMode(*mb_ostrm) == OstreamTypeMode::integer)
+        {
+            return make_printing_branch(
+                std::char_traits<Char>::to_int_type(value),
+                fmt,
+                config
+            );
+        }
 
         return PrintingNode(mb_ostrm->str());
     }
@@ -3898,7 +4013,8 @@ namespace detail {
     }
 
     template <typename T>
-    auto do_print_range(T&& value, StringView fmt, Config_ const& config//) -> PrintingNode
+    auto do_print_range(
+        T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_range<T>::value, PrintingNode>::type
     {
         auto range_fmt = StringView{};
