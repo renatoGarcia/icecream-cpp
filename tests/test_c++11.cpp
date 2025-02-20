@@ -308,7 +308,7 @@ TEST_CASE("base")
             "        'n', \n"
             "        't', \n"
             "        '>', \n"
-            "        '\\0'\n"
+            "        '\\u{0}'\n"
             "    ],\n"
             "    34: 34\n";
         IC(7, "same<int, \"int>", 34);
@@ -348,7 +348,7 @@ TEST_CASE("base")
         IC_CONFIG.output(str);
 
         IC("Hi");
-        REQUIRE(str == "ic| \"Hi\": ['H', 'i', '\\0']\n");
+        REQUIRE(str == "ic| \"Hi\": ['H', 'i', '\\u{0}']\n");
     }
 
     {
@@ -622,7 +622,7 @@ TEST_CASE("arrays")
 
         char v0[] = "abc";
         IC(v0);
-        REQUIRE(str == "ic| v0: ['a', 'b', 'c', '\\0']\n");
+        REQUIRE(str == "ic| v0: ['a', 'b', 'c', '\\u{0}']\n");
     }
 
     {

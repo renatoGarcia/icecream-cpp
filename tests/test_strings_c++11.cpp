@@ -23,6 +23,16 @@ TEST_CASE("character")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
+        auto v0 = char{'a'};
+        IC_F("x", v0);
+        REQUIRE(str == "ic| v0: 61\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
         auto v0 = wchar_t {L'a'};
         IC(v0);
         REQUIRE(str == "ic| v0: 'a'\n");
@@ -75,7 +85,7 @@ TEST_CASE("character")
 
         auto v0 = char16_t {u'\0'};
         IC(v0);
-        REQUIRE(str == "ic| v0: '\\0'\n");
+        REQUIRE(str == "ic| v0: '\\u{0}'\n");
     }
 
     {
@@ -86,6 +96,76 @@ TEST_CASE("character")
         auto v0 = char32_t {u'\t'};
         IC(v0);
         REQUIRE(str == "ic| v0: '\\t'\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char{'\t'};
+        IC_F("c", v0);
+        REQUIRE(str == "ic| v0: \t\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char16_t{u'a'};
+        IC_F("c", v0);
+        REQUIRE(str == "ic| v0: a\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char16_t{0xD801};  // invalid UTF-16 code unit
+        IC(v0);
+        REQUIRE(str == "ic| v0: '\\x{d801}'\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char16_t{0xD801};  // invalid UTF-16 code unit
+        IC_F("c", v0);
+        REQUIRE(str == "ic| v0: �\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char32_t{0xA001F427};  // invalid unicode codepoint
+        IC(v0);
+        REQUIRE(str == "ic| v0: '\\x{a001f427}'\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char32_t{0xA001F427};  // invalid unicode codepoint
+        IC_F("c", v0);
+        REQUIRE(str == "ic| v0: �\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char32_t {U'\U0001F427'};
+        IC_F("d", v0);
+        REQUIRE(str == "ic| v0: 128039\n");
     }
 }
 

@@ -24,6 +24,36 @@ TEST_CASE("char8_t")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
+        auto v0 = char8_t {u8'a'};
+        IC_F("#o", v0);
+        REQUIRE(str == "ic| v0: 0141\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char8_t{0x80};  // invalid UTF-8 code unit
+        IC(v0);
+        REQUIRE(str == "ic| v0: '\\x{80}'\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = char8_t{0x80};  // invalid UTF-8 code unit
+        IC_F("c", v0);
+        REQUIRE(str == "ic| v0: �\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
         auto v0 = std::u8string {u8"u8str \uAB8C"}; // Cherokee Small Letter MO
         IC(v0);
         REQUIRE(str == "ic| v0: \"u8str \xEA\xAE\x8C\"\n");
