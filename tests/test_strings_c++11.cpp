@@ -113,6 +113,16 @@ TEST_CASE("character")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
+        auto v0 = 126;
+        IC_F("c", v0);
+        REQUIRE(str == "ic| v0: ~\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
         auto v0 = char16_t{u'a'};
         IC_F("c", v0);
         REQUIRE(str == "ic| v0: a\n");
