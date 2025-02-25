@@ -999,14 +999,15 @@ The available integer presentation types are:
 
 | Symbol | Meaning                                                                                                                                                                   |
 |--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `'c'`  | Character format. Outputs the number as a character.                                                                                                                         |
 | `'d'`  | Decimal integer. Outputs the number in base 10.                                                                                                                           |
 | `'o'`  | Octal format. Outputs the number in base 8.                                                                                                                               |
 | `'x'`  | Hex format. Outputs the number in base 16, using lower-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0x" to the output value. |
 | `'X'`  | Hex format. Outputs the number in base 16, using upper-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0X" to the output value. |
 
-Integer presentation types can also be used with boolean values. Boolean values are
-formatted using textual representation, either true or false, if the presentation type is
-not specified.
+Integer presentation types can also be used with character and boolean values with the
+only exception that 'c' cannot be used with bool. Boolean values are formatted using
+textual representation, either true or false, if the presentation type is not specified.
 
 The available presentation types for floating-point values are:
 

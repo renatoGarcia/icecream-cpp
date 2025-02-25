@@ -2986,10 +2986,36 @@ namespace detail {
 
     // -------------------------------------------------- make_printing_branch functions
 
+    template <typename T>
+    auto do_print_integral(
+        T const&, StringView, Config_ const&
+    ) -> typename std::enable_if<!std::is_integral<remove_cvref_t<T>>::value, PrintingNode>::type
+    {
+        ICECREAM_UNREACHABLE;
+        return PrintingNode("");
+    }
+
+    template <typename T>
+    auto do_print_integral(
+        T const& value, StringView fmt, Config_ const& config
+    ) -> typename std::enable_if<std::is_integral<remove_cvref_t<T>>::value, PrintingNode>::type
+    {
+        if (value > 127)
+        {
+            return PrintingNode("*Error* Integral value outside the range of the char type");
+        }
+        else if (std::is_same<remove_cvref_t<T>, bool>::value)
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+
+        return make_printing_branch(static_cast<char>(value), fmt, config);
+    }
+
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
-        T&& value, StringView fmt, Config_ const&
+        T&& value, StringView fmt, Config_ const& config
     ) ->
         typename std::enable_if<
             is_streamable<T>::value
@@ -3008,6 +3034,13 @@ namespace detail {
         if (!mb_ostrm)
         {
             return PrintingNode("*Error* on formatting string");
+        }
+
+        if (
+            std::is_integral<remove_cvref_t<T>>::value
+            && getOstreamTypeMode(*mb_ostrm) == OstreamTypeMode::character
+        ) {
+            return do_print_integral(value, fmt, config);
         }
 
         *mb_ostrm << value;
