@@ -3223,7 +3223,7 @@ namespace detail {
     {
         if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
         {
-            ostrm << code_units.data();
+            ostrm << code_units.to_string();
         }
         else
         {
@@ -3632,10 +3632,11 @@ namespace detail {
                 }
 
                 auto end = static_cast<char*>(nullptr);
-                auto const lnum = strtol(idx_string.data(), &end, 10);
+                auto const null_terminated = idx_string.to_string();
+                auto const lnum = strtol(null_terminated.data(), &end, 10);
                 if (
                     // if idx_string in its whole isn't a number
-                    end != (idx_string.data() + idx_string.size())
+                    end != (null_terminated.data() + null_terminated.size())
 
                     // or if there is an overflow on long int
                     || (
