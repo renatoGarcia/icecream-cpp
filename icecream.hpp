@@ -26,6 +26,7 @@
 
 #include <cassert>
 #include <cerrno>
+#include <climits>
 #include <clocale>
 #include <cstddef>
 #include <cstdint>
@@ -1448,6 +1449,16 @@ namespace icecream{ namespace detail
     class Config_;
     class PrintingNode;
 
+    template <typename T>
+    auto do_print_integral(
+        T const&, Config_ const&, std::ostringstream&
+    ) -> typename std::enable_if<!std::is_integral<remove_cvref_t<T>>::value, PrintingNode>::type;
+
+    template <typename T>
+    auto do_print_integral(
+        T const&, Config_ const&, std::ostringstream&
+    ) -> typename std::enable_if<std::is_integral<remove_cvref_t<T>>::value, PrintingNode>::type;
+
     // Print any class that overloads operator<<(std::ostream&, T)
     template <typename T>
     auto make_printing_branch(
@@ -1522,6 +1533,9 @@ namespace icecream{ namespace detail
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type;
   #endif
+
+    template <typename T>
+    auto do_print_char(T, Config_ const&, std::ostringstream&) -> PrintingNode;
 
     // Print character
     template <typename T>
@@ -2496,9 +2510,12 @@ namespace detail {
 
     enum class OstreamTypeMode : long
     {
-        character,
+        none,
         debug,
-        integer
+        binary,
+        BINARY,
+        character,
+        non_binary_integer
     };
 
     inline auto xidx_type_mode() -> int
@@ -2526,13 +2543,13 @@ namespace detail {
         // sign        ::=  "+" | "-"
         // width       ::=  integer
         // precision   ::=  integer
-        // type        ::=  "a" | "A" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X" | "?"
+        // type        ::=  "a" | "A" | "b" | "B" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X" | "?"
         // integer     ::=  digit+
         // digit       ::=  "0"..."9"
 
         auto os = std::ostringstream{};
         os << std::boolalpha;
-        setOstreamTypeMode(os, OstreamTypeMode::debug);
+        setOstreamTypeMode(os, OstreamTypeMode::none);
 
         auto it = std::begin(fmt);
         auto end_it = std::end(fmt);
@@ -2621,6 +2638,16 @@ namespace detail {
             os << std::hexfloat << std::uppercase;
             ++it;
         }
+        else if (it != end_it && *it == 'b')
+        {
+            setOstreamTypeMode(os, OstreamTypeMode::binary);
+            ++it;
+        }
+        else if (it != end_it && *it == 'B')
+        {
+            setOstreamTypeMode(os, OstreamTypeMode::BINARY);
+            ++it;
+        }
         else if (it != end_it && *it == 'c')
         {
             setOstreamTypeMode(os, OstreamTypeMode::character);
@@ -2629,7 +2656,7 @@ namespace detail {
         else if (it != end_it && *it == 'd')
         {
             os << std::dec << std::noboolalpha;
-            setOstreamTypeMode(os, OstreamTypeMode::integer);
+            setOstreamTypeMode(os, OstreamTypeMode::non_binary_integer);
             ++it;
         }
         else if (it != end_it && *it == 'e')
@@ -2665,19 +2692,19 @@ namespace detail {
         else if (it != end_it && *it == 'o')
         {
             os << std::oct << std::noboolalpha;
-            setOstreamTypeMode(os, OstreamTypeMode::integer);
+            setOstreamTypeMode(os, OstreamTypeMode::non_binary_integer);
             ++it;
         }
         else if (it != end_it && *it == 'x')
         {
             os << std::hex << std::nouppercase << std::noboolalpha;
-            setOstreamTypeMode(os, OstreamTypeMode::integer);
+            setOstreamTypeMode(os, OstreamTypeMode::non_binary_integer);
             ++it;
         }
         else if (it != end_it && *it == 'X')
         {
             os << std::hex << std::uppercase << std::noboolalpha;
-            setOstreamTypeMode(os, OstreamTypeMode::integer);
+            setOstreamTypeMode(os, OstreamTypeMode::non_binary_integer);
             ++it;
         }
         else if (it != end_it && *it == '?')
@@ -2988,7 +3015,7 @@ namespace detail {
 
     template <typename T>
     auto do_print_integral(
-        T const&, StringView, Config_ const&
+        T const&, Config_ const&, std::ostringstream&
     ) -> typename std::enable_if<!std::is_integral<remove_cvref_t<T>>::value, PrintingNode>::type
     {
         ICECREAM_UNREACHABLE;
@@ -2997,19 +3024,68 @@ namespace detail {
 
     template <typename T>
     auto do_print_integral(
-        T const& value, StringView fmt, Config_ const& config
+        T const& value, Config_ const& config, std::ostringstream& ostrm
     ) -> typename std::enable_if<std::is_integral<remove_cvref_t<T>>::value, PrintingNode>::type
     {
-        if (value > 127)
-        {
-            return PrintingNode("*Error* Integral value outside the range of the char type");
-        }
-        else if (std::is_same<remove_cvref_t<T>, bool>::value)
-        {
-            return PrintingNode("*Error* on formatting string");
-        }
+        auto print_binary =
+            [&](bool uppercase_base)
+            {
+                if (ostrm.flags() & std::ios_base::showbase)
+                {
+                    ostrm << (uppercase_base ? "0B" : "0b");
+                }
 
-        return make_printing_branch(static_cast<char>(value), fmt, config);
+                auto const n_bits = sizeof(value) * CHAR_BIT;
+
+                // Flag to skip leading zeros
+                auto found_one = false;
+
+                // Loop through each bit from the most significant to the least significant
+                for (auto i = n_bits; (i--) > 0;)
+                {
+                    auto const bit = (value >> i) & 1;
+
+                    if (bit == 1) found_one = true;
+
+                    if (found_one || i == 0) // Always print at least the last bit
+                    {
+                        ostrm << bit;
+                    }
+                }
+            };
+
+        switch (getOstreamTypeMode(ostrm))
+        {
+        case OstreamTypeMode::character:
+            if (value > 127)
+            {
+                return PrintingNode("*Error* Integral value outside the range of the char type");
+            }
+            else if (std::is_same<remove_cvref_t<T>, bool>::value)
+            {
+                return PrintingNode("*Error* on formatting string");
+            }
+            else
+            {
+                return do_print_char(static_cast<char>(value), config, ostrm);
+            }
+
+        case OstreamTypeMode::debug:
+            return PrintingNode("*Error* on formatting string");
+
+        case OstreamTypeMode::none:
+        case OstreamTypeMode::non_binary_integer:
+            ostrm << value;
+            return PrintingNode(ostrm.str());
+
+        case OstreamTypeMode::binary:
+            print_binary(false);
+            return PrintingNode(ostrm.str());
+
+        case OstreamTypeMode::BINARY:
+            print_binary(true);
+            return PrintingNode(ostrm.str());
+        }
     }
 
     // Print any class that overloads operator<<(std::ostream&, T)
@@ -3036,15 +3112,15 @@ namespace detail {
             return PrintingNode("*Error* on formatting string");
         }
 
-        if (
-            std::is_integral<remove_cvref_t<T>>::value
-            && getOstreamTypeMode(*mb_ostrm) == OstreamTypeMode::character
-        ) {
-            return do_print_integral(value, fmt, config);
+        if (std::is_integral<remove_cvref_t<T>>::value)
+        {
+            return do_print_integral(value, config, *mb_ostrm);
         }
-
-        *mb_ostrm << value;
-        return PrintingNode(mb_ostrm->str());
+        else
+        {
+            *mb_ostrm << value;
+            return PrintingNode(mb_ostrm->str());
+        }
     }
 
   #if defined(ICECREAM_STL_FORMAT_RANGES)
@@ -3250,15 +3326,17 @@ namespace detail {
     }
   #endif
 
-    // Prints a character encoded in "execution encoding"
+    // Prints all characters encoded in "execution encoding"
     template <char Quote>
-    auto do_print_char(StringView code_units, Config_ const&, std::ostringstream& ostrm) -> void
+    auto print_text(
+        StringView code_units, Config_ const&, std::ostringstream& ostrm
+    ) -> void
     {
         if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
         {
             ostrm << code_units.to_string();
         }
-        else
+        else // if none or debug. Other values CAN NOT call this function
         {
             for (auto cu : code_units)
             {
@@ -3300,7 +3378,7 @@ namespace detail {
 
     // Prints char32_t characters
     template <char quote>
-    auto do_print_char(
+    auto print_text(
         U32StringView code_units, Config_ const& config, std::ostringstream& ostrm
     ) -> void
     {
@@ -3308,13 +3386,13 @@ namespace detail {
         {
             ostrm << config.unicode_transcoder()(code_units);
         }
-        else
+        else // if none or debug. Other values CAN NOT call this function
         {
             for (auto cu : code_units)
             {
                 if (is_code_point_valid(cu))
                 {
-                    do_print_char<quote>(
+                    print_text<quote>(
                         config.unicode_transcoder()(U32StringView(&cu, 1)), config, ostrm
                     );
                 }
@@ -3332,7 +3410,7 @@ namespace detail {
 
     // Prints char8_t and char16_t characters
     template <char quote, typename CharT>
-    auto do_print_char(
+    auto print_text(
         BasicStringView<CharT> code_units, Config_ const& config, std::ostringstream& ostrm
     ) -> void
     {
@@ -3340,7 +3418,7 @@ namespace detail {
         {
             ostrm << config.unicode_transcoder()(to_utf32_u32string(code_units));
         }
-        else
+        else // if none or debug. Other values CAN NOT call this function
         {
             while (!code_units.empty())
             {
@@ -3349,7 +3427,7 @@ namespace detail {
 
                 if (result.index() == 0)
                 {
-                    do_print_char<quote>(
+                    print_text<quote>(
                         U32StringView(&get<char32_t>(result), 1), config, ostrm
                     );
                 }
@@ -3367,7 +3445,7 @@ namespace detail {
 
     // Prints wchar_t characters
     template <char quote>
-    auto do_print_char(
+    auto print_text(
         WStringView code_units, Config_ const& config, std::ostringstream& ostrm
     ) -> void
     {
@@ -3375,9 +3453,34 @@ namespace detail {
         {
             ostrm << config.wide_string_transcoder()(code_units);
         }
-        else
+        else // if none or debug. Other values CAN NOT call this function
         {
-            do_print_char<quote>(config.wide_string_transcoder()(code_units), config, ostrm);
+            print_text<quote>(config.wide_string_transcoder()(code_units), config, ostrm);
+        }
+    }
+
+    template <typename T>
+    auto do_print_char(T value, Config_ const& config, std::ostringstream& ostrm) -> PrintingNode
+    {
+        using CharT = remove_cvref_t<T>;
+
+        switch (getOstreamTypeMode(ostrm))
+        {
+        case OstreamTypeMode::character:
+            print_text<'\''>(BasicStringView<CharT>(&value, 1), config, ostrm);
+            return PrintingNode(ostrm.str());
+
+        case OstreamTypeMode::none:
+        case OstreamTypeMode::debug:
+            ostrm << '\'';
+            print_text<'\''>(BasicStringView<CharT>(&value, 1), config, ostrm);
+            ostrm << '\'';
+            return PrintingNode(ostrm.str());
+
+        case OstreamTypeMode::non_binary_integer:
+        case OstreamTypeMode::binary:
+        case OstreamTypeMode::BINARY:
+            return do_print_integral(std::char_traits<CharT>::to_int_type(value), config, ostrm);
         }
     }
 
@@ -3387,34 +3490,13 @@ namespace detail {
         T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
     {
-        using Char = remove_cvref_t<T>;
-
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
         {
             return PrintingNode("*Error* on formatting string");
         }
 
-        if (getOstreamTypeMode(*mb_ostrm) == OstreamTypeMode::character)
-        {
-            do_print_char<'\''>(BasicStringView<Char>(&value, 1), config, *mb_ostrm);
-        }
-        else if (getOstreamTypeMode(*mb_ostrm) == OstreamTypeMode::debug)
-        {
-            *mb_ostrm << '\'';
-            do_print_char<'\''>(BasicStringView<Char>(&value, 1), config, *mb_ostrm);
-            *mb_ostrm << '\'';
-        }
-        else // if (getOstreamTypeMode(*mb_ostrm) == OstreamTypeMode::integer)
-        {
-            return make_printing_branch(
-                std::char_traits<Char>::to_int_type(value),
-                fmt,
-                config
-            );
-        }
-
-        return PrintingNode(mb_ostrm->str());
+        return do_print_char(value, config, *mb_ostrm);
     }
 
     // Print signed and unsigned char
