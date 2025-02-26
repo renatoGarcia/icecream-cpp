@@ -976,6 +976,13 @@ namespace icecream{ namespace detail
             , count_{s.size()}
         {}
 
+      #if defined(ICECREAM_STRING_VIEW_HEADER)
+        BasicStringView(std::basic_string_view<value_type> s)
+            : s_{s.data()}
+            , count_{s.size()}
+        {}
+      #endif
+
         BasicStringView(iterator first, iterator last)
             : s_{first}
             , count_{static_cast<size_t>(last - first)}
@@ -1520,19 +1527,15 @@ namespace icecream{ namespace detail
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type;
 
-    // Print std::string
+    // Print std::string and std::string_view
     template <typename T>
     auto make_printing_branch(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type;
-
-  #if defined(ICECREAM_STRING_VIEW_HEADER)
-    // Print std::string_view
-    template <typename T>
-    auto make_printing_branch(
-        T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type;
-  #endif
+    ) ->
+        typename std::enable_if<
+            is_std_string<T>::value || is_string_view<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type;
 
     template <typename T>
     auto do_print_char(T, Config_ const&, std::ostringstream&) -> PrintingNode;
@@ -2515,6 +2518,7 @@ namespace detail {
         binary,
         BINARY,
         character,
+        string,
         non_binary_integer
     };
 
@@ -2543,7 +2547,7 @@ namespace detail {
         // sign        ::=  "+" | "-"
         // width       ::=  integer
         // precision   ::=  integer
-        // type        ::=  "a" | "A" | "b" | "B" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X" | "?"
+        // type        ::=  "a" | "A" | "b" | "B" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "s" | "x" | "X" | "?"
         // integer     ::=  digit+
         // digit       ::=  "0"..."9"
 
@@ -2693,6 +2697,11 @@ namespace detail {
         {
             os << std::oct << std::noboolalpha;
             setOstreamTypeMode(os, OstreamTypeMode::non_binary_integer);
+            ++it;
+        }
+        else if (it != end_it && *it == 's')
+        {
+            setOstreamTypeMode(os, OstreamTypeMode::string);
             ++it;
         }
         else if (it != end_it && *it == 'x')
@@ -3070,9 +3079,6 @@ namespace detail {
                 return do_print_char(static_cast<char>(value), config, ostrm);
             }
 
-        case OstreamTypeMode::debug:
-            return PrintingNode("*Error* on formatting string");
-
         case OstreamTypeMode::none:
         case OstreamTypeMode::non_binary_integer:
             ostrm << value;
@@ -3085,6 +3091,9 @@ namespace detail {
         case OstreamTypeMode::BINARY:
             print_binary(true);
             return PrintingNode(ostrm.str());
+
+        default:
+            return PrintingNode("*Error* on formatting string");
         }
     }
 
@@ -3267,77 +3276,21 @@ namespace detail {
     }
   #endif
 
-    // Print C string
-    template <typename T>
-    auto make_printing_branch(
-        T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
-    {
-        auto mb_ostrm = build_ostream(fmt);
-        if (!mb_ostrm)
-        {
-            return PrintingNode("*Error* on formatting string");
-        }
-
-        if (config.show_c_string())
-        {
-            using CharT =
-                typename std::remove_const<
-                    typename std::remove_pointer<
-                        typename std::decay<T>::type
-                    >::type
-                >::type;
-
-            *mb_ostrm << '"' << transcoder_dispatcher(config, value) << '"';
-        }
-        else
-        {
-            *mb_ostrm << reinterpret_cast<void const*>(value);
-        }
-
-        return PrintingNode(mb_ostrm->str());
-    }
-
-    // Print std::string
-    template <typename T>
-    auto make_printing_branch(
-        T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_std_string<T>::value, PrintingNode>::type
-    {
-        auto mb_ostrm = build_ostream(fmt);
-        if (!mb_ostrm)
-        {
-            return PrintingNode("*Error* on formatting string");
-        }
-
-        *mb_ostrm << '"' << transcoder_dispatcher(config, value) << '"';
-        return PrintingNode(mb_ostrm->str());
-    }
-
-  #if defined(ICECREAM_STRING_VIEW_HEADER)
-    // Print std::string_view
-    template <typename T>
-    auto make_printing_branch(
-        T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_string_view<T>::value, PrintingNode>::type
-    {
-        using String = std::basic_string<typename remove_cvref_t<T>::value_type>;
-        return make_printing_branch(String{value}, fmt, config);
-    }
-  #endif
-
     // Prints all characters encoded in "execution encoding"
     template <char Quote>
     auto print_text(
         StringView code_units, Config_ const&, std::ostringstream& ostrm
     ) -> void
     {
-        if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
+        switch (getOstreamTypeMode(ostrm))
         {
+        case OstreamTypeMode::character:
+        case OstreamTypeMode::string:
             ostrm << code_units.to_string();
-        }
-        else // if none or debug. Other values CAN NOT call this function
-        {
+            break;
+
+        case OstreamTypeMode::none:
+        case OstreamTypeMode::debug:
             for (auto cu : code_units)
             {
                 switch (cu)
@@ -3373,6 +3326,11 @@ namespace detail {
                     ostrm << cu;
                 }
             }
+            break;
+
+        default:
+            ICECREAM_UNREACHABLE;
+
         }
     }
 
@@ -3382,12 +3340,15 @@ namespace detail {
         U32StringView code_units, Config_ const& config, std::ostringstream& ostrm
     ) -> void
     {
-        if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
+        switch (getOstreamTypeMode(ostrm))
         {
+        case OstreamTypeMode::character:
+        case OstreamTypeMode::string:
             ostrm << config.unicode_transcoder()(code_units);
-        }
-        else // if none or debug. Other values CAN NOT call this function
-        {
+            break;
+
+        case OstreamTypeMode::none:
+        case OstreamTypeMode::debug:
             for (auto cu : code_units)
             {
                 if (is_code_point_valid(cu))
@@ -3405,6 +3366,10 @@ namespace detail {
                           << "}";
                 }
             }
+            break;
+
+        default:
+            ICECREAM_UNREACHABLE;
         }
     }
 
@@ -3414,12 +3379,15 @@ namespace detail {
         BasicStringView<CharT> code_units, Config_ const& config, std::ostringstream& ostrm
     ) -> void
     {
-        if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
+        switch (getOstreamTypeMode(ostrm))
         {
+        case OstreamTypeMode::character:
+        case OstreamTypeMode::string:
             ostrm << config.unicode_transcoder()(to_utf32_u32string(code_units));
-        }
-        else // if none or debug. Other values CAN NOT call this function
-        {
+            break;
+
+        case OstreamTypeMode::none:
+        case OstreamTypeMode::debug:
             while (!code_units.empty())
             {
                 auto result = Variant<char32_t, CharT>{};
@@ -3440,6 +3408,10 @@ namespace detail {
                           << "}";
                 }
             }
+            break;
+
+        default:
+            ICECREAM_UNREACHABLE;
         }
     }
 
@@ -3449,14 +3421,97 @@ namespace detail {
         WStringView code_units, Config_ const& config, std::ostringstream& ostrm
     ) -> void
     {
-        if (getOstreamTypeMode(ostrm) == OstreamTypeMode::character)
+        switch (getOstreamTypeMode(ostrm))
         {
+        case OstreamTypeMode::character:
+        case OstreamTypeMode::string:
             ostrm << config.wide_string_transcoder()(code_units);
-        }
-        else // if none or debug. Other values CAN NOT call this function
-        {
+            break;
+
+        case OstreamTypeMode::none:
+        case OstreamTypeMode::debug:
             print_text<quote>(config.wide_string_transcoder()(code_units), config, ostrm);
+            break;
+
+        default:
+            ICECREAM_UNREACHABLE;
         }
+    }
+
+
+    template <typename CharT>
+    auto do_print_string(
+        BasicStringView<CharT> value, Config_ const& config, std::ostringstream& ostrm
+    ) -> PrintingNode
+    {
+        switch (getOstreamTypeMode(ostrm))
+        {
+        case OstreamTypeMode::string:
+            print_text<'"'>(value, config, ostrm);
+            return PrintingNode(ostrm.str());
+
+        case OstreamTypeMode::none:
+        case OstreamTypeMode::debug:
+            ostrm << '"';
+            print_text<'"'>(value, config, ostrm);
+            ostrm << '"';
+            return PrintingNode(ostrm.str());
+
+        default:
+            return PrintingNode("*Error* on formatting string");
+        }
+    }
+
+    // Print C string
+    template <typename T>
+    auto make_printing_branch(
+        T&& value, StringView fmt, Config_ const& config
+    ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
+    {
+        using CharT =
+            remove_cvref_t<
+                typename std::remove_pointer<
+                    typename std::decay<T>::type
+                >::type
+            >;
+
+        auto mb_ostrm = build_ostream(fmt);
+        if (!mb_ostrm)
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+
+        if (config.show_c_string())
+        {
+            do_print_string<CharT>(value, config, *mb_ostrm);
+        }
+        else
+        {
+            *mb_ostrm << reinterpret_cast<void const*>(value);
+        }
+
+        return PrintingNode(mb_ostrm->str());
+    }
+
+    // Print std::string and std::string_view
+    template <typename T>
+    auto make_printing_branch(
+        T&& value, StringView fmt, Config_ const& config
+    ) ->
+        typename std::enable_if<
+            is_std_string<T>::value || is_string_view<remove_cvref_t<T>>::value,
+            PrintingNode
+        >::type
+    {
+        using CharT = typename remove_cvref_t<T>::value_type;
+
+        auto mb_ostrm = build_ostream(fmt);
+        if (!mb_ostrm)
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+
+        return do_print_string<CharT>(value, config, *mb_ostrm);
     }
 
     template <typename T>
@@ -3481,6 +3536,9 @@ namespace detail {
         case OstreamTypeMode::binary:
         case OstreamTypeMode::BINARY:
             return do_print_integral(std::char_traits<CharT>::to_int_type(value), config, ostrm);
+
+        default:
+            return PrintingNode("*Error* on formatting string");
         }
     }
 

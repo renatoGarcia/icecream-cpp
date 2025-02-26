@@ -98,8 +98,8 @@ TEST_CASE("transcode functions")
         );
 
         char8_t const* v0 = u8"char8_t test A";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"foo\"\n");
+        IC_F("s", v0);
+        REQUIRE(str == "ic| v0: foo\n");
     }
 
     {
@@ -116,7 +116,7 @@ TEST_CASE("transcode functions")
         );
 
         auto v0 = std::u8string_view{u8"string B"};
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"foo\"\n");
+        IC_F("s", v0);
+        REQUIRE(str == "ic| v0: foo\n");
     }
 }

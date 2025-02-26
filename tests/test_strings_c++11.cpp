@@ -239,8 +239,19 @@ TEST_CASE("std_string")
 
         auto v0 = std::u32string {U"abc"};
         v0[1] = 0x300000;
+        IC_F("s", v0);
+        REQUIRE(str == "ic| v0: a\xEF\xBF\xBD" "c\n");
+    }
+
+    {  // Test an invalid unicode string
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = std::u32string {U"abc"};
+        v0[1] = 0x300000;
         IC(v0);
-        REQUIRE(str == "ic| v0: \"a\xEF\xBF\xBD" "c\"\n");
+        REQUIRE(str == "ic| v0: \"a\\x{300000}c\"\n");
     }
 }
 
@@ -362,8 +373,8 @@ TEST_CASE("transcode functions")
         );
 
         char16_t const* v0 = u"char16_t test \u03B1";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"foo\"\n");
+        IC_F("s", v0);
+        REQUIRE(str == "ic| v0: foo\n");
     }
 
     {
@@ -381,7 +392,7 @@ TEST_CASE("transcode functions")
         );
 
         wchar_t const* v0 = L"wide string test";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"qux\"\n");
+        IC_F("s", v0);
+        REQUIRE(str == "ic| v0: qux\n");
     }
 }
