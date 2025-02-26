@@ -926,7 +926,7 @@ align       ::=  "<" | ">" | "^"
 sign        ::=  "+" | "-"
 width       ::=  integer
 precision   ::=  integer
-type        ::=  "a" | "A" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X" | "?"
+type        ::=  "a" | "A" | "b" | "B" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X" | "?"
 integer     ::=  digit+
 digit       ::=  "0"..."9"
 ```
@@ -999,7 +999,9 @@ The available integer presentation types are:
 
 | Symbol | Meaning                                                                                                                                                                   |
 |--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `'c'`  | Character format. Outputs the number as a character.                                                                                                                         |
+| `'b'`  | Binary format. Outputs the number in base 2. Using the '#' option with this type adds the prefix "0b" to the output value.                                                |
+| `'B'`  | Binary format. Outputs the number in base 2. Using the '#' option with this type adds the prefix "0B" to the output value.                                                |
+| `'c'`  | Character format. Outputs the number as a character.                                                                                                                      |
 | `'d'`  | Decimal integer. Outputs the number in base 10.                                                                                                                           |
 | `'o'`  | Octal format. Outputs the number in base 8.                                                                                                                               |
 | `'x'`  | Hex format. Outputs the number in base 16, using lower-case letters for the digits above 9. Using the '#' option with this type adds the prefix "0x" to the output value. |

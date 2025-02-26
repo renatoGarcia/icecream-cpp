@@ -987,6 +987,36 @@ TEST_CASE("formatting")
         REQUIRE(str == "ic| v0: 052, 7: 07\n");
     }
 
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = int{42};
+        IC_F("b", v0, 7);
+        REQUIRE(str == "ic| v0: 101010, 7: 111\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = int{42};
+        IC_F("#b", v0, 7);
+        REQUIRE(str == "ic| v0: 0b101010, 7: 0b111\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = int{42};
+        IC_F("#B", v0, 7);
+        REQUIRE(str == "ic| v0: 0B101010, 7: 0B111\n");
+    }
+
     // {
     //     IC_CONFIG_SCOPE();
     //     auto str = std::string{};
@@ -1078,6 +1108,26 @@ TEST_CASE("formatting")
         auto v0 = true;
         IC_F("X", v0);
         REQUIRE(str == "ic| v0: 1\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = 'a';
+        IC_F("x", v0);
+        REQUIRE(str == "ic| v0: 61\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = 'b';
+        IC_F("#B", v0);
+        REQUIRE(str == "ic| v0: 0B1100010\n");
     }
 }
 
