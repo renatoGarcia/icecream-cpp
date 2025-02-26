@@ -38,6 +38,7 @@ and forward.
      * [Formatting library](#formatting-library)
      * [{fmt}](#fmt-1)
      * [Characters](#characters)
+     * [Strings](#strings)
      * [Pointer like types](#pointer-like-types)
      * [Range types](#range-types)
      * [Tuple like types](#tuple-like-types)
@@ -926,7 +927,7 @@ align       ::=  "<" | ">" | "^"
 sign        ::=  "+" | "-"
 width       ::=  integer
 precision   ::=  integer
-type        ::=  "a" | "A" | "b" | "B" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "x" | "X" | "?"
+type        ::=  "a" | "A" | "b" | "B" | "c" | "d" | "e" | "E" | "f" | "F" | "g" | "G" | "o" | "s" | "x" | "X" | "?"
 integer     ::=  digit+
 digit       ::=  "0"..."9"
 ```
@@ -986,6 +987,14 @@ precision is specified.
 ###### [type]
 
 Determines how the data should be presented.
+
+The available string presentation types are:
+
+| Symbol | Meaning                                                            |
+|--------|--------------------------------------------------------------------|
+| `'s'`  | String format.                                                     |
+| `'?'`  | Debug format. The string is quoted and special characters escaped. |
+| none   | The same as `'?'`.                                                 |
 
 The available character presentation types are:
 
@@ -1074,6 +1083,24 @@ This strategy has higher precedence than all the "baseline strategies".
 
 The same as the [IOStreams format string](#iostreams-format-string).
 
+#### Strings
+
+C strings ([with some subtleties](#c-strings)), [STL's
+strings](https://en.cppreference.com/w/cpp/string/basic_string), and [STL's
+string_views](https://en.cppreference.com/w/cpp/string/basic_string_view). These three
+classes instantiated to all character types: `char`, `wchar_t`, `char8_t`, `char16_t`, and
+`char32_t`.
+
+This strategy will [transcode](#character-encoding) any other character type to a `char`,
+using either [wide_string_transcoder](#wide_string_transcoder) or
+[unicode_transcoder](#unicode_transcoder) as appropriated, and after that it will delegate
+the actual printing to the [IOStreams](#iostreams) strategy.
+
+This strategy has higher precedence than all the "baseline strategies".
+
+##### Strings format string
+
+The same as the [IOStreams format string](#iostreams-format-string).
 
 #### Pointer like types
 

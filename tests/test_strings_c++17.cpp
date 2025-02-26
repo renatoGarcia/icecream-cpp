@@ -55,6 +55,18 @@ TEST_CASE("std_string_view")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
+        char16_t v[] = u"u16str ";
+        v[6] = 0xD801;  // invalid code
+        auto v0 = std::u16string_view(v);
+        IC(v0);
+        REQUIRE(str == "ic| v0: \"u16str\\x{d801}\"\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
         auto v0 = std::u32string_view {U"u32str \U0001F427"};
         IC(v0);
         REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
@@ -78,8 +90,8 @@ TEST_CASE("transcode functions")
         );
 
         char16_t const* v0 = u"char16_t test \u03B1";
-        IC(v0);
-        REQUIRE(str == "ic| v0: \"foo\"\n");
+        IC_F("s", v0);
+        REQUIRE(str == "ic| v0: foo\n");
     }
 
     {
