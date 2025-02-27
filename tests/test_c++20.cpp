@@ -38,7 +38,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}};
         auto v0 = arr | rv::transform([](auto i){return i.second;}) | IC_V();
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         REQUIRE(str == "ic| range_view_40:76[0]: 10\nic| range_view_40:76[1]: 11\n");
       #elif defined(ICECREAM_SOURCE_LOCATION)
@@ -55,7 +55,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | rv::drop(2) | IC_V([](auto i){return i.second;});
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         REQUIRE(str == "ic| range_view_57:72[0]: 12\n");
       #elif defined(ICECREAM_SOURCE_LOCATION)
@@ -72,7 +72,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}};
         auto v0 = arr | IC_FV(":#x", [](auto i){return i.second;}) | rv::drop(0); //68
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         auto const result =
             "ic| range_view_74:66[0]: 0xa\n"
@@ -188,7 +188,7 @@ TEST_CASE("ranges view erros")
 
         auto arr = std::vector<int>{1, 2, 3};
         auto v0 = arr | rv::drop(2) | IC_FV("[]", "v");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v[0]: \"<invalid slice formatting string>\"\n");
     }
 
@@ -199,7 +199,7 @@ TEST_CASE("ranges view erros")
 
         auto arr = std::vector<int>{1, 2, 3};
         auto v0 = arr | rv::drop(2) | IC_FV("[::-1]", "v");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v[0]: \"<slice steps must be strictly positive>\"\n");
     }
 
@@ -210,7 +210,7 @@ TEST_CASE("ranges view erros")
 
         auto arr = std::forward_list<int>{1, 2, 3};
         auto v0 = arr | rv::drop(2) | IC_FV("[:-1:]", "v");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v[0]: \"<this range view supports only non-negative slice indexes>\"\n");
     }
 
@@ -221,7 +221,7 @@ TEST_CASE("ranges view erros")
 
         auto arr = std::vector<int>{1, 2, 3};
         auto v0 = rv::drop(2) | IC_FV("[:-1:]", "v");
-        for (auto i : arr | v0){}
+        for (auto i : arr | v0){(void)i;}
         REQUIRE(str == "ic| v[0]: \"<partial views supports only non-negative slice indexes>\"\n");
     }
 }

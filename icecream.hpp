@@ -988,8 +988,6 @@ namespace icecream{ namespace detail
             , count_{static_cast<size_t>(last - first)}
         {}
 
-        BasicStringView& operator=(BasicStringView const& other) = default;
-
         auto empty() const -> bool
         {
             return this->count_ == 0;
