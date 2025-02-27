@@ -3611,8 +3611,29 @@ namespace detail {
         PrintingNode
     >::type
     {
+        auto container_fmt = StringView{};
+        auto element_fmt = StringView{};
+
+        auto const cut_idx = fmt.find(":");
+        if (cut_idx != StringView::npos)
+        {
+            auto const fmt_parts = split(fmt, std::vector<size_t>{cut_idx});
+            container_fmt = fmt_parts[0];
+            element_fmt = fmt_parts[1];
+        }
+        else
+        {
+            container_fmt = fmt;
+        }
+
+        // std::optional hasn't any container formatting string
+        if (!container_fmt.empty())
+        {
+            return PrintingNode("*Error* on formatting string");
+        }
+
         return value.has_value() ?
-            make_printing_branch(*value, fmt, config) : PrintingNode("nullopt");
+            make_printing_branch(*value, element_fmt, config) : PrintingNode("nullopt");
     }
   #endif
 
