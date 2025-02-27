@@ -280,6 +280,8 @@ namespace boost
     {
         template<typename... T> class variant;
 
+        template<class T> struct variant_size;
+
         template <typename R, typename Visitor, typename Variant>
         constexpr auto visit(Visitor&& vis, Variant&& var) -> R;
     }
@@ -818,6 +820,25 @@ namespace icecream{ namespace detail
           #endif
         >::type;
 
+    // -------------------------------------------------- variant_size
+
+    template <typename... Ts>
+    struct variant_size;
+
+  #if defined(ICECREAM_VARIANT_HEADER)
+    template <typename... Ts>
+    struct variant_size<std::variant<Ts...>>
+    {
+        static size_t const value = std::variant_size_v<std::variant<Ts...>>;
+    };
+  #endif
+
+    template <typename... Ts>
+    struct variant_size<boost::variant2::variant<Ts...>>
+    {
+        static size_t const value =
+            boost::variant2::variant_size<boost::variant2::variant<Ts...>>::value;
+    };
 
     // -------------------------------------------------- is_optional
 
@@ -1576,6 +1597,16 @@ namespace icecream{ namespace detail
     >::type;
   #endif
 
+    template <typename T>
+    auto do_print_variant(
+        T&&, StringView, Config_ const&
+    ) -> typename std::enable_if<!is_variant<T>::value, PrintingNode>::type;
+
+    template <typename T>
+    auto do_print_variant(
+        T&&, StringView, Config_ const&
+    ) -> typename std::enable_if<is_variant<T>::value, PrintingNode>::type;
+
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
@@ -2196,6 +2227,18 @@ namespace icecream{ namespace detail
             return *this;
         }
 
+        auto force_variant_strategy() const -> bool
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->force_variant_strategy_.value();
+        }
+
+        auto force_variant_strategy(bool value) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->force_variant_strategy_ = value;
+            return *this;
+        }
         auto wide_string_transcoder(
             std::function<std::string(wchar_t const*, size_t)>&& transcoder
         ) -> Config&
@@ -2375,6 +2418,8 @@ namespace icecream{ namespace detail
         detail::Hereditary<bool> force_range_strategy_{true};
 
         detail::Hereditary<bool> force_tuple_strategy_{true};
+
+        detail::Hereditary<bool> force_variant_strategy_{true};
 
         detail::Hereditary<std::function<std::string(detail::WStringView)>> wide_string_transcoder_{
             [](detail::WStringView str) -> std::string
@@ -3113,6 +3158,11 @@ namespace detail {
             PrintingNode
         >::type
     {
+        if (config.force_variant_strategy() && is_variant<remove_cvref_t< T>>::value)
+        {
+            return do_print_variant(std::forward<T>(value), fmt, config);
+        }
+
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
         {
@@ -3228,6 +3278,10 @@ namespace detail {
         {
             return do_print_tuple(std::forward<T>(value), fmt, config);
         }
+        else if (config.force_variant_strategy() && is_variant<remove_cvref_t< T>>::value)
+        {
+            return do_print_variant(std::forward<T>(value), fmt, config);
+        }
 
         try
         {
@@ -3266,6 +3320,10 @@ namespace detail {
         else if (config.force_tuple_strategy() && is_tuple<T>::value)
         {
             return do_print_tuple(std::forward<T>(value), fmt, config);
+        }
+        else if (config.force_variant_strategy() && is_variant<remove_cvref_t< T>>::value)
+        {
+            return do_print_variant(std::forward<T>(value), fmt, config);
         }
 
         return PrintingNode(
@@ -3637,22 +3695,61 @@ namespace detail {
     }
   #endif
 
+    template <typename Variant>
     struct Visitor
     {
-        Visitor(StringView fmt, Config_ const& config)
-            : fmt_(fmt)
+        Visitor(Variant const& variant, StringView fmt, Config_ const& config)
+            : variant_(variant)
+            , elements_fmt(
+                [&]() -> std::vector<StringView>
+                {
+                    if (fmt.empty())
+                    {
+                        // No element specifications is equivalent to all them having an empty string
+                        return std::vector<StringView>(variant_size<Variant>::value, StringView{});
+                    }
+
+                    auto const sep = fmt[0];
+                    fmt.remove_prefix(1);
+                    return split(fmt, sep);
+                }()
+            )
             , config_(config)
         {}
 
         template <typename T>
         auto operator()(T const& arg) -> PrintingNode
         {
-            return make_printing_branch(arg, this->fmt_, this->config_);
+            if (this->elements_fmt.size() != variant_size<Variant>::value)
+            {
+                return PrintingNode("*Error* on formatting string");
+            }
+
+            auto const fmt = this->elements_fmt.at(this->variant_.index());
+            return make_printing_branch(arg, fmt, this->config_);
         }
 
-        StringView fmt_;
+        Variant const& variant_;
+        std::vector<StringView> elements_fmt;
         Config_ const& config_;
     };
+
+    template <typename T>
+    auto do_print_variant(
+        T&& value, StringView fmt, Config_ const& config
+    ) -> typename std::enable_if<!is_variant<T>::value, PrintingNode>::type
+    {
+        ICECREAM_UNREACHABLE;
+        return PrintingNode("");
+    }
+
+    template <typename T>
+    auto do_print_variant(
+        T&& value, StringView fmt, Config_ const& config
+    ) -> typename std::enable_if<is_variant<T>::value, PrintingNode>::type
+    {
+        return visit(Visitor<remove_cvref_t<T>>(value, fmt, config), value);
+    }
 
     // Print *::variant<Ts...> classes
     template <typename T>
@@ -3663,7 +3760,7 @@ namespace detail {
         PrintingNode
     >::type
     {
-        return visit(Visitor(fmt, config), value);
+        return do_print_variant(std::forward<T>(value), fmt, config);
     }
 
     template <int... N, typename T>

@@ -27,6 +27,7 @@ and forward.
      * [show_c_string](#show_c_string)
      * [force_range_strategy](#force_range_strategy)
      * [force_tuple_strategy](#force_tuple_strategy)
+     * [force_variant_strategy](#force_variant_strategy)
      * [wide_string_transcoder](#wide_string_transcoder)
      * [unicode_transcoder](#unicode_transcoder)
      * [output_transcoder](#output_transcoder)
@@ -785,6 +786,27 @@ This option has a default value of `true`.
     auto force_tuple_strategy(bool value) -> Config&;
     ```
 
+#### force_variant_strategy
+
+Controls if a variant type `T` (either
+[`std::variant`](https://en.cppreference.com/w/cpp/utility/variant) or
+[`boost::variant2::variant`](https://www.boost.org/doc/libs/release/libs/variant2/doc/html/variant2.html))
+will be printed using the [variant types](#variant-types) strategy even when some of the
+*baseline strategies* would be able to print it. We force the use of *variant types*
+strategy here because it supports more useful formatting options that would be available
+otherwise if using some *baseline strategy*.
+
+This option has a default value of `true`.
+
+- get:
+    ```C++
+    auto force_variant_strategy() const -> bool;
+    ```
+- set:
+    ```C++
+    auto force_variant_strategy(bool value) -> Config&;
+    ```
+
 #### wide_string_transcoder
 
 Function that transcodes a `wchar_t` string, from a system defined encoding to a `char`
@@ -1227,8 +1249,8 @@ ic| v0: (10, 3.14), v1: (7, 6.28, "bla")
 ```
 
 This strategy has a higher precedence than the "baseline strategies", so if the printing
-of a type  supported by both, this strategy will be used instead. This precedence can be
-disabled by the [Tuple like types](#tuple-like-types) configuration.
+of a type supported by both, this strategy will be used instead. This precedence can be
+disabled by the [force_tuple_strategy](#force_tuple_strategy) configuration.
 
 ##### Tuple like format string
 
@@ -1305,8 +1327,8 @@ type is supported by any one of them it will used instead.
 ##### Optional types format string
 
 ```
-optional_spec  ::= [":"element_fmt]
-element_fmt ::= <format specification of the element type>
+optional_spec ::= [":"element_fmt]
+element_fmt   ::= <format specification of the element type>
 ```
 
 ```C++
@@ -1338,8 +1360,35 @@ will print:
 ic| v0: 4.2
 ```
 
-This strategy has a lower precedence than the "baseline strategies". So if the printing
-type is supported by any one of them it will used instead.
+This strategy has a higher precedence than the "baseline strategies", so if the printing
+of a type supported by both, this strategy will be used instead. This precedence can be
+disabled by the [force_variant_strategy](#force_variant_strategy) configuration.
+
+##### Variant types format string
+
+```
+variant_spec ::= [content]
+content      ::= (delimiter element_fmt){N}
+delimiter    ::= <a character, the same to all N expansions>
+element_fmt  ::= <format specification of the element type>
+```
+
+Where the number `N` of repetitions in `content` rule is the number of types in the
+variant.
+
+The code:
+
+```C++
+auto v0 = std::variant<int, char const*>{50};
+IC_F("|b|s", v0);
+```
+
+will print:
+
+```
+ic| v0: 110010
+```
+
 
 #### Exception types
 
