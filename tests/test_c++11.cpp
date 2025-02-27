@@ -489,13 +489,25 @@ TEST_CASE("boost_optional")
 
 TEST_CASE("boost_variant2")
 {
-    IC_CONFIG_SCOPE();
-    auto str = std::string{};
-    IC_CONFIG.output(str);
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
 
-    auto v0 = boost::variant2::variant<int, double, char> {6.28};
-    IC(v0);
-    REQUIRE(str == "ic| v0: 6.28\n");
+        auto v0 = boost::variant2::variant<int, double, char> {6.28};
+        IC(v0);
+        REQUIRE(str == "ic| v0: 6.28\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = boost::variant2::variant<int, char const*>{50};
+        IC_F("|b|s", v0);
+        REQUIRE(str == "ic| v0: 110010\n");
+    }
 }
 
 

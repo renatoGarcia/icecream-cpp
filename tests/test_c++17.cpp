@@ -72,13 +72,25 @@ TEST_CASE("std_optional")
 
 TEST_CASE("std_variant")
 {
-    IC_CONFIG_SCOPE();
-    auto str = std::string{};
-    IC_CONFIG.output(str);
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
 
-    auto v0 = std::variant<int, double, char> {3.14};
-    IC(v0);
-    REQUIRE(str == "ic| v0: 3.14\n");
+        auto v0 = std::variant<int, double, char> {3.14};
+        IC(v0);
+        REQUIRE(str == "ic| v0: 3.14\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto v0 = std::variant<int, char const*>{50};
+        IC_F("|b|s", v0);
+        REQUIRE(str == "ic| v0: 110010\n");
+    }
 }
 
 
