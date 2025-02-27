@@ -1258,7 +1258,7 @@ IC_F("n|#x||.3e", v0);
 will print:
 
 ```
-ic| ic| v0: 0x14, "foo", 1.230e-02
+ic| v0: 0x14, "foo", 1.230e-02
 ```
 
 ###### casing
@@ -1301,6 +1301,24 @@ ic| v0: 10, v1: nullopt
 
 This strategy has a lower precedence than the "baseline strategies". So if the printing
 type is supported by any one of them it will used instead.
+
+##### Optional types format string
+
+```
+optional_spec  ::= [":"element_fmt]
+element_fmt ::= <format specification of the element type>
+```
+
+```C++
+auto v0 = std::optional<int>{50};
+IC_F(":#x", v0);
+```
+
+will print:
+
+```
+ic| v0: 0x32
+```
 
 #### Variant types
 

@@ -57,6 +57,16 @@ TEST_CASE("std_optional")
         IC(s2);
         REQUIRE(str == "ic| s2: ||opt MyClass|| <MyClass 1>\n");
     }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        auto s0 = std::optional<int>{50};
+        IC_F(":#x", s0);
+        REQUIRE(str == "ic| s0: 0x32\n");
+    }
 }
 
 
