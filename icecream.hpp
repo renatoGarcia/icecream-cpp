@@ -252,8 +252,6 @@
 #endif
 
 
-#define ICECREAM_ASSERT(exp, msg) assert(((void)msg, exp))
-
 #define ICECREAM_UNREACHABLE assert(((void)"Should not reach here. Please report the bug", false))
 
 
@@ -2118,7 +2116,7 @@ namespace icecream{ namespace detail
             }
             else
             {
-                ICECREAM_ASSERT(false, "Should never reach here");
+                ICECREAM_UNREACHABLE;
                 return this->storage.value();
             }
         }
@@ -4560,7 +4558,7 @@ namespace detail {
         bool, std::string const& = "", std::string const& = ""
     ) -> std::pair<std::string, PrintingNode>
     {
-        ICECREAM_ASSERT(false, "Shoud not reach here.");
+        ICECREAM_UNREACHABLE;
         return std::pair<std::string, PrintingNode>("", PrintingNode(""));
     }
 
