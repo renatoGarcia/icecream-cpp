@@ -216,9 +216,9 @@
 #define ICECREAM_APPLY(fmt, argument_names, N, ...)                       \
     ICECREAM_EXPAND(ICECREAM_APPLY_(fmt, argument_names, N, __VA_ARGS__))
 
-#define ICECREAM_DISPATCH(is_ic_apply, fmt, argument_names, ...)                           \
-    ::icecream::detail::Dispatcher{                                                        \
-        is_ic_apply, icecream_config_5f803a3bcdb4, __FILE__, __LINE__, ICECREAM_FUNCTION, fmt, argument_names \
+#define ICECREAM_DISPATCH(is_ic_apply, fmt, argument_names, ...)                                                      \
+    ::icecream::detail::Dispatcher{                                                                                   \
+        is_ic_apply, icecream_private_config_5f803a3bcdb4, __FILE__, __LINE__, ICECREAM_FUNCTION, fmt, argument_names \
     }.ret(__VA_ARGS__)
 
 #if defined(ICECREAM_LONG_NAME)
@@ -228,12 +228,12 @@
     #define ICECREAM_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
-    #define ICECREAM_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define ICECREAM_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define ICECREAM_CONFIG_SCOPE()                                                                    \
-        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4;         \
-        ::icecream::detail::Config_ icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
-        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_config_5f803a3bcdb4;
+    #define ICECREAM_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define ICECREAM_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define ICECREAM_CONFIG_SCOPE()                                                                            \
+        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_private_config_5f803a3bcdb4;         \
+        ::icecream::detail::Config_ icecream_private_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
+        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_private_config_5f803a3bcdb4;
     #define ICECREAM_CONFIG icecream_public_config_5f803a3bcdb4
 #else
     #define IC(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__, __VA_ARGS__)
@@ -242,12 +242,12 @@
     #define IC_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
-    #define IC_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define IC_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define IC_CONFIG_SCOPE()                                                                          \
-        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_config_5f803a3bcdb4;         \
-        ::icecream::detail::Config_ icecream_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
-        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_config_5f803a3bcdb4;
+    #define IC_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define IC_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
+    #define IC_CONFIG_SCOPE()                                                                                  \
+        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_private_config_5f803a3bcdb4;         \
+        ::icecream::detail::Config_ icecream_private_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
+        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_private_config_5f803a3bcdb4;
     #define IC_CONFIG icecream_public_config_5f803a3bcdb4
 #endif
 
@@ -5697,8 +5697,8 @@ namespace detail {
 
 
 namespace {
-    auto& icecream_config_5f803a3bcdb4 = icecream::detail::Config_::global();
-    auto& icecream_public_config_5f803a3bcdb4 = static_cast<::icecream::Config&>(icecream_config_5f803a3bcdb4);
+    auto& icecream_private_config_5f803a3bcdb4 = icecream::detail::Config_::global();
+    auto& icecream_public_config_5f803a3bcdb4 = static_cast<::icecream::Config&>(icecream_private_config_5f803a3bcdb4);
 }
 
 #endif // ICECREAM_HPP_INCLUDED
