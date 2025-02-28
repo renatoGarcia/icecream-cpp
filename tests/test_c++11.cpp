@@ -640,6 +640,18 @@ TEST_CASE("arrays")
     {
         IC_CONFIG_SCOPE();
         auto str = std::string{};
+        IC_CONFIG
+            .output(str)
+            .decay_char_array(true);
+
+        char v0[] = "abc";
+        IC(v0);
+        REQUIRE(str == "ic| v0: \"abc\"\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
         IC_CONFIG.output(str);
 
         int v0[] = {10, 20, 30};

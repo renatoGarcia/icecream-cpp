@@ -25,6 +25,7 @@ and forward.
      * [output](#output)
      * [prefix](#prefix)
      * [show_c_string](#show_c_string)
+     * [decay_char_array](#decay_char_array)
      * [force_range_strategy](#force_range_strategy)
      * [force_tuple_strategy](#force_tuple_strategy)
      * [force_variant_strategy](#force_variant_strategy)
@@ -477,27 +478,18 @@ should be the `flavor` variable.
 
 ```
 ic| flavor: 0x55587b6f5410
-ic| flavor: ['p', 'i', 's', 't', 'a', 'c', 'h', 'i', 'o', '\0']
+ic| flavor: ['p', 'i', 's', 't', 'a', 'c', 'h', 'i', 'o', '\u{0}']
 ic| flavor: "pistachio"
 ```
 
-The Icecream-cpp policy is to handle any bounded `char` array (i.e.: array with a known
-size) as an array of single characters. So the code:
+A bounded `char` array (i.e.: array with a known size) will either be interpreted as an
+array of single characters or let decay to a `char*`, subject to the
+[`decay_char_array`](#decay_char_array) option.
 
-```C++
-char flavor[] = "chocolate";
-IC(flavor);
-```
 
-will print:
-
-```
-ic| flavor: ['c', 'h', 'o', 'c', 'o', 'l', 'a', 't', 'e', '\0']
-```
-
-unbounded `char[]` arrays (i.e.: array with an unknown size) will decay to `char*`
-pointers, and will be printed either as a string or a pointer as configured by the
-[show_c_string](#show_c_string) option.
+An unbounded `char[]` arrays (i.e.: array with an unknown size) will decay to `char*`
+pointers, and a character pointer will be printed either as a string or as a pointer as
+configured by the [`show_c_string`](#show_c_string) option.
 
 The exact same logic as above applies to C strings of all character types, namely `char`,
 `wchar_t`, `char8_t`, `char16_t`, and `char32_t`.
@@ -716,8 +708,9 @@ thread 1 | 3: 3
 
 #### show_c_string
 
-Controls if a `char*` variable should be interpreted as a null-terminated C string
-(`true`) or a pointer to a `char` (`false`). The default value is `true`.
+Controls if a character pointer variable (`char*` `wchar_t*`, `char8_t*`, `char16_t*`, or
+`char32_t*`) should be interpreted as a null-terminated C string (`true`) or a pointer to
+a `char` (`false`). The default value is `true`.
 
 - get:
     ```C++
@@ -745,6 +738,44 @@ will print:
 ```
 ic| flavor: "mango";
 ic| flavor: 0x55587b6f5410
+```
+
+#### decay_char_array
+
+Controls if a character array variable (`char[N]` `wchar_t[N]`, `char8_t[N]`,
+`char16_t[N]`, or `char32_t[N]`) should decay to a character pointer (when `true`) to be
+printed by the [*strings strategy*](#strings) (subject to the
+[`show_c_string`](#show_c_string) configuration), or remain as an array (when `false`) to
+be printed by the [*range types*](#range-types) strategy.
+
+The default value is `false`.
+
+- get:
+    ```C++
+    auto decay_char_array() const -> bool;
+    ```
+- set:
+    ```C++
+    auto decay_char_array(bool value) -> Config&;
+    ```
+
+The code:
+
+```C++
+char flavor[] = "caju";
+
+IC_CONFIG.decay_char_array(true);
+IC(flavor);
+
+IC_CONFIG.decay_char_array(false);
+IC(flavor);
+```
+
+will print:
+
+```
+ic| flavor: "caju";
+ic| flavor: ['c', 'a', 'j', 'u', '\u{0}']
 ```
 
 #### force_range_strategy

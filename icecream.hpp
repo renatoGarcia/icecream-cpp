@@ -1639,7 +1639,7 @@ namespace icecream{ namespace detail
     auto do_print_range(
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
-        is_range<T>::value,
+        !is_range<T>::value,
         PrintingNode
     >::type;
 
@@ -1647,8 +1647,18 @@ namespace icecream{ namespace detail
     auto do_print_range(
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
-        !is_range<T>::value,
-        PrintingNode
+        is_range<T>::value
+        && is_c_string<typename std::decay<T>::type>::value
+        , PrintingNode
+    >::type;
+
+    template <typename T, typename ForceArrayAcceptance=std::false_type>
+    auto do_print_range(
+        T&&, StringView, Config_ const&
+    ) -> typename std::enable_if<
+        is_range<T>::value
+        && (!is_c_string<typename std::decay<T>::type>::value || ForceArrayAcceptance::value)
+        , PrintingNode
     >::type;
 
     // Print all elements of a range
@@ -2131,7 +2141,11 @@ namespace icecream{ namespace detail
             : enabled_(parent->enabled_)
             , output_(parent->output_)
             , prefix_(parent->prefix_)
+            , decay_char_array_(parent->decay_char_array_)
             , show_c_string_(parent->show_c_string_)
+            , force_range_strategy_(parent->force_range_strategy_)
+            , force_tuple_strategy_(parent->force_tuple_strategy_)
+            , force_variant_strategy_(parent->force_variant_strategy_)
             , wide_string_transcoder_(parent->wide_string_transcoder_)
             , unicode_transcoder_(parent->unicode_transcoder_)
             , output_transcoder_(parent->output_transcoder_)
@@ -2185,6 +2199,19 @@ namespace icecream{ namespace detail
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
             this->prefix_ = detail::Prefix(detail::to_invocable(std::forward<Ts>(value))...);
+            return *this;
+        }
+
+        auto decay_char_array() const -> bool
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            return this->decay_char_array_.value();
+        }
+
+        auto decay_char_array(bool value) -> Config&
+        {
+            std::lock_guard<std::mutex> guard(this->attribute_mutex);
+            this->decay_char_array_ = value;
             return *this;
         }
 
@@ -2412,6 +2439,8 @@ namespace icecream{ namespace detail
                 }
             )
         };
+
+        detail::Hereditary<bool> decay_char_array_{false};
 
         detail::Hereditary<bool> show_c_string_{true};
 
@@ -4302,10 +4331,40 @@ namespace detail {
         return PrintingNode("");
     }
 
+    // Check if T is an array of characters (CharT[[N]). If true, and decay_char_array
+    // option is also true, then print value as a C string (CharT*).
     template <typename T>
     auto do_print_range(
         T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_range<T>::value, PrintingNode>::type
+    ) ->
+        typename std::enable_if<
+            is_range<T>::value
+            && is_c_string<typename std::decay<T>::type>::value
+            , PrintingNode
+        >::type
+    {
+        if (config.decay_char_array())
+        {
+            using PCharT = typename std::decay<T>::type;
+            return make_printing_branch(static_cast<PCharT>(value), fmt, config);
+        }
+        else
+        {
+            return do_print_range<T, std::true_type>(std::forward<T>(value), fmt, config);
+        }
+    }
+
+    // The ForceArrayAcceptance argument is used so that the do_print_range overload that
+    // handles characters arrays can delegate the printing when not decaying
+    template <typename T, typename ForceArrayAcceptance/*=std::false_type*/>
+    auto do_print_range(
+        T&& value, StringView fmt, Config_ const& config
+    ) ->
+        typename std::enable_if<
+            is_range<T>::value
+            && (!is_c_string<typename std::decay<T>::type>::value || ForceArrayAcceptance::value)
+            , PrintingNode
+        >::type
     {
         auto range_fmt = StringView{};
         auto elements_fmt = StringView{};
