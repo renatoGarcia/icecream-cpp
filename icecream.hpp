@@ -351,7 +351,13 @@ namespace icecream{ namespace detail
         >::type;
 
 
-    // -------------------------------------------------- remove_cvref
+    // -------------------------------------------------- remove_ref_t
+
+    template <typename T>
+    using remove_ref_t = typename std::remove_reference<T>::type;
+
+
+    // -------------------------------------------------- remove_cvref_t
 
     template <typename T>
     using remove_cvref_t =
@@ -359,6 +365,8 @@ namespace icecream{ namespace detail
 
 
     // -------------------------------------------------- int_sequence
+
+    // A call to `make_int_sequence<N>` will return a type `int_sequence<0, 1, 2, ..., N-1>`
 
     template <int...>
     struct int_sequence {};
@@ -379,6 +387,11 @@ namespace icecream{ namespace detail
     // -------------------------------------------------- is_bounded_array
 
     // Checks if T is an array with a known size.
+    //
+    // is_bounded_array<int[5]> will return true
+    // is_bounded_array<int[]> will return false
+    // is_bounded_array<int> will return false
+
     template <typename T>
     struct is_bounded_array_impl: std::false_type {};
 
@@ -386,13 +399,13 @@ namespace icecream{ namespace detail
     struct is_bounded_array_impl<T[N]>: std::true_type {};
 
     template <typename T>
-    using is_bounded_array =
-        typename is_bounded_array_impl<typename std::remove_reference<T>::type>::type;
+    using is_bounded_array = typename is_bounded_array_impl<T>::type;
 
 
     // -------------------------------------------------- is_invocable
 
     // Checks if T is nullary invocable, i.e.: the statement T() is valid.
+
     template <typename T>
     auto is_invocable_impl(int) -> decltype(std::declval<T&>()(), std::true_type{});
 
@@ -402,9 +415,12 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_invocable = decltype(is_invocable_impl<T>(0));
 
+
     // -------------------------------------------------- is_string_convertible
 
-    // Checks if T is nullary invocable, i.e.: the statement T(U) is valid.
+    // Checks if T is "string convertible", i.e.: is accepted as argument to a std::string
+    // constructor.
+
     template <typename T>
     auto is_string_convertible_impl(int) -> decltype(std::string(std::declval<T&>()), std::true_type{});
 
@@ -414,9 +430,11 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_string_convertible = decltype(is_string_convertible_impl<T>(0));
 
+
     // -------------------------------------------------- returned_type
 
     // Returns the result type of nullary function
+
     template <typename T>
     auto returned_type_impl(int) -> decltype(std::declval<T&>()());
 
@@ -429,6 +447,9 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- resolve_view_t
 
+    // Applies the pipe operator between a range and a value of type T, and returns the
+    // resulting view type.
+
     template <typename T>
     auto resolve_view_t_impl(int) -> decltype(std::declval<std::vector<int>&>() | std::declval<T&>());
 
@@ -440,6 +461,7 @@ namespace icecream{ namespace detail
 
 
     // -------------------------------------------------- is_sized
+
     // Checks if a class `T` has either a `size()` method or a `size(T const&)` overload.
 
     template <typename T>
@@ -478,6 +500,8 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- is_sentinel_for
 
+    // Checks if `S` is a sentinel type to an iterator `I`
+
     template <typename S, typename I>
     auto is_sentinel_for_impl(int) ->
         decltype (
@@ -497,6 +521,8 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- is_range
 
+    // Checks if the type `R` is a range.
+
     template <typename R>
     auto is_range_impl(int) ->
         decltype (
@@ -514,11 +540,15 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- get_iterator_t
 
+    // Gets the iterator type of a range `R`
+
     template <typename R>
     using get_iterator_t = decltype(begin(std::declval<R&>()));
 
 
     // -------------------------------------------------- get_reference_t
+
+    // Gets the reference type (the derreference result) of an iterator `I`
 
     template <typename I>
     using get_reference_t = decltype(*std::declval<I&>());
@@ -617,7 +647,8 @@ namespace icecream{ namespace detail
 
 
     // -------------------------------------------------- has_push_back_T
-    // Checks if the class `C` has a method push_back(`T`)
+
+    // Checks if the `C` class has a push_back(`T`) method
 
     template <typename C, typename T>
     auto has_push_back_T_impl(int) ->
@@ -635,7 +666,8 @@ namespace icecream{ namespace detail
 
     // --------------------------------------------------is_streamable
 
-    // Checks if T has an insertion overload, i.e.: std::ostream& << T&
+    // Checks if `T` has an insertion overload, i.e.: `std::ostream& << T&`
+
     template <typename T>
     auto is_streamable_impl(int) ->
         decltype(
@@ -651,6 +683,8 @@ namespace icecream{ namespace detail
 
 
     // --------------------------------------------------is_stl_formattable
+
+    // Checks if type `T` is formattable by STL Formatting library
 
   #if defined(ICECREAM_STL_FORMAT)
     template <class T>
@@ -669,6 +703,8 @@ namespace icecream{ namespace detail
 
 
     // --------------------------------------------------is_fmt_formattable
+
+    // Checks if type `T` is formattable by {fmt} library
 
   #if defined(ICECREAM_FMT_ENABLED)
     template <class T>
@@ -691,11 +727,13 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_baseline_printable =
         typename disjunction<
-            is_streamable<T>, is_stl_formattable<T>, is_fmt_formattable<T>
+        is_streamable<T>, is_stl_formattable<T>, is_fmt_formattable<T>
         >::type;
 
 
     // -------------------------------------------------- has_to_string
+
+    // Checks if there is a `size(T const&)` overload to a `T` type.
 
     template <typename T>
     auto has_to_string_impl(int) ->
@@ -713,29 +751,31 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- is_tuple
 
-    // Checks if T is a tuple like type, i.e.: an instantiation of one of
+    // Checks if `T` is a tuple like type, i.e.: an instantiation of one of
     // std::pair<typename U0, typename U1> or std::tuple<typename... Us>.
+
     template <typename T>
     using is_tuple =
         typename disjunction<
-            is_instantiation<std::pair, remove_cvref_t<T>>,
-            is_instantiation<std::tuple, remove_cvref_t<T>>
+            is_instantiation<std::pair, T>,
+            is_instantiation<std::tuple, T>
         >::type;
 
 
     // -------------------------------------------------- is_character
 
-    // Checks if T is character type (char, char16_t, etc).
+    // Checks if T is character type [const, volatile]?[char, wchar_t, char8_t, char16_t, char32].
+
     template <typename T>
     using is_character =
         typename disjunction<
-            std::is_same<typename std::decay<T>::type, char>,
-            std::is_same<typename std::decay<T>::type, wchar_t>,
+            std::is_same<typename std::remove_cv<T>::type, char>,
+            std::is_same<typename std::remove_cv<T>::type, wchar_t>,
           #if defined(__cpp_char8_t)
-            std::is_same<typename std::decay<T>::type, char8_t>,
+            std::is_same<typename std::remove_cv<T>::type, char8_t>,
           #endif
-            std::is_same<typename std::decay<T>::type, char16_t>,
-            std::is_same<typename std::decay<T>::type, char32_t>
+            std::is_same<typename std::remove_cv<T>::type, char16_t>,
+            std::is_same<typename std::remove_cv<T>::type, char32_t>
         >::type;
 
 
@@ -744,36 +784,24 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_xsig_char =
         typename disjunction<
-            std::is_same<typename std::decay<T>::type, signed char>,
-            std::is_same<typename std::decay<T>::type, unsigned char>
+            std::is_same<typename std::remove_cv<T>::type, signed char>,
+            std::is_same<typename std::remove_cv<T>::type, unsigned char>
         >::type;
 
 
     // -------------------------------------------------- is_c_string
 
-    // Checks if T is C string type, i.e.: either char* or char[]. A char[N] is not
-    // considered a C string.
+    // Checks if T is a C string type, i.e.: either char*, a char[], or a char[N]; of any
+    // character type
+
     template <typename T>
     using is_c_string =
-        typename conjunction<
-            negation<is_bounded_array<T>>,
-            disjunction<
-                std::is_same<typename std::decay<T>::type, char*>,
-                std::is_same<typename std::decay<T>::type, char const*>,
-                std::is_same<typename std::decay<T>::type, signed char*>,
-                std::is_same<typename std::decay<T>::type, signed char const*>,
-                std::is_same<typename std::decay<T>::type, unsigned char*>,
-                std::is_same<typename std::decay<T>::type, unsigned char const*>,
-                std::is_same<typename std::decay<T>::type, wchar_t*>,
-                std::is_same<typename std::decay<T>::type, wchar_t const*>,
-              #if defined(__cpp_char8_t)
-                std::is_same<typename std::decay<T>::type, char8_t*>,
-                std::is_same<typename std::decay<T>::type, char8_t const*>,
-              #endif
-                std::is_same<typename std::decay<T>::type, char16_t*>,
-                std::is_same<typename std::decay<T>::type, char16_t const*>,
-                std::is_same<typename std::decay<T>::type, char32_t*>,
-                std::is_same<typename std::decay<T>::type, char32_t const*>
+        typename disjunction<
+            conjunction<
+                std::is_pointer<T>, is_character<typename std::remove_pointer<T>::type>
+            >,
+            conjunction<
+                std::is_array<T>, is_character<typename std::remove_extent<T>::type>
             >
         >::type;
 
@@ -781,42 +809,54 @@ namespace icecream{ namespace detail
     // -------------------------------------------------- is_std_string
 
     // Checks if T is a std::basic_string<typename U>
+
     template <typename T>
-    using is_std_string = typename is_instantiation<std::basic_string, remove_cvref_t<T>>::type;
+    using is_std_string =
+        typename is_instantiation<std::basic_string, typename std::remove_cv<T>::type>::type;
 
 
     // -------------------------------------------------- is_string_view
 
     // Checks if T is a std::basic_string_view<typename U>
+
     template <typename T>
     using is_string_view =
         typename disjunction<
           #if defined(ICECREAM_STRING_VIEW_HEADER)
-            is_instantiation<std::basic_string_view, remove_cvref_t<T>>
+            is_instantiation<std::basic_string_view, typename std::remove_cv<T>::type>
           #endif
         >::type;
 
-    // -------------------------------------------------- is_collection
 
-    // Checks if T is a collection, i.e.: a range type that is not a std::string.
+    // -------------------------------------------------- bypass_baseline_printing
+
+    // Checks if a type T would be baseline printable, but uses a custom strategy instead
+
     template <typename T>
-    using is_collection =
-        typename conjunction<
-            is_range<T>, negation<is_std_string<T>>, negation<is_string_view<T>>
+    using bypass_baseline_printing =
+        typename disjunction<
+            is_character<remove_ref_t<T>>,
+            is_c_string<remove_ref_t<T>>,
+            is_xsig_char<remove_ref_t<T>>,
+            is_std_string<remove_ref_t<T>>,
+            is_string_view<remove_ref_t<T>>,
+            std::is_array<remove_ref_t<T>>
         >::type;
 
 
     // -------------------------------------------------- is_variant
 
     // Checks if T is a variant type.
+
     template <typename T>
     using is_variant =
         typename disjunction<
-            is_instantiation<boost::variant2::variant, remove_cvref_t<T>>
+            is_instantiation<boost::variant2::variant, typename std::remove_cv<T>::type>
           #if defined(ICECREAM_VARIANT_HEADER)
-            , is_instantiation<std::variant, remove_cvref_t<T>>
+            , is_instantiation<std::variant, typename std::remove_cv<T>::type>
           #endif
         >::type;
+
 
     // -------------------------------------------------- variant_size
 
@@ -838,14 +878,16 @@ namespace icecream{ namespace detail
             boost::variant2::variant_size<boost::variant2::variant<Ts...>>::value;
     };
 
+
     // -------------------------------------------------- is_optional
 
     // Checks if T is an optional type.
+
     template <typename T>
     using is_optional =
         typename disjunction<
           #if defined(ICECREAM_OPTIONAL_HEADER)
-            is_instantiation<std::optional, remove_cvref_t<T>>
+            is_instantiation<std::optional, typename std::remove_cv<T>::type>
           #endif
         >::type;
 
@@ -854,11 +896,12 @@ namespace icecream{ namespace detail
 
     // Checks if T is either std::unique_ptr<typename U> instantiation (Until C++20), or a
     // boost::scoped_ptr<typename U>. Both are without an operator<<(ostream&) overload.
+
     template <typename T>
     using is_unstreamable_ptr =
         typename disjunction<
-            is_instantiation<std::unique_ptr, remove_cvref_t<T>>,
-            is_instantiation<boost::scoped_ptr, remove_cvref_t<T>>
+            is_instantiation<std::unique_ptr, typename std::remove_cv<T>::type>,
+            is_instantiation<boost::scoped_ptr, typename std::remove_cv<T>::type>
         >::type;
 
 
@@ -866,11 +909,12 @@ namespace icecream{ namespace detail
 
     // Checks if T is a instantiation if either std::weak_ptr<typename U> or
     // boost::weak_ptr<typename U>.
+
     template <typename T>
     using is_weak_ptr =
         typename disjunction<
-            is_instantiation<std::weak_ptr, remove_cvref_t<T>>,
-            is_instantiation<boost::weak_ptr, remove_cvref_t<T>>
+            is_instantiation<std::weak_ptr, typename std::remove_cv<T>::type>,
+            is_instantiation<boost::weak_ptr, typename std::remove_cv<T>::type>
         >::type;
 
 
@@ -878,12 +922,13 @@ namespace icecream{ namespace detail
 
     // Checks if T can be used as prefix, i.e.: T is a string or a nullary function
     // returning a type that has a "ostream <<" overload.
+
     template <typename T>
     using is_valid_prefix =
         typename disjunction<
-            is_std_string<T>,
-            is_string_view<T>,
-            is_c_string<typename std::decay<T>::type>,
+            is_std_string<remove_ref_t<T>>,
+            is_string_view<remove_ref_t<T>>,
+            is_c_string<remove_ref_t<T>>,
             conjunction<
                 is_invocable<T>,
                 is_streamable<returned_type<T>>
@@ -892,6 +937,7 @@ namespace icecream{ namespace detail
 
 
     // -------------------------------------------------- is_T_output_iterator
+
     // Checks if `Iterator` is an output iterator with type `Item`
 
     template <typename Iterator, typename Item>
@@ -914,17 +960,17 @@ namespace icecream{ namespace detail
     using is_handled_by_clang_dump_struct =
         typename negation<
             disjunction<
-                is_collection<T>,
-                is_tuple<T>,
-                is_unstreamable_ptr<T>,
-                is_weak_ptr<T>,
-                is_std_string<T>,
-                is_string_view<T>,
-                is_variant<T>,
-                is_optional<T>,
+                is_range<T>,
+                is_tuple<remove_cvref_t<T>>,
+                is_unstreamable_ptr<remove_ref_t<T>>,
+                is_weak_ptr<remove_ref_t<T>>,
+                is_std_string<remove_ref_t<T>>,
+                is_string_view<remove_ref_t<T>>,
+                is_variant<remove_ref_t<T>>,
+                is_optional<remove_ref_t<T>>,
                 is_baseline_printable<T>,
-                is_character<T>,
-                is_c_string<T>,
+                is_character<remove_ref_t<T>>,
+                is_c_string<remove_ref_t<T>>,
                 std::is_base_of<std::exception, remove_cvref_t<T>>,
                 std::is_base_of<boost::exception, remove_cvref_t<T>>
             >
@@ -945,6 +991,7 @@ namespace icecream{ namespace detail
         return std::move(t);
     };
 
+
     // -------------------------------------------------- Identity
 
     struct Identity
@@ -955,6 +1002,7 @@ namespace icecream{ namespace detail
             return std::forward<T>(t);
         }
     };
+
 
     // -------------------------------------------------- min
 
@@ -1492,13 +1540,8 @@ namespace icecream{ namespace detail
             is_streamable<T>::value
             && !is_stl_formattable<T>::value
             && !is_fmt_formattable<T>::value
-            && !is_c_string<T>::value
-            && !is_character<T>::value
-            && !is_xsig_char<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-            && !std::is_array<remove_cvref_t<T>>::value,
-            PrintingNode
+            && !bypass_baseline_printing<T>::value
+            , PrintingNode
         >::type;
 
   #if defined(ICECREAM_STL_FORMAT)
@@ -1510,13 +1553,8 @@ namespace icecream{ namespace detail
         typename std::enable_if<
             is_stl_formattable<T>::value
             && !is_fmt_formattable<T>::value
-            && !is_character<T>::value
-            && !is_c_string<T>::value
-            && !is_xsig_char<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-            && !std::is_array<remove_cvref_t<T>>::value,
-            PrintingNode
+            && !bypass_baseline_printing<T>::value
+            , PrintingNode
         >::type;
   #endif
 
@@ -1528,13 +1566,8 @@ namespace icecream{ namespace detail
     ) ->
         typename std::enable_if<
             is_fmt_formattable<T>::value
-            && !is_c_string<T>::value
-            && !is_character<T>::value
-            && !is_xsig_char<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-            && !std::is_array<remove_cvref_t<T>>::value,
-            PrintingNode
+            && !bypass_baseline_printing<T>::value
+            , PrintingNode
         >::type;
   #endif
 
@@ -1542,7 +1575,7 @@ namespace icecream{ namespace detail
     template <typename T>
     auto make_printing_branch(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type;
+   ) -> typename std::enable_if<is_c_string<remove_ref_t<T>>::value, PrintingNode>::type;
 
     // Print std::string and std::string_view
     template <typename T>
@@ -1550,7 +1583,7 @@ namespace icecream{ namespace detail
         T&&, StringView, Config_ const&
     ) ->
         typename std::enable_if<
-            is_std_string<T>::value || is_string_view<remove_cvref_t<T>>::value,
+            is_std_string<remove_ref_t<T>>::value || is_string_view<remove_ref_t<T>>::value,
             PrintingNode
         >::type;
 
@@ -1561,7 +1594,9 @@ namespace icecream{ namespace detail
     template <typename T>
     auto make_printing_branch(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type;
+    ) -> typename std::enable_if<
+            is_character<remove_ref_t<T>>::value, PrintingNode
+        >::type;
 
     // Print signed and unsigned char
     template <typename T>
@@ -1574,7 +1609,7 @@ namespace icecream{ namespace detail
     auto make_printing_branch(
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
-        is_unstreamable_ptr<T>::value && !is_baseline_printable<T>::value,
+        is_unstreamable_ptr<remove_ref_t<T>>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
@@ -1582,7 +1617,7 @@ namespace icecream{ namespace detail
     template <typename T>
     auto make_printing_branch(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type;
+    ) -> typename std::enable_if<is_weak_ptr<remove_ref_t<T>>::value, PrintingNode>::type;
 
   #if defined(ICECREAM_OPTIONAL_HEADER)
     // Print std::optional<> classes
@@ -1590,7 +1625,7 @@ namespace icecream{ namespace detail
     auto make_printing_branch(
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
-        is_optional<T>::value && !is_baseline_printable<T>::value,
+        is_optional<remove_ref_t<T>>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
   #endif
@@ -1598,66 +1633,56 @@ namespace icecream{ namespace detail
     template <typename T>
     auto do_print_variant(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<!is_variant<T>::value, PrintingNode>::type;
+    ) -> typename std::enable_if<!is_variant<remove_ref_t<T>>::value, PrintingNode>::type;
 
     template <typename T>
     auto do_print_variant(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<is_variant<T>::value, PrintingNode>::type;
+    ) -> typename std::enable_if<is_variant<remove_ref_t<T>>::value, PrintingNode>::type;
 
     // Print *::variant<Ts...> classes
     template <typename T>
     auto make_printing_branch(
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
-        is_variant<T>::value && !is_baseline_printable<T>::value,
+        is_variant<remove_ref_t<T>>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
     template <typename T>
     auto do_print_tuple(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<!is_tuple<T>::value, PrintingNode>::type;
+    ) -> typename std::enable_if<
+            !is_tuple<remove_cvref_t<T>>::value
+            , PrintingNode
+        >::type;
 
     template <typename T>
     auto do_print_tuple(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<is_tuple<T>::value, PrintingNode>::type;
+    ) -> typename std::enable_if<
+            is_tuple<remove_cvref_t<T>>::value
+            , PrintingNode
+        >::type;
 
     // Print tuple like classes
     template <typename T>
     auto make_printing_branch(
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
-        is_tuple<T>::value && !is_baseline_printable<T>::value,
+        is_tuple<remove_cvref_t<T>>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type;
 
     template <typename T>
     auto do_print_range(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<
-        !is_range<T>::value,
-        PrintingNode
-    >::type;
+    ) -> typename std::enable_if<!is_range<T>::value, PrintingNode>::type;
 
     template <typename T>
     auto do_print_range(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<
-        is_range<T>::value
-        && is_c_string<typename std::decay<T>::type>::value
-        , PrintingNode
-    >::type;
-
-    template <typename T, typename ForceArrayAcceptance=std::false_type>
-    auto do_print_range(
-        T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<
-        is_range<T>::value
-        && (!is_c_string<typename std::decay<T>::type>::value || ForceArrayAcceptance::value)
-        , PrintingNode
-    >::type;
+    ) -> typename std::enable_if<is_range<T>::value , PrintingNode>::type;
 
     // Print all elements of a range
     template <typename T>
@@ -1665,13 +1690,16 @@ namespace icecream{ namespace detail
         T&&, StringView, Config_ const&
     ) -> typename std::enable_if<
         (
-            is_range<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-            && !is_baseline_printable<T>::value
+            is_range<T>::value                      // it is range
+            && !is_baseline_printable<T>::value     // but it is not printable by baseline strategies
+            && !bypass_baseline_printing<T>::value  // and it hasn't its own strategy
+         ) || (
+            // Except by arrays of anything other than character, which are baseline
+            // printable, but should be printed by this strategy instead.
+            std::is_array<remove_ref_t<T>>::value
+            && !is_c_string<remove_ref_t<T>>::value
         )
-        || std::is_array<remove_cvref_t<T>>::value,
-        PrintingNode
+        , PrintingNode
     >::type;
 
     // Print classes deriving from only std::exception and not from boost::exception
@@ -2019,11 +2047,11 @@ namespace icecream{ namespace detail
 
     // If value is a string returns an function that returns it.
     template <typename T>
-    auto to_invocable(T&& value,
+    auto to_invocable(T&& value) ->
         typename std::enable_if<
-            is_std_string<T>::value || is_c_string<typename std::decay<T>::type>::value
-        >::type* = nullptr
-    ) -> std::function<std::string()>
+            is_std_string<remove_ref_t<T>>::value || is_c_string<remove_ref_t<T>>::value
+            , std::function<std::string()>
+        >::type
     {
         auto const str = std::string{value};
         return [str]{return str;};
@@ -2031,11 +2059,11 @@ namespace icecream{ namespace detail
 
     // If value is already invocable do nothing.
     template <typename T>
-    auto to_invocable(T&& value,
+    auto to_invocable(T&& value) ->
         typename std::enable_if<
             is_invocable<T>::value
-        >::type* = nullptr
-    ) -> T&&
+            , T&&
+        >::type
     {
         return std::forward<T>(value);
     }
@@ -2191,8 +2219,11 @@ namespace icecream{ namespace detail
         template <typename... Ts>
         auto prefix(Ts&&... value) ->
             typename std::enable_if<
-                sizeof...(Ts) >= 1 && detail::conjunction<detail::is_valid_prefix<Ts>...>::value,
-                Config&
+                sizeof...(Ts) >= 1
+                && detail::conjunction<
+                    detail::is_valid_prefix<detail::remove_ref_t<Ts>>...
+                >::value
+                , Config&
             >::type
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
@@ -3176,16 +3207,11 @@ namespace detail {
             is_streamable<T>::value
             && !is_stl_formattable<T>::value
             && !is_fmt_formattable<T>::value
-            && !is_c_string<T>::value
-            && !is_character<T>::value
-            && !is_xsig_char<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-            && !std::is_array<remove_cvref_t<T>>::value,
-            PrintingNode
+            && !bypass_baseline_printing<T>::value
+            , PrintingNode
         >::type
     {
-        if (config.force_variant_strategy() && is_variant<remove_cvref_t< T>>::value)
+        if (config.force_variant_strategy() && is_variant<remove_ref_t< T>>::value)
         {
             return do_print_variant(std::forward<T>(value), fmt, config);
         }
@@ -3254,7 +3280,7 @@ namespace detail {
     requires (format_kind<remove_cvref_t<T>> != range_format::disabled) &&
         formattable<ranges::range_reference_t<T>, char>
         && (!::icecream::detail::is_instantiation<::icecream::detail::HijackTag, remove_cvref_t<T>>::value)
-        && (!::icecream::detail::is_c_string<remove_cvref_t<T>>::value)
+        && (!::icecream::detail::is_c_string<T>::value)
         && (!::icecream::detail::is_std_string<remove_cvref_t<T>>::value)
         && (!::icecream::detail::is_string_view<remove_cvref_t<T>>::value)
         && (!std::is_array<remove_cvref_t<T>>::value)
@@ -3288,24 +3314,19 @@ namespace detail {
         typename std::enable_if<
             is_stl_formattable<T>::value
             && !is_fmt_formattable<T>::value
-            && !is_character<T>::value
-            && !is_c_string<T>::value
-            && !is_xsig_char<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-            && !std::is_array<remove_cvref_t<T>>::value,
-            PrintingNode
+            && !bypass_baseline_printing<T>::value
+            , PrintingNode
         >::type
     {
         if (config.force_range_strategy() && has_hijacked_tag<T>::value)
         {
             return do_print_range(std::forward<T>(value), fmt, config);
         }
-        else if (config.force_tuple_strategy() && is_tuple<T>::value)
+        else if (config.force_tuple_strategy() && is_tuple<remove_cvref_t<T>>::value)
         {
             return do_print_tuple(std::forward<T>(value), fmt, config);
         }
-        else if (config.force_variant_strategy() && is_variant<remove_cvref_t< T>>::value)
+        else if (config.force_variant_strategy() && is_variant<remove_ref_t< T>>::value)
         {
             return do_print_variant(std::forward<T>(value), fmt, config);
         }
@@ -3331,20 +3352,15 @@ namespace detail {
     ) ->
         typename std::enable_if<
             is_fmt_formattable<T>::value
-            && !is_c_string<T>::value
-            && !is_character<T>::value
-            && !is_xsig_char<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-            && !std::is_array<remove_cvref_t<T>>::value,
-            PrintingNode
+            && !bypass_baseline_printing<T>::value
+            , PrintingNode
         >::type
     {
         if (config.force_range_strategy() && is_range<remove_cvref_t<T>>::value)
         {
             return do_print_range(std::forward<T>(value), fmt, config);
         }
-        else if (config.force_tuple_strategy() && is_tuple<T>::value)
+        else if (config.force_tuple_strategy() && is_tuple<remove_cvref_t<T>>::value)
         {
             return do_print_tuple(std::forward<T>(value), fmt, config);
         }
@@ -3549,7 +3565,7 @@ namespace detail {
     template <typename T>
     auto make_printing_branch(
         T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_c_string<T>::value, PrintingNode>::type
+    ) -> typename std::enable_if<is_c_string<remove_ref_t<T>>::value, PrintingNode>::type
     {
         using CharT =
             remove_cvref_t<
@@ -3562,6 +3578,13 @@ namespace detail {
         if (!mb_ostrm)
         {
             return PrintingNode("*Error* on formatting string");
+        }
+
+        // If config.decay_char_array() is not true, any character array with a known size
+        // should be printed as a range
+        if (is_bounded_array<remove_ref_t<T>>::value && !config.decay_char_array())
+        {
+            return do_print_range(std::forward<T>(value), fmt, config);
         }
 
         if (config.show_c_string())
@@ -3582,11 +3605,11 @@ namespace detail {
         T&& value, StringView fmt, Config_ const& config
     ) ->
         typename std::enable_if<
-            is_std_string<T>::value || is_string_view<remove_cvref_t<T>>::value,
+            is_std_string<remove_ref_t<T>>::value || is_string_view<remove_ref_t<T>>::value,
             PrintingNode
         >::type
     {
-        using CharT = typename remove_cvref_t<T>::value_type;
+        using CharT = typename remove_ref_t<T>::value_type;
 
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
@@ -3629,7 +3652,9 @@ namespace detail {
     template <typename T>
     auto make_printing_branch(
         T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_character<T>::value, PrintingNode>::type
+    ) -> typename std::enable_if<
+            is_character<remove_ref_t<T>>::value, PrintingNode
+        >::type
     {
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
@@ -3667,7 +3692,7 @@ namespace detail {
         T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
         // On C++20 unique_ptr will have a << overload.
-        is_unstreamable_ptr<T>::value && !is_baseline_printable<T>::value,
+        is_unstreamable_ptr<remove_ref_t<T>>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -3680,7 +3705,7 @@ namespace detail {
     template <typename T>
     auto make_printing_branch(
         T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_weak_ptr<T>::value, PrintingNode>::type
+    ) -> typename std::enable_if<is_weak_ptr<remove_ref_t<T>>::value, PrintingNode>::type
     {
         return value.expired() ?
             PrintingNode("expired") : make_printing_branch(value.lock(), fmt, config);
@@ -3692,7 +3717,7 @@ namespace detail {
     auto make_printing_branch(
         T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
-        is_optional<T>::value && !is_baseline_printable<T>::value,
+        is_optional<remove_ref_t<T>>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -3764,7 +3789,7 @@ namespace detail {
     template <typename T>
     auto do_print_variant(
         T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<!is_variant<T>::value, PrintingNode>::type
+    ) -> typename std::enable_if<!is_variant<remove_ref_t<T>>::value, PrintingNode>::type
     {
         ICECREAM_UNREACHABLE;
         return PrintingNode("");
@@ -3773,7 +3798,7 @@ namespace detail {
     template <typename T>
     auto do_print_variant(
         T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_variant<T>::value, PrintingNode>::type
+    ) -> typename std::enable_if<is_variant<remove_ref_t<T>>::value, PrintingNode>::type
     {
         return visit(Visitor<remove_cvref_t<T>>(value, fmt, config), value);
     }
@@ -3783,7 +3808,7 @@ namespace detail {
     auto make_printing_branch(
         T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
-        is_variant<T>::value && !is_baseline_printable<T>::value,
+        is_variant<remove_ref_t<T>>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -3815,7 +3840,11 @@ namespace detail {
     template <typename T>
     auto do_print_tuple(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<!is_tuple<T>::value, PrintingNode>::type
+    ) ->
+        typename std::enable_if<
+            !is_tuple<remove_cvref_t<T>>::value
+            , PrintingNode
+        >::type
     {
         ICECREAM_UNREACHABLE;
         return PrintingNode("");
@@ -3824,7 +3853,11 @@ namespace detail {
     template <typename T>
     auto do_print_tuple(
         T&& value, StringView fmt, Config_ const& config
-    ) -> typename std::enable_if<is_tuple<T>::value, PrintingNode>::type
+    ) ->
+        typename std::enable_if<
+            is_tuple<remove_cvref_t<T>>::value
+            , PrintingNode
+        >::type
     {
         auto const tuple_size = std::tuple_size<remove_cvref_t<T>>::value;
 
@@ -3894,7 +3927,7 @@ namespace detail {
     auto make_printing_branch(
         T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
-        is_tuple<T>::value && !is_baseline_printable<T>::value,
+        is_tuple<remove_cvref_t<T>>::value && !is_baseline_printable<T>::value,
         PrintingNode
     >::type
     {
@@ -4329,40 +4362,10 @@ namespace detail {
         return PrintingNode("");
     }
 
-    // Check if T is an array of characters (CharT[[N]). If true, and decay_char_array
-    // option is also true, then print value as a C string (CharT*).
     template <typename T>
     auto do_print_range(
         T&& value, StringView fmt, Config_ const& config
-    ) ->
-        typename std::enable_if<
-            is_range<T>::value
-            && is_c_string<typename std::decay<T>::type>::value
-            , PrintingNode
-        >::type
-    {
-        if (config.decay_char_array())
-        {
-            using PCharT = typename std::decay<T>::type;
-            return make_printing_branch(static_cast<PCharT>(value), fmt, config);
-        }
-        else
-        {
-            return do_print_range<T, std::true_type>(std::forward<T>(value), fmt, config);
-        }
-    }
-
-    // The ForceArrayAcceptance argument is used so that the do_print_range overload that
-    // handles characters arrays can delegate the printing when not decaying
-    template <typename T, typename ForceArrayAcceptance/*=std::false_type*/>
-    auto do_print_range(
-        T&& value, StringView fmt, Config_ const& config
-    ) ->
-        typename std::enable_if<
-            is_range<T>::value
-            && (!is_c_string<typename std::decay<T>::type>::value || ForceArrayAcceptance::value)
-            , PrintingNode
-        >::type
+    ) -> typename std::enable_if<is_range<T>::value , PrintingNode>::type
     {
         auto range_fmt = StringView{};
         auto elements_fmt = StringView{};
@@ -4402,13 +4405,16 @@ namespace detail {
         T&& value, StringView fmt, Config_ const& config
     ) -> typename std::enable_if<
         (
-            is_range<T>::value
-            && !is_std_string<T>::value
-            && !is_string_view<T>::value
-            && !is_baseline_printable<T>::value
+            is_range<T>::value                      // it is range
+            && !is_baseline_printable<T>::value     // but it is not printable by baseline strategies
+            && !bypass_baseline_printing<T>::value  // and it hasn't its own strategy
+         ) || (
+            // Except by arrays of anything other than character, which are baseline
+            // printable, but should be printed by this strategy instead.
+            std::is_array<remove_ref_t<T>>::value
+            && !is_c_string<remove_ref_t<T>>::value
         )
-        || std::is_array<remove_cvref_t<T>>::value,
-        PrintingNode
+        , PrintingNode
     >::type
     {
         return do_print_range(std::forward<T>(value), fmt, config);
@@ -4709,8 +4715,8 @@ namespace detail {
     auto is_printable_impl(int) ->
         decltype(
             make_printing_branch(
-                std::declval<T const&>(),
-                std::declval<StringView>(),
+                std::declval<T&>(),
+                std::declval<StringView&>(),
                 std::declval<Config_ const&>()
             ),
             std::true_type{}
@@ -4762,10 +4768,10 @@ namespace detail {
         typename std::enable_if<
             !has_to_string<T>::value
             && (
-                is_character<T>::value
-                || is_c_string<typename std::decay<T>::type>::value
-                || is_std_string<T>::value
-                || is_string_view<T>::value
+                is_character<remove_ref_t<T>>::value
+                || is_c_string<remove_ref_t<T>>::value
+                || is_std_string<remove_ref_t<T>>::value
+                || is_string_view<remove_ref_t<T>>::value
             ),
             std::string
         >::type
@@ -4779,10 +4785,10 @@ namespace detail {
         typename std::enable_if<
             !has_to_string<T>::value
             && !(
-                is_character<T>::value
-                || is_c_string<typename std::decay<T>::type>::value
-                || is_std_string<T>::value
-                || is_string_view<T>::value
+                is_character<remove_ref_t<T>>::value
+                || is_c_string<remove_ref_t<T>>::value
+                || is_std_string<remove_ref_t<T>>::value
+                || is_string_view<remove_ref_t<T>>::value
             ),
             std::string
         >::type
