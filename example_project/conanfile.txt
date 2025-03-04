@@ -1,0 +1,6 @@
+[requires]
+icecream-cpp/1.0.0
+
+[generators]
+CMakeDeps
+CMakeToolchain
