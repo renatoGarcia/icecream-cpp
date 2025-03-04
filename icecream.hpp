@@ -5573,7 +5573,8 @@ namespace detail {
                 this->start <= idx && idx < this->stop
                 && ((idx - this->start) % this->step) == 0
             ) {
-                dispatcher.ret(this->proj(element));
+                using TConst = typename std::add_const<remove_ref_t<T>>::type;
+                dispatcher.ret(this->proj(const_cast<TConst&>(element)));
             }
 
             return std::forward<T>(element);
