@@ -1,18 +1,19 @@
-# IceCream-Cpp
+# Icecream-cpp
 
 [![CI.badge]][CI.link]
 [![LICENSE.badge]][LICENSE.link]
 
-IceCream-Cpp is a little (single header) library to help with the print debugging in C++11
+Icecream-cpp is a little (single header) library to help with the print debugging in C++11
 and forward.
 
 [Try it at Compiler Explorer!](https://godbolt.org/z/WKbxejjaa)
 
 
 **Contents**
+* [Rationale](#rationale)
 * [Install](#install)
-  * [Nix](#nix)
   * [Conan](#conan)
+  * [Nix](#nix)
 * [Usage](#usage)
   * [Direct printing](#direct-printing)
   * [Range views pipeline](#range-views-pipeline)
@@ -51,7 +52,7 @@ and forward.
   * [Third-party libraries](#third-party-libraries)
 * [Pitfalls](#pitfalls)
 
-With IceCream, an execution inspection:
+With Icecream-cpp, an execution inspection:
 
 ```c++
 auto my_function(int i, double d) -> void
@@ -64,7 +65,7 @@ auto my_function(int i, double d) -> void
 }
 ```
 
-can be coded instead:
+can be [coded instead](#direct-printing):
 
 ```c++
 auto my_function(int i, double d) -> void
@@ -91,7 +92,7 @@ std::cout << "a: " << a
           << std::endl;
 ```
 
-can be simplified to:
+can be [simplified to](#direct-printing):
 
 ```c++
 IC(a, b, sum(a, b));
@@ -103,8 +104,8 @@ and will print:
 
 We also can inspect the data flowing through a range views pipeline (both [STL
 ranges](https://en.cppreference.com/w/cpp/header/ranges) and
-[Range-v3](https://ericniebler.github.io/range-v3/)), by inserting a `IC_V()` function at the
-point of interest:
+[Range-v3](https://ericniebler.github.io/range-v3/)), by inserting a
+[`IC_V()`](#range-views-pipeline) function at the point of interest:
 
 ```c++
 auto rv = std::vector<int>{1, 0, 2, 3, 0, 4, 5}
@@ -120,17 +121,45 @@ So that when we iterate on `rv`, we will see the printing:
     ic| range_view_63:16[2]: [4, 5]
 
 
-This library is inspired by the original [Python IceCream](https://github.com/gruns/icecream) library.
+And as a last example, we can easily [format the printing output](#output-formatting):
 
+```c++
+auto i = int{42};
+IC_F("#x", i);
+auto v = std::vector<char8_t>{'a', 'b', 'c', 'd', 'e', 'f'};
+IC_F("[1:-2]", v);
+```
+
+will print:
+
+```
+ic| i: 0x2a
+ic| v: [1:-2]->['b', 'c', 'd']
+```
+
+This library was inspired by the original [Python
+IceCream](https://github.com/gruns/icecream) library.
+
+## Rationale
+
+The Icecream-cpp is a throw off library. It is designed to be used when writing code and
+debugging it, it was not designed to go along with the released product.
+
+Because of these design decisions, the Icecream-cpp library perhaps is one of the few
+libraries that you should spend more time writing code with it than reading code with it.
+With that in mind, we have as design goals: expressivity and conciseness. It should be
+possible to print the value of any variable, formatted as desired, and writing the code to
+achieve that should be as easy and short as possible.
 
 ## Install
 
-The IceCream-Cpp is a one file, header only library, having the STL as its only
+The Icecream-cpp is a one file, header only library, having the STL as its only
 dependency. The most immediate way to use it is just copy the `icecream.hpp` header into
 your project.
 
 To properly install it system wide, together with the CMake project files, run these
-commands in IceCream-Cpp project root directory:
+commands at Icecream-cpp project root directory:
+
 ```Shell
 mkdir build
 cd build
@@ -138,14 +167,21 @@ cmake ..
 cmake --install .
 ```
 
+### Conan
+
+The released versions are available on [Conan](https://conan.io/center/recipes/icecream-cpp) too:
+
+[Here](example_project/conanfile.txt) we also have an example of a `conanfile.txt` which
+requires Icecream-cpp.
+
 ### Nix
 
-If using [Nix](https://nixos.org), IceCream-Cpp can be included as a flakes input as
+If using [Nix](https://nixos.org), Icecream-cpp can be included as a flakes input as
 ```Nix
 inputs.icecream-cpp.url = "github:renatoGarcia/icecream-cpp";
 ```
 
-The IceCream-Cpp flake defines an overlay, so that it can be used when importing `nixpkgs`:
+The Icecream-cpp flake defines an overlay, so that it can be used when importing `nixpkgs`:
 ```Nix
 import nixpkgs {
   system = "x86_64-linux";
@@ -156,22 +192,16 @@ import nixpkgs {
 ```
 Doing this, an `icecream-cpp` derivation will be added to the `nixpkgs` attribute set.
 
-A working example of how to use IceCream-Cpp in a flake project is [here](example_project/flake.nix).
+A working example of how to use Icecream-cpp in a flake project is available
+[here](example_project/flake.nix).
 
-
-### Conan
-
-The released versions are available on [Conan](https://conan.io) too:
-```Shell
-conan install icecream-cpp/0.3.1@
-```
 
 ## Usage
 
 If using CMake:
 ```CMake
-find_package(IcecreamCpp)
-include_directories(${IcecreamCpp_INCLUDE_DIRS})
+find_package(icecream-cpp)
+include_directories(${icecream-cpp_INCLUDE_DIRS})
 ```
 will add the installed directory within the include paths list.
 
@@ -181,7 +211,7 @@ After including the `icecream.hpp` header in a source file:
 #include <icecream.hpp>
 ```
 
-all the functionalities of IceCream-Cpp library will be available by the functions
+all the functionalities of Icecream-cpp library will be available by the functions
 [`IC`](#direct-printing), [`IC_A`](#return-value-and-icecream-apply-macro), and
 [`IC_V`](#range-views-pipeline); together with its respective counterparts `IC_F`,
 `IC_FA`, and `IC_FV`; that behave the same but accept an [output formatting
@@ -190,8 +220,8 @@ string](#output-formatting) as its first argument.
 
 ### Direct printing
 
-The `IC` is the simplest of the IceCream functions. If called with no arguments it will
-print the [prefix](#prefix), the source file name, the current line number, and the
+The `IC` is the simplest of the Icecream-cpp functions. If called with no arguments it
+will print the [prefix](#prefix), the source file name, the current line number, and the
 current function signature. The code:
 
 ```C++
@@ -229,11 +259,11 @@ formatting string](#output-formatting) as its first argument.
 To print the data flowing through a range views pipeline (both with [STL
 ranges](https://en.cppreference.com/w/cpp/header/ranges) and
 [Range-v3](https://ericniebler.github.io/range-v3/)), we can use either the `IC_V` or
-`IC_FV` functions, which will lazily print any input they receive from the previous view.
-The `IC_VF` function behaves the same as `IC_V`, but accepts a [format
-string](#output-formatting) as defined to the [range types](#range-format-string) as its
+`IC_FV` functions, which will lazily print any input coming from the previous view. The
+`IC_VF` function behaves the same as `IC_V`, but accepts the same [format
+string](#output-formatting) as the [*range format string*](#range-format-string) as its
 first argument. Since these functions will be placed within a range views pipeline, the
-printing will be done lazily, as each element is generated. For instance:
+printing will be done lazily, while each element is generated. For instance:
 
 ```C++
 namespace vws = std::views;
@@ -255,7 +285,7 @@ over it. At each `for` loop iteration one line will be printed, until we have th
 > The Icecream-cpp will enable its support to Range-v3 types either if the "icecream.hpp"
 > header is included some lines after any Range-v3 header, or if the `ICECREAM_RANGE_V3`
 > macro was declared before the "icecream.hpp" header inclusion. This is discussed in
-> details at the ["third-party libraries"](#third-party-libraries) section.
+> details at the [*third-party libraries*](#third-party-libraries) section.
 
 The `IC_V` function has the signature `IC_V(name, projection)`, and the `IC_FV` function
 `IC_FV(fmt, name, projection)`. In both them, the `name` and `projection` parameters as
@@ -263,11 +293,11 @@ optional.
 
 #### fmt
 
-The same syntax as described at [range types format string](#range-format-string).
+The same syntax as described at [*range types format string*](#range-format-string).
 
 #### name
 
-The variable name used to the view when printing. The printing layout is: `<name>[<idx>]:
+The variable name used by the view when printing. The printing layout is: `<name>[<idx>]:
 <value>`. If the name parameter is not used, the default value to `<name>` is
 `range_view_<source_location>`.
 
@@ -286,7 +316,8 @@ when iterated over will print:
 #### projection
 
 A [callable](https://en.cppreference.com/w/cpp/named_req/Callable) that will receive as
-input the elements from the previous view and must return the actual object to be printed.
+input a *const reference* to the current element at the *range views pipeline*, and must
+return the actual value to be printed.
 
 The code:
 
@@ -300,16 +331,16 @@ when iterated over will print:
     ic| range_view_61:53[1]: 'b'
 
 > [!NOTE]
-> The `IC_V` function will still forward to the next view an unchanged input element,
-> exactly as it was received from the previous view. None action done by the `projection`
-> function will have any effect on that.
+> The `IC_V` function will forward to the next view the exact same input element, just as
+> it was received from the previous view. No action done by the `projection` function will
+> have any effect on that.
 
 
 ### Return value and IceCream apply macro
 
-Except when called with exactly one argument, the [`IC`](#direct-printing) function will
-return a tuple with all its input arguments. If called with one argument it will return
-the argument itself.
+The [`IC`](#direct-printing) function (and [`IC_F`](#output-formatting)) will return a
+tuple with all its input arguments. Except when called with exactly one argument, when
+then it will return the argument itself.
 
 This is done this way so that you can use `IC` to inspect a function argument at calling
 point, with no further code change. In the code:
@@ -318,10 +349,10 @@ point, with no further code change. In the code:
 my_function(IC(MyClass{}));
 ```
 the `MyClass` object will be forwarded to `my_function` exactly the same as if the
-`IC` function was not there. The `my_function` will continue receiving a rvalue reference to a
+`IC` function wasn't there. The `my_function` will continue receiving a rvalue reference to a
 `MyClass` object.
 
-This approach however is not so practical when the function has many arguments. On the code:
+This approach however is not so practical when the function has multiple arguments. On the code:
 ```C++
 my_function(IC(a), IC(b), IC(c), IC(d));
 ```
@@ -334,7 +365,7 @@ distinct lines. Something like:
     ic| d: 4
 
 Unfortunately, just wrapping all the four arguments in a single `IC` call will not work
-too. The returned value will be a `std:::tuple` with `(a, b, c, d)` and the `my_function`
+too. The returned value will be one `std:::tuple` with `(a, b, c, d)` and `my_function`
 expects four arguments.
 
 To work around that, there is the `IC_A` function. `IC_A` behaves exactly like the `IC`
@@ -366,14 +397,15 @@ auto r = mc->my_function(a, b);
 
 but will print the values of `a` and `b`.
 
-The variant `IC_FA` behaves the same as the `IC_A` function, but accepts an [output
-formatting string](#output-formatting) as its first argument, even before the callable
+The `IC_FA` variant does the same as the `IC_A` function, but accepts an [output
+formatting string](#output-formatting) as its first argument, just before the callable
 argument.
 
 
 ### Output formatting
 
-It is possible to configure how the value must be formatted while printing. The following code:
+It is possible to configure how a value must be formatted while printing. The following
+code:
 
 ```C++
 auto a = int{42};
@@ -385,16 +417,16 @@ will print:
 
     ic| a: 0X2A, b: 0X14
 
-when using the `IC_F` variant instead of the plain [`IC`](#direct-printing) functio. A
-similar result would be obtained if using `IC_FA` and `IC_FV` in place of
+if using the `IC_F` variant instead of the plain [`IC`](#direct-printing) function. A
+similar result would be achieved if using `IC_FA` and `IC_FV` in place of
 [`IC_A`](#return-value-and-icecream-apply-macro) and [`IC_V`](#range-views-pipeline)
 respectively.
 
 When using the formatting function variants (`IC_F` and `IC_FA`), the same formatting
-string will be applied by default to all the arguments. That could be a problem if we wish
-to have arguments with distinct formatting, or if the arguments have multiple types with
-non mutually valid syntaxes. Therefore, to set a distinct formatting string to a specific
-argument we can wrap it with the `IC_` function.  The code:
+string will be applied by default to all of its arguments. That could be a problem if we
+need to have distinct formatting to each argument, or if the arguments have multiple types
+with non mutually valid syntaxes. Therefore, to set a distinct formatting string to a
+specific argument we can wrap it with the `IC_` function. The code:
 
 ```C++
 auto a = int{42};
@@ -406,7 +438,7 @@ will print:
 
     ic| a: 0X2A, b: 20
 
-The `IC_` function can be used within the plain `IC` (or `IC_A`) function too:
+The `IC_` function can also be used within the plain `IC` (or `IC_A`) function:
 
 ```C++
 auto a = int{42};
@@ -419,9 +451,9 @@ will print:
     ic| a: 0x2a, b: 20
 
 The last argument in an `IC_` function call is the one that will be printed, all other
-arguments that come before the last will be converted to a string using the
+arguments coming before the last will be converted to a string using the
 [`to_string`](https://en.cppreference.com/w/cpp/string/basic_string/to_string) function
-and concatenated as the resulting formatting string.
+and concatenated to the resulting formatting string.
 
 ```C++
 auto a = float{1.234};
@@ -440,7 +472,7 @@ IC_FA("#x", my_function, 10, 20);
 auto rv0 = vws::iota(0) | IC_FV("[::2]:#x", "bar") | vws::take(5);
 ```
 
-This will print:
+This will at first print:
 
     ic| 10: 0xa, 20: 0x14
 
@@ -452,7 +484,7 @@ and when iterating on `rv0`:
 
 To `IC_F` and `IC_FA`, the syntax specification of the formatting strings depends both on
 the type `T` being printed, and in that type's [printing strategy](#printing-strategies)
-used by IceCream.
+used by Icecream-cpp.
 
 To `IC_FV`, the formatting syntax if the same as the [Range format
 string](#range-format-string).
@@ -465,7 +497,7 @@ single `char` or as a null-terminated string? Likewise, is the `char bar[]` vari
 array of single characters or a null-terminated string? Is `char baz[3]` an array with
 three single characters or is it a string of size two plus a `'\0'`?
 
-Each one of those interpretations of `foo`, `bar`, and `baz` would be printed in a
+Each one of these interpretations of `foo`, `bar`, and `baz` would be printed in a
 distinct way. To the code:
 
 ```C++
@@ -519,34 +551,34 @@ std::cout << str;
 ```
 
 We will have three character encoding points of interest. In the first one, before
-compiling, that code will be in a source file in an unspecified "source encoding". In the
-second interest point, the compiled binary will have the "foo" string saved in an
-unspecified "execution encoding". Finally on the third point, the "foo" byte stream
-received by `std::cout` will be ultimately forwarded to the system, that expects the
-stream being encoded in an also unspecified "output encoding".
+compiling, that code will be written in a source file in an unspecified *source encoding*.
+In the second interest point, the compiled binary will have the "foo" string stored in an
+also unspecified *execution encoding*. Finally on the third point of interest, the "foo"
+byte stream sent to `std::cout` will be ultimately forwarded to the system, that expects
+that stream being encoded in an also unspecified *output encoding*.
 
-From that three interest points of character encoding, both "execution encoding", and
-"output encoding" have impact in the inner working of Icecream-cpp, and there is no way to
+From these three *interest points of character encoding*, both *execution encoding* and
+*output encoding* have impact in the inner working of Icecream-cpp, and there is no way to
 know for sure what is the used encoding in both of them. In face of this uncertainty, the
-adopted strategy is offer a reasonable default transcoding function, that will try convert
-the data to the right encoding, and allow the user to use its own implementation when
-needed.
+adopted strategy is to offer a reasonable default transcoding function, that will try
+convert the data to the right encoding, and allow the user to use its own implementation
+when needed.
 
-Except for wide and Unicode string types (discussed below), when printing any other type
-we will have its serialized textual data in "execution encoding". That "execution
-encoding" may or may not be the same as the "output encoding", this one being the encoding
+Except for wide and Unicode string types (discussed below), when printing any other types
+we will have its serialized textual data in *execution encoding*. That *execution
+encoding* may or may not be the same as the *output encoding*, this one being the encoding
 expected by the configured [output](#output). Because of that, before we send that data to
-the output, we must transcode it to make sure that we have it in "output encoding". To
+the output, we must transcode it to make sure that we have it in *output encoding*. To
 that end, before delivering the text data to the [output](#output), we send it to the
-configured [output_transcoder](#output_transcoder) function, that must ensure it is
-encoded in the correct "output encoding".
+configured [`output_transcoder`](#output_transcoder) function, that must ensure it is
+encoded in the correct *output encoding*.
 
 When printing the wide and Unicode string types, we need to have one more transcoding
 level, because it is possible that the text data is in a distinct character encoding from
-the expected "execution encoding".  Because of that, additional logic is applied to make
-sure that the strings are in "execution encoding" before we send them to output. This is
-further discussed in [wide strings](#wide-strings), and [unicode
-strings](#unicode-strings) sections.
+the expected *execution encoding*. Because of that, additional logic is applied to make
+sure that the strings are in *execution encoding* before we send them to output. That is
+done by applying the [`wide_string_transcoder`](#wide_string_transcoder) and
+[`unicode_transcoder`](#unicode_transcoder) functions respectively.
 
 
 ### Configuration
@@ -556,11 +588,11 @@ the global `IC_CONFIG` object. That global instance is shared by the whole runni
 program, as would be expected of a global variable. It is created with all config options
 at its default values, and any change is readily seen by the whole program.
 
-At any point of the code we can create a new config layer at the current scope by
-instantiating a new `IC_CONFIG` variable, calling the `IC_CONFIG_SCOPE()` macro. All the
-config options of this new instance will be in an "unset" state by default, and any
-request to an option value not yet set will be delegated to its parent. That request will
-go up on the parent chain until the first one having that option set answers.
+At any point in the code we can create a new config layer in the current scope by
+instantiating a new `IC_CONFIG` variable, calling the `IC_CONFIG_SCOPE()` macro function.
+All the config options of this new instance will be at an "unset" state by default, and
+any request to retrieve an option value not yet set will be delegated to its parent. That
+request will go up on the parent chain until the first one having that option set answers.
 
 All config options are set by using accessor methods of the `IC_CONFIG` object, and they
 can be chained:
@@ -574,7 +606,7 @@ IC_CONFIG
 
 `IC_CONFIG` is just a regular variable with a funny name to make a collision extremely
 unlikely. When calling any `IC*(...)` macro, it will pick the `IC_CONFIG` instance at
-scope by doing an [unqualified name
+current scope by doing an [unqualified name
 lookup](https://en.cppreference.com/w/cpp/language/unqualified_lookup), using the same
 rules applied to any other regular variable.
 
@@ -615,7 +647,7 @@ The reading and writing operations on `IC_CONFIG` objects are thread safe.
 
 #### enable/disable
 
-Enable or disable the output of `IC(...)` macro, *enabled* default.
+Enable or disable the output of `IC(...)` macro. The default value is *enabled*.
 
 - get:
     ```C++
@@ -647,7 +679,7 @@ ic| 3: 3
 #### output
 
 Sets where the serialized textual data will be printed. By default that data will be
-printed on the standard error output, the same as `std::cerr`.
+printed in the *standard error output*, the same as `std::cerr`.
 
 - set:
     ```C++
@@ -656,9 +688,9 @@ printed on the standard error output, the same as `std::cerr`.
     ```
 
 Where the type `T` must be one of:
-- A class inheriting from `std::ostream`.
-- A class having a method `push_back(char)`.
-- An output iterator that accepts the operation `*it = 'c'`
+- A class inheriting from `std::ostream`,
+- A class having a method `push_back(char)`,
+- An output iterator that accepts the operation `*it = 'c'`.
 
 For instance, the code:
 ```C++
@@ -666,15 +698,15 @@ auto str = std::string{};
 IC_CONFIG.output(str);
 IC(1, 2);
 ```
-Will print the output `"ic| 1: 1, 2: 2\n"` on the `str` string.
+Will print the output `"ic| 1: 1, 2: 2\n"` in the `str` string.
 
 > [!WARNING]
-> Icecream-cpp won't take ownership of the argument `t`, so care must be taken by the user
-> to ensure that it is alive.
+> Icecream-cpp won't take ownership of the `t` argument, so care must be taken by the user
+> to ensure that it stay alive.
 
 #### prefix
 
-A function that generate the text that will be printed before each output.
+A function that generates the text that will be printed before each output.
 
 - set:
     ```C++
@@ -819,8 +851,8 @@ This option has a default value of `true`.
 
 #### force_variant_strategy
 
-Controls if a variant type `T` (either
-[`std::variant`](https://en.cppreference.com/w/cpp/utility/variant) or
+Controls if a variant type `T`
+([`std::variant`](https://en.cppreference.com/w/cpp/utility/variant) or
 [`boost::variant2::variant`](https://www.boost.org/doc/libs/release/libs/variant2/doc/html/variant2.html))
 will be printed using the [variant types](#variant-types) strategy even when some of the
 *baseline strategies* would be able to print it. We force the use of *variant types*
@@ -841,7 +873,7 @@ This option has a default value of `true`.
 #### wide_string_transcoder
 
 Function that transcodes a `wchar_t` string, from a system defined encoding to a `char`
-string in the system "execution encoding".
+string in the system *execution encoding*.
 
 - set:
     ```C++
@@ -849,8 +881,10 @@ string in the system "execution encoding".
     auto wide_string_transcoder(std::function<std::string(std::wstring_view)> transcoder) -> Config&;
     ```
 
-There is no guarantee that the input string will end on a null terminator (this is the
-actual semantic of string_view), so the user must observe the input string size value.
+There is no guarantee that the input string will end in a null terminator (this is the
+actual semantic of a
+[`string_view`](https://en.cppreference.com/w/cpp/string/basic_string_view)), so the user
+must observe the input string size value.
 
 The default implementation will check if the C locale is set to other value than "C" or
 "POSIX". If yes, it will forward the input to the
@@ -861,7 +895,7 @@ to the byte size of `wchar_t`), and transcoded it to UTF-8.
 #### unicode_transcoder
 
 Function that transcodes a `char32_t` string, from a UTF-32 encoding to a `char` string in
-the system "execution encoding".
+the system *execution encoding*.
 
 - set:
     ```C++
@@ -870,7 +904,9 @@ the system "execution encoding".
     ```
 
 There is no guarantee that the input string will end on a null terminator (this is the
-actual semantic of string_view), so the user must observe the input string size value.
+actual semantic of a
+[`string_view`](https://en.cppreference.com/w/cpp/string/basic_string_view)), so the user
+must observe the input string size value.
 
 The default implementation will check the C locale is set to other value than "C" or
 "POSIX". If yes, it will forward the input to the
@@ -883,8 +919,8 @@ to a `char32_t` string, before being sent as input to this function.
 
 #### output_transcoder
 
-Function that transcodes a `char` string, from the system "execution encoding" to a `char`
-string in the system "output encoding", as expected by the configured [output](#output).
+Function that transcodes a `char` string, from the system *execution encoding* to a `char`
+string in the system *output encoding*, as expected by the configured [`output`](#output).
 
 - set:
     ```C++
@@ -893,14 +929,16 @@ string in the system "output encoding", as expected by the configured [output](#
     ```
 
 There is no guarantee that the input string will end on a null terminator (this is the
-actual semantic of string_view), so the user must observe the input string size value.
+actual semantic of a
+[`string_view`](https://en.cppreference.com/w/cpp/string/basic_string_view)), so the user
+must observe the input string size value.
 
-The default implementation assumes that the "execution encoding" is the same as the
-"output encoding", and will just return an unchanged input.
+The default implementation assumes that the *execution encoding* is the same as the
+*output encoding*, and will return an unchanged input.
 
 #### line_wrap_width
 
-The maximum number of characters before the output be broken on multiple lines. Default
+The maximum number of characters before the output be broken in multiple lines. Default
 value of `70`.
 
 - get:
@@ -944,11 +982,11 @@ The string separating the context text from the variables values. Default value 
 
 In order to be printable, a type `T` must satisfy at least one of the strategies described
 in the next sections. If a type `T` is not printable, it can be mended by adding support
-to one of the "baseline strategies": [IOStreams](#iostreams), [Formatting
+to one of the *baseline strategies*: [IOStreams](#iostreams), [Formatting
 library](#formatting-library), and [{fmt}](#fmt-1).
 
 If it happens that multiple strategies are simultaneously satisfied, the one with the
-higher precedence will be chosen. Within the "baseline strategies", the precedence order
+higher precedence will be chosen. Within the *baseline strategies*, the precedence order
 is: *{fmt}*, *Formatting library*, and *IOStreams*. The precedence criteria other than
 these are discussed in each strategy section.
 
@@ -961,7 +999,7 @@ type `T` is eligible to this strategy if there exist a function overload
 <SOME_TYPE>)`](https://en.cppreference.com/w/cpp/io/basic_ostream/operator_ltlt), where a
 value of type `T` is accepted as `<SOME_TYPE>`.
 
-Within the "baseline strategies" the IOStreams has the lowest precedence. So if a type is
+Within the *baseline strategies* the IOStreams has the lowest precedence. So if a type is
 supported either by [{fmt}](#fmt-1) or [Formatting library](#formatting-library) they will
 be used instead.
 
@@ -1094,7 +1132,7 @@ print values. A type `T` is eligible to this strategy if there exist a struct
 specialization
 [`std::formatter<T>`](https://en.cppreference.com/w/cpp/utility/format/formatter).
 
-Within the "baseline strategies" the [{fmt}](#fmt-1) has precedence over [Formatting
+Within the *baseline strategies* the [{fmt}](#fmt-1) has precedence over [Formatting
 library](#formatting-library), so if a type is supported by both, the *{fmt}* will be used
 instead.
 
@@ -1113,8 +1151,8 @@ function overload [`auto
 format_as(T)`](https://fmt.dev/latest/api/#formatting-user-defined-types).
 
 {fmt} is a third-party library, so it needs to be available at the system and enabled to
-be supported by Icecream-cpp. An explanation of this is in the ["third-party
-libraries"](#third-party-libraries) section.
+be supported by Icecream-cpp. An explanation of this is in the [*third-party
+libraries*](#third-party-libraries) section.
 
 ##### {fmt} format string
 
@@ -1126,11 +1164,11 @@ The format string is forwarded to the *{fmt}* library. Its syntax can be checked
 
 All character types: `char`, `wchar_t`, `char8_t`, `char16_t`, and `char32_t`. This
 strategy will [transcode](#character-encoding) any other character type to a `char`, using
-either [wide_string_transcoder](#wide_string_transcoder) or
-[unicode_transcoder](#unicode_transcoder) as appropriated, and after that it will delegate
-the actual printing to the [IOStreams](#iostreams) strategy.
+either [`wide_string_transcoder`](#wide_string_transcoder) or
+[`unicode_transcoder`](#unicode_transcoder) as appropriated, and after that it will
+delegate the actual printing to the [IOStreams](#iostreams) strategy.
 
-This strategy has higher precedence than all the "baseline strategies".
+This strategy has higher precedence than all the *baseline strategies*.
 
 ##### Characters format string
 
@@ -1145,9 +1183,9 @@ classes instantiated to all character types: `char`, `wchar_t`, `char8_t`, `char
 `char32_t`.
 
 This strategy will [transcode](#character-encoding) any other character type to a `char`,
-using either [wide_string_transcoder](#wide_string_transcoder) or
-[unicode_transcoder](#unicode_transcoder) as appropriated, and after that it will delegate
-the actual printing to the [IOStreams](#iostreams) strategy.
+using either [`wide_string_transcoder`](#wide_string_transcoder) or
+[`unicode_transcoder`](#unicode_transcoder) as appropriated, and after that it will
+delegate the actual printing to the [IOStreams](#iostreams) strategy.
 
 This strategy has higher precedence than all the "baseline strategies".
 
@@ -1179,7 +1217,7 @@ ic| v1: 0x55bcbd840ec0
 ic| v1: expired
 ```
 
-This strategy has a lower precedence than the "baseline strategies". So if the printing
+This strategy has a lower precedence than the *baseline strategies*. So if the printing
 type is supported by any one of them it will used instead.
 
 #### Range types
@@ -1206,10 +1244,10 @@ will print:
 
     ic| v0: [10, 20, 30]
 
-A `view` is close concept to `ranges`. Refer to the [range views
-pipeline](#range-views-pipeline) section to see how to print them.
+A `view` is close concept to `ranges`. Refer to the [*range views
+pipeline*](#range-views-pipeline) section to see how to print them.
 
-This strategy has a higher precedence than the "baseline strategies", so if the printing
+This strategy has a higher precedence than the *baseline strategies*, so if the printing
 of a type is supported by both, this strategy will be used instead. This precedence can be
 disabled by the [force_range_strategy](#force_range_strategy) configuration.
 
@@ -1279,9 +1317,9 @@ will print:
 ic| v0: (10, 3.14), v1: (7, 6.28, "bla")
 ```
 
-This strategy has a higher precedence than the "baseline strategies", so if the printing
+This strategy has a higher precedence than the *baseline strategies*, so if the printing
 of a type supported by both, this strategy will be used instead. This precedence can be
-disabled by the [force_tuple_strategy](#force_tuple_strategy) configuration.
+disabled by the [`force_tuple_strategy`](#force_tuple_strategy) configuration.
 
 ##### Tuple like format string
 
@@ -1352,7 +1390,7 @@ will print:
 ic| v0: 10, v1: nullopt
 ```
 
-This strategy has a lower precedence than the "baseline strategies". So if the printing
+This strategy has a lower precedence than the *baseline strategies*. So if the printing
 type is supported by any one of them it will used instead.
 
 ##### Optional types format string
@@ -1391,7 +1429,7 @@ will print:
 ic| v0: 4.2
 ```
 
-This strategy has a higher precedence than the "baseline strategies", so if the printing
+This strategy has a higher precedence than the *baseline strategies*, so if the printing
 of a type supported by both, this strategy will be used instead. This precedence can be
 disabled by the [force_variant_strategy](#force_variant_strategy) configuration.
 
@@ -1440,12 +1478,13 @@ will print:
 ic| v0: error description
 ```
 
-This strategy has a lower precedence than the "baseline strategies". So if the printing
+This strategy has a lower precedence than the *baseline strategies*. So if the printing
 type is supported by any one of them it will used instead.
 
 #### Clang dump struct
 
-If using Clang >= 15, a class will be printable even without an `operator<<(ostream&, T)` overload.
+If using Clang >= 15, a class will be printable even without support to any of the
+*baseline strategies*.
 
 The code:
 ```C++
@@ -1464,7 +1503,7 @@ will print:
 ic| s: {f: 3.14, ii: [1, 2, 3]}
 ```
 
-This strategy has a lower precedence than the "baseline strategies". So if the printing
+This strategy has a lowest precedence of all the printing strategies. So if the printing
 type is supported by any one of them it will used instead.
 
 ### Third-party libraries
