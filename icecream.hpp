@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The IceCream-Cpp Developers. See the AUTHORS file at the
+ * Copyright (c) 2019-2025 The IceCream-Cpp Developers. See the AUTHORS file at the
  * top-level directory of this distribution and at
  * https://github.com/renatoGarcia/icecream-cpp
  *

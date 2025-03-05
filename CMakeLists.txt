@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.16)
 cmake_policy(SET CMP0048 NEW)
 
-project(icecream-cpp VERSION 0.3.1 LANGUAGES CXX)
+project(icecream-cpp VERSION 1.0.0 LANGUAGES CXX)
 
 include(CMakePackageConfigHelpers)
 
