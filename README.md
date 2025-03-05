@@ -1555,7 +1555,7 @@ fine too:
 #include "icecream.hpp"
 ```
 
-#### {ftm}
+#### {fmt}
 
 Icecream-cpp can optionally use the {fmt} library to get the string representation of a
 type. When available, the {fmt} library will take precedence over the STL's formatting and
