@@ -3173,7 +3173,7 @@ namespace detail {
             }
             else if (std::is_same<remove_cvref_t<T>, bool>::value)
             {
-                return PrintingNode("*Error* on formatting string");
+                return PrintingNode("*Error* in formatting string");
             }
             else
             {
@@ -3194,7 +3194,7 @@ namespace detail {
             return PrintingNode(ostrm.str());
 
         default:
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
     }
 
@@ -3219,7 +3219,7 @@ namespace detail {
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
         {
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
 
         if (std::is_integral<remove_cvref_t<T>>::value)
@@ -3339,7 +3339,7 @@ namespace detail {
         }
         catch (std::format_error const&)
         {
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
     }
   #endif // defined(ICECREAM_STL_FORMAT)
@@ -3557,7 +3557,7 @@ namespace detail {
             return PrintingNode(ostrm.str());
 
         default:
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
     }
 
@@ -3577,7 +3577,7 @@ namespace detail {
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
         {
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
 
         // If config.decay_char_array() is not true, any character array with a known size
@@ -3614,7 +3614,7 @@ namespace detail {
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
         {
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
 
         return do_print_string<CharT>(value, config, *mb_ostrm);
@@ -3644,7 +3644,7 @@ namespace detail {
             return do_print_integral(std::char_traits<CharT>::to_int_type(value), config, ostrm);
 
         default:
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
     }
 
@@ -3659,7 +3659,7 @@ namespace detail {
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
         {
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
 
         return do_print_char(value, config, *mb_ostrm);
@@ -3679,7 +3679,7 @@ namespace detail {
         auto mb_ostrm = build_ostream(fmt);
         if (!mb_ostrm)
         {
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
 
         *mb_ostrm << static_cast<T0>(value);
@@ -3739,7 +3739,7 @@ namespace detail {
         // std::optional hasn't any container formatting string
         if (!container_fmt.empty())
         {
-            return PrintingNode("*Error* on formatting string");
+            return PrintingNode("*Error* in formatting string");
         }
 
         return value.has_value() ?
@@ -3774,7 +3774,7 @@ namespace detail {
         {
             if (this->elements_fmt.size() != variant_size<Variant>::value)
             {
-                return PrintingNode("*Error* on formatting string");
+                return PrintingNode("*Error* in formatting string");
             }
 
             auto const fmt = this->elements_fmt.at(this->variant_.index());

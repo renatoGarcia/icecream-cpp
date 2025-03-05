@@ -1061,7 +1061,7 @@ TEST_CASE("formatting")
 
         auto v0 = int{42};
         IC_F("oA", v0);
-        REQUIRE(str == "ic| v0: *Error* on formatting string\n");
+        REQUIRE(str == "ic| v0: *Error* in formatting string\n");
     }
 
     {
