@@ -1685,7 +1685,7 @@ namespace icecream{ namespace detail
     template <typename T>
     auto make_printing_branch(
         T&&, StringView, Config_ const&
-    ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type;
+    ) -> typename std::enable_if<is_xsig_char<remove_ref_t<T>>::value, PrintingNode>::type;
 
     // Print smart pointers without an operator<<(ostream&) overload.
     template <typename T>
@@ -3795,7 +3795,7 @@ namespace detail {
     template <typename T>
     auto make_printing_branch(
         T&& value, StringView fmt, Config_ const&
-    ) -> typename std::enable_if<is_xsig_char<T>::value, PrintingNode>::type
+    ) -> typename std::enable_if<is_xsig_char<remove_ref_t<T>>::value, PrintingNode>::type
     {
         using T0 =
             typename std::conditional<
