@@ -404,6 +404,26 @@ TEST_CASE("base")
         IC(v1);
         REQUIRE(str == "ic| v1: false\n");
     }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        signed char v1{'a'};
+        IC(v1);
+        REQUIRE(str == "ic| v1: 97\n");
+    }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto str = std::string{};
+        IC_CONFIG.output(str);
+
+        unsigned char v1{98};
+        IC(v1);
+        REQUIRE(str == "ic| v1: 98\n");
+    }
 }
 
 
