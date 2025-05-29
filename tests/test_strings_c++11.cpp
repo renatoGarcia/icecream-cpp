@@ -2,6 +2,10 @@
 
 #include <string>
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4571 4868)
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
@@ -364,10 +368,10 @@ TEST_CASE("transcode functions")
         IC_CONFIG.output(str);
 
         IC_CONFIG.unicode_transcoder(
-            [](char32_t const* str, std::size_t count) -> std::string
+            [](char32_t const* strg, std::size_t count) -> std::string
             {
                 REQUIRE(count == 15);
-                REQUIRE(std::char_traits<char32_t>::compare(str, U"char16_t test \u03B1", 15) == 0);
+                REQUIRE(std::char_traits<char32_t>::compare(strg, U"char16_t test \u03B1", 15) == 0);
                 return "foo";
             }
         );
@@ -383,10 +387,10 @@ TEST_CASE("transcode functions")
         IC_CONFIG.output(str);
 
         IC_CONFIG.wide_string_transcoder(
-            [](wchar_t const* str, std::size_t count) -> std::string
+            [](wchar_t const* strg, std::size_t count) -> std::string
             {
                 REQUIRE(count == 16);
-                REQUIRE(std::char_traits<wchar_t>::compare(str, L"wide string test", 16) == 0);
+                REQUIRE(std::char_traits<wchar_t>::compare(strg, L"wide string test", 16) == 0);
                 return "qux";
             }
         );

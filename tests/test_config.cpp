@@ -1,5 +1,15 @@
 #include "icecream.hpp"
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4571 4868)
+#endif
+
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ <= 6)
+    // GCC at version 6 and older has a bug when processing a `_Pragma` directive within
+    // macro expansions. https://gcc.gnu.org/bugzilla/show_bug.cgi?id=69126
+    #pragma GCC diagnostic ignored "-Wshadow"
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 

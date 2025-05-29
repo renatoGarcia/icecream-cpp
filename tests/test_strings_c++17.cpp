@@ -3,6 +3,10 @@
 #include <string>
 #include <string_view>
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4571 4868)
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
@@ -82,9 +86,9 @@ TEST_CASE("transcode functions")
         IC_CONFIG.output(str);
 
         IC_CONFIG.unicode_transcoder(
-            [](std::u32string_view str) -> std::string
+            [](std::u32string_view strg) -> std::string
             {
-                REQUIRE(str == U"char16_t test \u03B1");
+                REQUIRE(strg == U"char16_t test \u03B1");
                 return "foo";
             }
         );
@@ -100,9 +104,9 @@ TEST_CASE("transcode functions")
         IC_CONFIG.output(str);
 
         IC_CONFIG.wide_string_transcoder(
-            [](std::wstring_view str) -> std::string
+            [](std::wstring_view strg) -> std::string
             {
-                REQUIRE(str == L"wide string test");
+                REQUIRE(strg == L"wide string test");
                 return "qux";
             }
         );

@@ -3,6 +3,10 @@
 #include <string>
 #include <string_view>
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4571 4868)
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
@@ -89,10 +93,10 @@ TEST_CASE("transcode functions")
         IC_CONFIG.output(str);
 
         IC_CONFIG.unicode_transcoder(
-            [](char32_t const* str, std::size_t count) -> std::string
+            [](char32_t const* strg, std::size_t count) -> std::string
             {
                 REQUIRE(count == 14);
-                REQUIRE(std::char_traits<char32_t>::compare(str, U"char8_t test A", count) == 0);
+                REQUIRE(std::char_traits<char32_t>::compare(strg, U"char8_t test A", count) == 0);
                 return "foo";
             }
         );
@@ -108,9 +112,9 @@ TEST_CASE("transcode functions")
         IC_CONFIG.output(str);
 
         IC_CONFIG.unicode_transcoder(
-            [](std::u32string_view str) -> std::string
+            [](std::u32string_view strg) -> std::string
             {
-                REQUIRE(str == U"string B");
+                REQUIRE(strg == U"string B");
                 return "foo";
             }
         );

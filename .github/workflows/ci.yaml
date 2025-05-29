@@ -68,7 +68,7 @@ jobs:
       - name: build
         run: |
           docker exec ic-test /bin/sh -c " \
-          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release && \
+          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror' -DCMAKE_BUILD_TYPE=Release && \
           cmake --build ."
       - name: run
         run: |
@@ -104,8 +104,10 @@ jobs:
           conan profile detect
           conan install ./tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=conan --build=missing
       - name: build
+        # C4710 and C4711 warnings aren't affected by the '/external', so we disable them here globally
+        # C4619 ignore silencing unknown warnings
         run: |
-          cmake . -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake" -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+          cmake . -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake" -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_CXX_FLAGS="/experimental:external /Wall /WX /external:W0 /external:anglebrackets /EHsc /wd4619 /wd4710 /wd4711" -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
       - name: run
         run: ctest -V -C Release
@@ -131,7 +133,7 @@ jobs:
         run: |
           conan profile detect
           conan install ./tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing
-          cmake . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+          cmake . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DBUILD_TESTING=ON -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror' -DCMAKE_BUILD_TYPE=Release
           cmake --build .
       - name: run
         run: ctest -V

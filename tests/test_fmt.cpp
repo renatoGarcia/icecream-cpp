@@ -8,6 +8,10 @@
 #include <tuple>
 #include <vector>
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4571 4868)
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
