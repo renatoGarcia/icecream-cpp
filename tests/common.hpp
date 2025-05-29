@@ -3,6 +3,10 @@
 
 #include <ostream>
 
+#if defined(_MSC_VER)
+  #pragma warning(push)
+  #pragma warning(disable: 4514)
+#endif
 
 class MyClass
 {
@@ -179,5 +183,8 @@ struct fmt::formatter<IOStreamFmtFormattable>
 
 // --------------------------------------------------------------------------------
 
+#if defined(_MSC_VER)
+  #pragma warning(pop)
+#endif
 
 #endif // TESTS_COMMON_HPP_INCLUDED
