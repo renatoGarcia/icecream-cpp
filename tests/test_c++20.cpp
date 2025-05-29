@@ -6,6 +6,10 @@
 #include <vector>
 #include <forward_list>
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4571 4868)
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
@@ -40,11 +44,11 @@ TEST_CASE("ranges view")
         auto v0 = arr | rv::transform([](auto i){return i.second;}) | IC_V();
         for (auto i : v0){(void)i;}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
-        REQUIRE(str == "ic| range_view_40:76[0]: 10\nic| range_view_40:76[1]: 11\n");
+        REQUIRE(str == "ic| range_view_44:76[0]: 10\nic| range_view_44:76[1]: 11\n");
       #elif defined(ICECREAM_SOURCE_LOCATION)
-        REQUIRE(str == "ic| range_view_40:71[0]: 10\nic| range_view_40:71[1]: 11\n");
+        REQUIRE(str == "ic| range_view_44:71[0]: 10\nic| range_view_44:71[1]: 11\n");
       #else
-        REQUIRE(str == "ic| range_view_40[0]: 10\nic| range_view_40[1]: 11\n");
+        REQUIRE(str == "ic| range_view_44[0]: 10\nic| range_view_44[1]: 11\n");
       #endif
     }
 
@@ -57,11 +61,11 @@ TEST_CASE("ranges view")
         auto v0 = arr | rv::drop(2) | IC_V([](auto i){return i.second;});
         for (auto i : v0){(void)i;}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
-        REQUIRE(str == "ic| range_view_57:72[0]: 12\n");
+        REQUIRE(str == "ic| range_view_61:72[0]: 12\n");
       #elif defined(ICECREAM_SOURCE_LOCATION)
-        REQUIRE(str == "ic| range_view_57:39[0]: 12\n");
+        REQUIRE(str == "ic| range_view_61:39[0]: 12\n");
       #else
-        REQUIRE(str == "ic| range_view_57[0]: 12\n");
+        REQUIRE(str == "ic| range_view_61[0]: 12\n");
       #endif
     }
 
@@ -71,20 +75,20 @@ TEST_CASE("ranges view")
         IC_CONFIG.output(str);
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}};
-        auto v0 = arr | IC_FV(":#x", [](auto i){return i.second;}) | rv::drop(0); //68
+        auto v0 = arr | IC_FV(":#x", [](auto i){return i.second;}) | rv::drop(0);
         for (auto i : v0){(void)i;}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         auto const result =
-            "ic| range_view_74:66[0]: 0xa\n"
-            "ic| range_view_74:66[1]: 0xb\n";
+            "ic| range_view_78:66[0]: 0xa\n"
+            "ic| range_view_78:66[1]: 0xb\n";
       #elif defined(ICECREAM_SOURCE_LOCATION)
         auto const result =
-            "ic| range_view_74:25[0]: 0xa\n"
-            "ic| range_view_74:25[1]: 0xb\n";
+            "ic| range_view_78:25[0]: 0xa\n"
+            "ic| range_view_78:25[1]: 0xb\n";
       #else
         auto const result =
-            "ic| range_view_74[0]: 0xa\n"
-            "ic| range_view_74[1]: 0xb\n";
+            "ic| range_view_78[0]: 0xa\n"
+            "ic| range_view_78[1]: 0xb\n";
       #endif
         REQUIRE(str == result);
     }
@@ -96,7 +100,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | rv::drop(1) | IC_V("v");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v[0]: (1.1, 11)\nic| v[1]: (2.1, 12)\n");
     }
 
@@ -107,7 +111,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | rv::drop(1) | IC_V("v1", [](auto i){return i.first;}) | rv::drop(1) | IC_V("v2");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v1[0]: 2.1\nic| v2[0]: (2.1, 12)\n");
     }
 
@@ -118,7 +122,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | IC_V("v") | rv::drop(1);
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v[0]: (1.1, 11)\nic| v[1]: (2.1, 12)\n");
     }
 
@@ -129,7 +133,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = IC_V("v") | rv::drop(1);
-        for (auto i : arr | v0){}
+        for (auto i : arr | v0){(void)i;}
         REQUIRE(str == "ic| v[0]: (1.1, 11)\nic| v[1]: (2.1, 12)\n");
     }
 
@@ -140,7 +144,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = rv::drop(1) | IC_V("v");
-        for (auto i : arr | v0){}
+        for (auto i : arr | v0){(void)i;}
         REQUIRE(str == "ic| v[0]: (1.1, 11)\nic| v[1]: (2.1, 12)\n");
     }
 
@@ -151,7 +155,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | IC_FV("[:-1:]", "v1") | rv::drop(0) | IC_V("v2");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         auto const result =
             "ic| v1[0]: (0.1, 10)\n"
             "ic| v2[0]: (0.1, 10)\n"
@@ -168,7 +172,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}, {3.1, 13}, {4.1, 14}};
         auto v0 = arr | IC_FV("[1::2]:#x", "v1", [](auto i){return i.second;}) | rv::drop(0);
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         auto const result =
             "ic| v1[1]: 0xb\n"
             "ic| v1[3]: 0xd\n";

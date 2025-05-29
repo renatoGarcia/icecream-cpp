@@ -7,6 +7,10 @@
 #include <string_view>
 #include <variant>
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4571 4868)
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
@@ -120,9 +124,9 @@ TEST_CASE("output transcoding")
         IC_CONFIG.output(str);
 
         IC_CONFIG.output_transcoder(
-            [](std::string_view str) -> std::string
+            [](std::string_view strg) -> std::string
             {
-                return std::string(str) + ";";
+                return std::string(strg) + ";";
             }
         );
 

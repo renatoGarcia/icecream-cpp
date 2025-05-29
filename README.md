@@ -1593,9 +1593,11 @@ one, just define `ICECREAM_LONG_NAME` before the inclusion of `icecream.hpp` hea
 #include "icecream.hpp"
 ```
 
-While most compilers will work just fine, until the C++20 the standard requires at least
-one argument when calling a variadic macro. To handle this the nullary macros `IC0()` and
-`ICECREAM0()` are defined alongside `IC(...)` and `ICECREAM(...)`.
+While most compilers will work just fine, until C++20 the standard requires at least one
+argument when calling a variadic macro. To handle this the nullary macros `IC0()` and
+`ICECREAM0()` are defined alongside `IC(...)` and `ICECREAM(...)`. For the same reason the
+pair `IC_A0(callable)` and `ICECREAM_A0(callable)` is defined alongside `IC_A(...)` and
+`ICECREAM_A(...)`.
 
 
 [CI.badge]: https://github.com/renatoGarcia/icecream-cpp/workflows/CI/badge.svg

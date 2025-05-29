@@ -1,6 +1,16 @@
 #include "icecream.hpp"
 #include "common.hpp"
 
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4365 4435 4626 4820 4571 4710 4711 4868 5262)
+#endif
+
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ <= 6)
+    // GCC at version 6 and older has a bug when processing a `_Pragma` directive within
+    // macro expansions. https://gcc.gnu.org/bugzilla/show_bug.cgi?id=69126
+    #pragma GCC diagnostic ignored "-Wshadow"
+#endif
+
 #include <boost/exception/all.hpp>
 #include <boost/optional.hpp>
 #include <boost/optional/optional_io.hpp>
@@ -139,7 +149,11 @@ TEST_CASE("apply")
         IC_CONFIG.output(str);
         auto mc = MyClass{50};
 
+      #if (__cplusplus >= 202002L)
         auto r = IC_A(mc.ret_val);
+      #else
+        auto r = IC_A0(mc.ret_val);
+      #endif
         REQUIRE(str == "ic| \n");
         REQUIRE(r == 50);
     }
@@ -226,7 +240,7 @@ TEST_CASE("base")
         auto str = std::string{};
 
         test_empty_ic(str);
-        REQUIRE_THAT(str, Catch::StartsWith("ic| test_c++11.cpp:26 in"));
+        REQUIRE_THAT(str, Catch::StartsWith("ic| test_c++11.cpp:36 in"));
         REQUIRE_THAT(str, Catch::Contains("test_empty_ic("));
     }
 
@@ -386,9 +400,9 @@ TEST_CASE("base")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto v0 = false;
-        IC(v0);
-        REQUIRE(str == "ic| v0: false\n");
+        auto v1 = false;
+        IC(v1);
+        REQUIRE(str == "ic| v1: false\n");
     }
 }
 
@@ -643,7 +657,7 @@ TEST_CASE("range")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto v0 = std::vector<float> {1.1, 1.2};
+        auto v0 = std::vector<float> {1.1f, 1.2f};
         IC(v0);
         REQUIRE(str == "ic| v0: [1.1, 1.2]\n");
     }
@@ -855,7 +869,7 @@ TEST_CASE("line_wrap")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto v0 = std::vector<float> {1.1, 1.2};
+        auto v0 = std::vector<float> {1.1f, 1.2f};
         IC(v0);
         REQUIRE(str == "ic| v0: [1.1, 1.2]\n");
     }
@@ -909,7 +923,7 @@ TEST_CASE("line_wrap")
         IC_CONFIG.output(str);
 
         IC_CONFIG.prefix("pref -> ");
-        auto v0 = std::vector<float> {1.1, 1.2};
+        auto v0 = std::vector<float> {1.1f, 1.2f};
         auto v1 = std::vector<int> {11, 12};
         auto const result =
             "pref -> \n"
@@ -1168,9 +1182,9 @@ TEST_CASE("output transcoding")
         IC_CONFIG.output(str);
 
         IC_CONFIG.output_transcoder(
-            [](char const* str, std::size_t count) -> std::string
+            [](char const* strg, std::size_t count) -> std::string
             {
-                return std::string(str, count) + "|";
+                return std::string(strg, count) + "|";
             }
         );
 
