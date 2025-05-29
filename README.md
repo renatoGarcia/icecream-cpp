@@ -17,7 +17,7 @@ and forward.
 * [Usage](#usage)
   * [Direct printing](#direct-printing)
   * [Range views pipeline](#range-views-pipeline)
-  * [Return value and IceCream apply macro](#return-value-and-icecream-apply-macro)
+  * [Return value and Icecream apply macro](#return-value-and-icecream-apply-macro)
   * [Output formatting](#output-formatting)
   * [C strings](#c-strings)
   * [Character Encoding](#character-encoding)
@@ -336,52 +336,47 @@ when iterated over will print:
 > have any effect on that.
 
 
-### Return value and IceCream apply macro
+### Return value and Icecream apply macro
 
-The [`IC`](#direct-printing) function (and [`IC_F`](#output-formatting)) will return a
-tuple with all its input arguments. Except when called with exactly one argument, when
+The [`IC`](#direct-printing) function (and [`IC_F`](#output-formatting)) won't return any
+value in its general case. Exception to that if called with exactly one argument, when
 then it will return the argument itself.
 
-This is done this way so that you can use `IC` to inspect a function argument at calling
-point, with no further code change. In the code:
+This is done this way so we can use `IC` to inspect a function argument at calling point,
+without further code change. In the code:
 
 ```C++
 my_function(IC(MyClass{}));
 ```
-the `MyClass` object will be forwarded to `my_function` exactly the same as if the
-`IC` function wasn't there. The `my_function` will continue receiving a rvalue reference to a
-`MyClass` object.
+the `MyClass` object will be forwarded to `my_function` as if the `IC` function wasn't
+there. The `my_function` will continue receiving a rvalue reference to a `MyClass` object.
 
-This approach however is not so practical when the function has multiple arguments. On the code:
+This approach however is not so practical when the function has multiple arguments. In the code:
 ```C++
-my_function(IC(a), IC(b), IC(c), IC(d));
+another_function(IC(a), IC(b), IC(c), IC(d));
 ```
 besides writing four times the `IC` function, the printed output will be split in four
-distinct lines. Something like:
+lines. Something like:
 
     ic| a: 1
     ic| b: 2
     ic| c: 3
     ic| d: 4
 
-Unfortunately, just wrapping all the four arguments in a single `IC` call will not work
-too. The returned value will be one `std:::tuple` with `(a, b, c, d)` and `my_function`
-expects four arguments.
-
 To work around that, there is the `IC_A` function. `IC_A` behaves exactly like the `IC`
 function, but receives a [callable](https://en.cppreference.com/w/cpp/named_req/Callable)
-as its first argument, and will call it using all the next arguments, printing all of them
-before that. That previous example code could be rewritten as:
+as its first argument, and will call it using the remaining arguments, printing all of
+them before that. That previous example code could be rewritten as:
 
 ```C++
-IC_A(my_function, a, b, c, d);
+IC_A(another_function, a, b, c, d);
 ```
 
 and this time it will print:
 
     ic| a: 1, b: 2, c: 3, d: 4
 
-The `IC_A` function will return the same value as returned by the callable. The code:
+The `IC_A` function will return the same value returned by the callable. The code:
 
 ```C++
 auto mc = std::make_unique<MyClass>();

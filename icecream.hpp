@@ -203,28 +203,28 @@
 #define ICECREAM_UNPACK_31 ICECREAM_UNPACK_30, std::get<30>(std::move(ret_tuple))
 #define ICECREAM_UNPACK_32 ICECREAM_UNPACK_31, std::get<31>(std::move(ret_tuple))
 
-#define ICECREAM_APPLY_(fmt, argument_names, N, callable, ...)                         \
-    [&]()                                                                              \
-    {                                                                                  \
-        auto ret_tuple = ::icecream::detail::ensure_tuple(                             \
-            ICECREAM_EXPAND(ICECREAM_DISPATCH(true, fmt, argument_names, __VA_ARGS__)) \
-        );                                                                             \
-        (void) ret_tuple;                                                              \
-        return callable(ICECREAM_UNPACK_##N);                                          \
+#define ICECREAM_APPLY_(fmt, argument_names, N, callable, ...) \
+    [&]()                                                      \
+    {                                                          \
+        auto ret_tuple = ICECREAM_DISPATCH(                    \
+            true, fmt, argument_names                          \
+        ).tuple_run(__VA_ARGS__);                              \
+        (void) ret_tuple;                                      \
+        return callable(ICECREAM_UNPACK_##N);                  \
     }()
 
 #define ICECREAM_APPLY(fmt, argument_names, N, ...)                       \
     ICECREAM_EXPAND(ICECREAM_APPLY_(fmt, argument_names, N, __VA_ARGS__))
 
-#define ICECREAM_DISPATCH(is_ic_apply, fmt, argument_names, ...)                                                      \
+#define ICECREAM_DISPATCH(is_ic_apply, fmt, argument_names)                                                           \
     ::icecream::detail::Dispatcher{                                                                                   \
         is_ic_apply, icecream_private_config_5f803a3bcdb4, __FILE__, __LINE__, ICECREAM_FUNCTION, fmt, argument_names \
-    }.ret(__VA_ARGS__)
+    }
 
 #if defined(ICECREAM_LONG_NAME)
-    #define ICECREAM(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__, __VA_ARGS__)
-    #define ICECREAM0() ICECREAM_DISPATCH(false, "", "")
-    #define ICECREAM_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
+    #define ICECREAM(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__).unary_run(__VA_ARGS__)
+    #define ICECREAM0() ICECREAM_DISPATCH(false, "", "").unary_run()
+    #define ICECREAM_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__).unary_run(__VA_ARGS__)
     #define ICECREAM_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
@@ -236,9 +236,9 @@
         ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_private_config_5f803a3bcdb4;
     #define ICECREAM_CONFIG icecream_public_config_5f803a3bcdb4
 #else
-    #define IC(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__, __VA_ARGS__)
-    #define IC0() ICECREAM_DISPATCH(false, "", "")
-    #define IC_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__, __VA_ARGS__)
+    #define IC(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__).unary_run(__VA_ARGS__)
+    #define IC0() ICECREAM_DISPATCH(false, "", "").unary_run()
+    #define IC_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__).unary_run(__VA_ARGS__)
     #define IC_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
@@ -977,20 +977,22 @@ namespace icecream{ namespace detail
         >::type;
 
 
-    // -------------------------------------------------- ensure_tuple
+    // -------------------------------------------------- custody
+
+    // Maps a lvalue to a lvalue (T& -> T&) and a rvalue to a value (T&& -> T).
+    //
+    // This will be used when deciding what are the types within a tuple holding the
+    // argument values of a IC_A and IC_FA call. We need to store a rvalue as a value to
+    // keep a prvalue alive, otherwise when calling `IC_A(function, 1, myClass{})` we will
+    // hold dangling references to both arguments.
 
     template <typename T>
-    auto ensure_tuple(T&& t) -> std::tuple<decltype(std::forward<T>(t))>
-    {
-        return std::forward_as_tuple(std::forward<T>(t));
-    };
-
-    template <typename... Ts>
-    auto ensure_tuple(std::tuple<Ts...>&& t) -> std::tuple<Ts...>
-    {
-        return std::move(t);
-    };
-
+    using custody_t =
+        typename std::conditional<
+            std::is_rvalue_reference<T>::value,
+            typename std::remove_reference<T>::type,
+            T
+        >::type;
 
     // -------------------------------------------------- Identity
 
@@ -5266,20 +5268,35 @@ namespace detail {
             : Dispatcher(is_ic_apply, config, file, line, function, default_format, "")
         {}
 
-        // Return a std::tuple with all the args
-        template <typename... Ts>
-        auto ret(Ts&&... args) -> decltype(std::forward_as_tuple(std::forward<Ts>(args)...))
-        {
-            this->dispatch(make_int_sequence<sizeof...(Ts)>(), args...);
-            return std::forward_as_tuple(std::forward<Ts>(args)...);
-        }
-
-        // Return the unique arg
+        // Runs the Dispatcher and returns the same unique argument.
+        // It is called when printing only one value, e.g.: IC(v0)
         template <typename T>
-        auto ret(T&& arg) -> decltype(arg)
+        auto unary_run(T&& arg) -> T&&
         {
             this->dispatch(make_int_sequence<1>(), arg);
-            return std::forward<decltype(arg)>(arg);
+            return std::forward<T>(arg);
+        }
+
+        // Runs the Dispatcher and returns nothing.
+        // It is called when printing zero or multiple values, e.g.: IC(), IC(v0, v1)
+        template <typename... Ts>
+        auto unary_run(Ts&&... args) -> void
+        {
+            this->dispatch(make_int_sequence<sizeof...(Ts)>(), args...);
+        }
+
+        // Runs the Dispatcher and returns a tuple with all the arguments.
+        // This method is used by the apply macro variants (IC_A and IC_FA). The returned
+        // tuple is used to keep the arguments alive when printing them and applying them
+        // afterwards to the function. lvalues will be stored as lvalues, rvalues will be
+        // stored as values. This needs be this way, because otherwise a prvalue argument
+        // if not stored as a value would be destructed before being applied to the
+        // function. Look at the `ICECREAM_APPLY_` macro implementation.
+        template <typename... Ts>
+        auto tuple_run(Ts&&... args) -> std::tuple<custody_t<Ts>...>
+        {
+            this->dispatch(make_int_sequence<sizeof...(Ts)>(), args...);
+            return std::tuple<custody_t<Ts>...>(std::forward<Ts>(args)...);
         }
 
     private:
@@ -5567,14 +5584,14 @@ namespace detail {
 
             if (this->slice_error)
             {
-                dispatcher.ret(*this->slice_error);
+                dispatcher.unary_run(*this->slice_error);
             }
             else if (
                 this->start <= idx && idx < this->stop
                 && ((idx - this->start) % this->step) == 0
             ) {
                 using TConst = typename std::add_const<remove_ref_t<T>>::type;
-                dispatcher.ret(this->proj(const_cast<TConst&>(element)));
+                dispatcher.unary_run(this->proj(const_cast<TConst&>(element)));
             }
 
             return std::forward<T>(element);

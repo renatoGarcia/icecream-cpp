@@ -176,7 +176,7 @@ TEST_CASE("apply")
         auto mc = MyClass{3};
         auto r = IC_A(mc.multiply, 10);
         REQUIRE(str == "ic| 10: 10\n");
-        REQUIRE(r == 30);
+        REQUIRE(r == mc.multiply(10));
     }
 
     {
@@ -187,7 +187,7 @@ TEST_CASE("apply")
         auto mc = MyClass{3};
         auto r = IC_A(mc.add, MyClass{7});
         REQUIRE(str == "ic| MyClass{7}: <MyClass 7>\n");
-        REQUIRE(r == 10);
+        REQUIRE(r == mc.add(MyClass{7}));
     }
 
     {
@@ -402,7 +402,7 @@ TEST_CASE("return")
 
     {
         auto irval = [](int&&){return 10;};
-        REQUIRE(IC_A(irval, 7) == 10);
+        REQUIRE(IC_A(irval, 7) == irval(7));
     }
 
     {
@@ -427,41 +427,6 @@ TEST_CASE("return")
     {
         REQUIRE(std::is_same<decltype(IC_F("#o", 7)), int&&>::value);
         REQUIRE(IC_F("#o", 7) == 7);
-    }
-
-    {
-        auto const a = int{20};
-
-        REQUIRE(
-            std::is_same<
-                decltype(IC(7, 3.14, a)),
-                std::tuple<int&&, double&&, int const&>
-            >::value
-        );
-
-        // !v0 has a dangling reference to 7 and 3.14!
-        auto v0 = IC(7, 3.14, a);
-        REQUIRE(&std::get<2>(std::move(v0)) == &a);
-        REQUIRE((IC(7, 3.14, a) == std::make_tuple(7, 3.14, 20)));
-    }
-
-    {
-        auto a = int{30};
-
-        REQUIRE(
-            std::is_same<
-                decltype(IC_F("#", 7, a, 3.14)),
-                std::tuple<int&&, int&, double&&>
-            >::value
-        );
-
-        auto v0 = IC_F("#", 7, a, 3.14);
-        REQUIRE(&std::get<1>(std::move(v0)) == &a);
-        REQUIRE(IC_F("#", 7, a, 3.14) == std::make_tuple(7, 30, 3.14));
-    }
-
-    {
-        REQUIRE(std::is_same<decltype(IC()), std::tuple<>>::value);
     }
 }
 
