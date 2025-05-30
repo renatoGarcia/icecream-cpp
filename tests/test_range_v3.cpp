@@ -50,7 +50,7 @@ TEST_CASE("ranges view")
         using Pair = std::pair<double, int>;
         auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | rv::drop(2) | IC_V([](Pair const& i){return i.second;});
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         auto const result = "ic| range_view_52:79[0]: 12\n";
       #elif defined(ICECREAM_SOURCE_LOCATION)
@@ -69,7 +69,7 @@ TEST_CASE("ranges view")
         using Pair = std::pair<double, int>;
         auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}};
         auto v0 = arr | IC_FV(":#x", [](Pair const& i){return i.second;}) | rv::drop(0);
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
       #if defined(ICECREAM_SOURCE_LOCATION) && defined(__clang__)
         auto const result =
             "ic| range_view_71:73[0]: 0xa\n"
@@ -93,7 +93,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | rv::drop(1) | IC_V("v");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v[0]: (1.1, 11)\nic| v[1]: (2.1, 12)\n");
     }
 
@@ -105,7 +105,7 @@ TEST_CASE("ranges view")
         using Pair = std::pair<double, int>;
         auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | rv::drop(1) | IC_V("v1", [](Pair const& i){return i.first;}) | rv::drop(1) | IC_V("v2");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v1[0]: 2.1\nic| v2[0]: (2.1, 12)\n");
     }
 
@@ -116,7 +116,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | IC_V("v") | rv::drop(1);
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         REQUIRE(str == "ic| v[0]: (1.1, 11)\nic| v[1]: (2.1, 12)\n");
     }
 
@@ -127,7 +127,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = IC_V("v") | rv::drop(1);
-        for (auto i : arr | v0){}
+        for (auto i : arr | v0){(void)i;}
         REQUIRE(str == "ic| v[0]: (1.1, 11)\nic| v[1]: (2.1, 12)\n");
     }
 
@@ -138,7 +138,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = rv::drop(1) | IC_V("v");
-        for (auto i : arr | v0){}
+        for (auto i : arr | v0){(void)i;}
         REQUIRE(str == "ic| v[0]: (1.1, 11)\nic| v[1]: (2.1, 12)\n");
     }
 
@@ -149,7 +149,7 @@ TEST_CASE("ranges view")
 
         auto arr = std::vector<std::pair<double, int>>{{0.1, 10}, {1.1, 11}, {2.1, 12}};
         auto v0 = arr | IC_FV("[:-1:]", "v1") | rv::drop(0) | IC_V("v2");
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         auto const result =
             "ic| v1[0]: (0.1, 10)\n"
             "ic| v2[0]: (0.1, 10)\n"
@@ -167,7 +167,7 @@ TEST_CASE("ranges view")
         using Pair = std::pair<double, int>;
         auto arr = std::vector<Pair>{{0.1, 10}, {1.1, 11}, {2.1, 12}, {3.1, 13}, {4.1, 14}};
         auto v0 = arr | IC_FV("[1::2]:#x", "v1", [](Pair const& i){return i.second;}) | rv::drop(0);
-        for (auto i : v0){}
+        for (auto i : v0){(void)i;}
         auto const result =
             "ic| v1[1]: 0xb\n"
             "ic| v1[3]: 0xd\n";
