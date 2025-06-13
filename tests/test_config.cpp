@@ -1,5 +1,10 @@
 #include "icecream.hpp"
 
+#if defined(_MSC_VER)
+  #pragma warning(push)
+  #pragma warning(disable: 4571 4868)
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
@@ -55,3 +60,7 @@ TEST_CASE("Configure")
     }
     REQUIRE(IC_CONFIG.is_enabled());
 }
+
+#if defined(_MSC_VER)
+  #pragma warning(pop)
+#endif

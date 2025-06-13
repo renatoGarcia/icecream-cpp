@@ -1,10 +1,14 @@
 #include "icecream.hpp"
 
-#define CATCH_CONFIG_MAIN
-#include <catch2/catch.hpp>
-
 #include <forward_list>
 
+#if defined(_MSC_VER)
+  #pragma warning(push)
+  #pragma warning(disable: 4571 4868)
+#endif
+
+#define CATCH_CONFIG_MAIN
+#include <catch2/catch.hpp>
 
 class SizedForwardList
     : public std::forward_list<int>
@@ -531,3 +535,7 @@ TEST_CASE("forward known size - wrong formatting")
         REQUIRE(str == "ic| v0: <slice step cannot be zero>\n");
     }
 }
+
+#if defined(_MSC_VER)
+  #pragma warning(pop)
+#endif

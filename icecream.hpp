@@ -43,12 +43,32 @@
 #include <mutex>
 #include <ostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
+
+#if defined(_MSC_VER)
+    // Disable unharmful MSVC warnings within this header, so that we can build it without
+    // errors using "/Wall /WX" flags
+    #pragma warning(push)
+    // C4127: conditional expression is constant
+    // C4355: 'this' used in base member initializer list
+    // C4514: unreferenced inline function has been removed
+    // C4623: default constructor was implicitly defined as deleted
+    // C4626: assignment operator was implicitly defined as deleted
+    // C4840: bytes padding added after construct 'member_name'
+    // C4866: compiler may not enforce left-to-right evaluation order for call
+    // C4868: compiler may not enforce left-to-right evaluation order in braced initializer list
+    // C5027: move assignment operator was implicitly defined as deleted
+    // These both are triggered in `Variant` class, due to the unamed union:
+    // C4582: constructor is not implicitly called
+    // C4583: destructor is not implicitly called
+    #pragma warning(disable: 4127 4355 4514 4623 4626 4820 4866 4868 5027 4582 4583)
+#endif
 
 #if !defined(__APPLE__) && (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 15000)
     #define ICECREAM_CUCHAR_HEADER
@@ -92,7 +112,7 @@
 
 #if defined(__has_include) && __has_include(<format>)
     #include <format>
-    #if defined(__cpp_lib_format) || (_LIBCPP_VERSION >= 170000 && __cplusplus >= 202002L)
+    #if defined(__cpp_lib_format) || (defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 170000 && __cplusplus >= 202002L)
         // libc++ just defines the '__cpp_lib_format' macro start from version 19. However
         // from version 17 it already implemens all functionalities that we need.
         #define ICECREAM_STL_FORMAT
@@ -203,6 +223,11 @@
 #define ICECREAM_UNPACK_31 ICECREAM_UNPACK_30, std::get<30>(std::move(ret_tuple))
 #define ICECREAM_UNPACK_32 ICECREAM_UNPACK_31, std::get<31>(std::move(ret_tuple))
 
+#define ICECREAM_SCOPE_VARS                                                                                    \
+        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_private_config_5f803a3bcdb4;         \
+        ::icecream::detail::Config_ icecream_private_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
+        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_private_config_5f803a3bcdb4;
+
 #define ICECREAM_APPLY_(fmt, argument_names, N, callable, ...) \
     [&]()                                                      \
     {                                                          \
@@ -211,6 +236,13 @@
         ).tuple_run(__VA_ARGS__);                              \
         (void) ret_tuple;                                      \
         return callable(ICECREAM_UNPACK_##N);                  \
+    }()
+
+#define ICECREAM_APPLY_0(callable)                          \
+    [&]()                                                   \
+    {                                                       \
+        ICECREAM_DISPATCH(true, "", #callable).tuple_run(); \
+        return callable();                                  \
     }()
 
 #define ICECREAM_APPLY(fmt, argument_names, N, ...)                       \
@@ -226,28 +258,48 @@
     #define ICECREAM0() ICECREAM_DISPATCH(false, "", "").unary_run()
     #define ICECREAM_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__).unary_run(__VA_ARGS__)
     #define ICECREAM_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
+    #define ICECREAM_A0(callable) ICECREAM_APPLY_0(callable)
     #define ICECREAM_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define ICECREAM_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
     #define ICECREAM_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
     #define ICECREAM_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define ICECREAM_CONFIG_SCOPE()                                                                            \
-        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_private_config_5f803a3bcdb4;         \
-        ::icecream::detail::Config_ icecream_private_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
-        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_private_config_5f803a3bcdb4;
+
+    #if defined(_MSC_VER)
+        // Disable global and outer scope name shadowing warnings
+        #define ICECREAM_CONFIG_SCOPE()            \
+            __pragma(warning(push))                \
+            __pragma(warning(disable: 4456 4459))  \
+            ICECREAM_SCOPE_VARS                    \
+            __pragma(warning(pop))
+    #else
+        #define ICECREAM_CONFIG_SCOPE()  \
+            ICECREAM_SCOPE_VARS
+    #endif
+
     #define ICECREAM_CONFIG icecream_public_config_5f803a3bcdb4
 #else
     #define IC(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__).unary_run(__VA_ARGS__)
     #define IC0() ICECREAM_DISPATCH(false, "", "").unary_run()
     #define IC_F(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__).unary_run(__VA_ARGS__)
     #define IC_A(...) ICECREAM_APPLY("", #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
+    #define IC_A0(callable) ICECREAM_APPLY_0(callable)
     #define IC_FA(fmt, ...) ICECREAM_APPLY(fmt, #__VA_ARGS__, ICECREAM_ARGS_SIZE(__VA_ARGS__), __VA_ARGS__)
     #define IC_(...) ::icecream::detail::make_formatting_argument(__VA_ARGS__)
     #define IC_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
     #define IC_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
-    #define IC_CONFIG_SCOPE()                                                                                  \
-        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_private_config_5f803a3bcdb4;         \
-        ::icecream::detail::Config_ icecream_private_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
-        ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_private_config_5f803a3bcdb4;
+
+    #if defined(_MSC_VER)
+        // Disable global and outer scope name shadowing warnings
+        #define IC_CONFIG_SCOPE()                  \
+            __pragma(warning(push))                \
+            __pragma(warning(disable: 4456 4459))  \
+            ICECREAM_SCOPE_VARS                    \
+            __pragma(warning(pop))
+    #else
+        #define IC_CONFIG_SCOPE()  \
+            ICECREAM_SCOPE_VARS
+    #endif
+
     #define IC_CONFIG icecream_public_config_5f803a3bcdb4
 #endif
 
@@ -368,19 +420,19 @@ namespace icecream{ namespace detail
 
     // A call to `make_int_sequence<N>` will return a type `int_sequence<0, 1, 2, ..., N-1>`
 
-    template <int...>
+    template <size_t...>
     struct int_sequence {};
 
-    template <int N, int... S>
+    template <size_t N, size_t... S>
     struct int_sequence_generator: int_sequence_generator<N-1, N-1, S...> {};
 
-    template <int... S>
+    template <size_t... S>
     struct int_sequence_generator<0, S...>
     {
         typedef int_sequence<S...> type;
     };
 
-    template <int N>
+    template <size_t N>
     using make_int_sequence = typename int_sequence_generator<N>::type;
 
 
@@ -1202,7 +1254,7 @@ namespace icecream{ namespace detail
             }
 
             this->s_ = c0;
-            this->count_ = c1 - c0;
+            this->count_ = static_cast<size_t>(c1 - c0);
         };
 
         auto to_string() const -> std::basic_string<CharT>
@@ -1316,7 +1368,9 @@ namespace icecream{ namespace detail
             }
         }
 
-        Variant& operator=(Variant&& other)
+        auto operator=(Variant const&) -> Variant& = delete;
+
+        auto operator=(Variant&& other) -> Variant&
         {
             if (this != &other)
             {
@@ -1338,16 +1392,19 @@ namespace icecream{ namespace detail
     {
         auto operator()(Variant<T0, T1> const& v) -> T0 const&
         {
+            if (v.type_index != 0)
+            {
+                throw std::runtime_error("Invalid variant get type");
+            }
             return v.as_t0;
         }
 
         auto operator()(Variant<T0, T1>& v) -> T0&
         {
-            return v.as_t0;
-        }
-
-        auto operator()(Variant<T0, T1>&& v) -> T0&
-        {
+            if (v.type_index != 0)
+            {
+                throw std::runtime_error("Invalid variant get type");
+            }
             return v.as_t0;
         }
     };
@@ -1357,16 +1414,19 @@ namespace icecream{ namespace detail
     {
         auto operator()(Variant<T0, T1> const& v) -> T1 const&
         {
+            if (v.type_index != 1)
+            {
+                throw std::runtime_error("Invalid variant get type");
+            }
             return v.as_t1;
         }
 
         auto operator()(Variant<T0, T1>& v) -> T1&
         {
-            return v.as_t1;
-        }
-
-        auto operator()(Variant<T0, T1>&& v) -> T1&
-        {
+            if (v.type_index != 1)
+            {
+                throw std::runtime_error("Invalid variant get type");
+            }
             return v.as_t1;
         }
     };
@@ -1381,12 +1441,6 @@ namespace icecream{ namespace detail
     auto get(Variant<T0, T1> const& v) -> T const&
     {
         return GetHelper<T0, T1, T>()(v);
-    }
-
-    template <typename T, typename T0, typename T1>
-    auto get(Variant<T0, T1>&& v) -> T&&
-    {
-        return GetHelper<T0, T1, T>()(std::move(v));
     }
 
 
@@ -1410,7 +1464,9 @@ namespace icecream{ namespace detail
 
         Optional(Optional<T>&& v) = default;
 
-        Optional& operator=(Optional&& other)
+        auto operator=(Optional const&) -> Optional& = delete;
+
+        auto operator=(Optional&& other) -> Optional&
         {
             if (this != &other)
             {
@@ -1470,7 +1526,9 @@ namespace icecream{ namespace detail
 
         Optional(Optional<T&>&& v) = default;
 
-        Optional& operator=(Optional&& other)
+        auto operator=(Optional const&) -> Optional& = delete;
+
+        auto operator=(Optional&& other) -> Optional&
         {
             if (this != &other)
             {
@@ -1902,7 +1960,7 @@ namespace icecream{ namespace detail
         auto state = std::mbstate_t{};
         for (auto c : str)
         {
-            auto mb = std::string(MB_CUR_MAX, '\0');
+            auto mb = std::string(static_cast<size_t>(MB_CUR_MAX), '\0');
             if (tomb(&mb[0], c, &state) == static_cast<size_t>(-1))
             {
                 result.append("<?>");
@@ -1930,7 +1988,7 @@ namespace icecream{ namespace detail
             else continue; //invalid utf8, silently move on
         }
         return result;
-    };
+    }
 
     // Checks if the code_unit is a valid codepoint.
     // Returns 1 if it is a valid codepoint, returns 0 otherwise
@@ -2122,6 +2180,8 @@ namespace icecream{ namespace detail
             , parent{nullptr}
         {}
 
+        auto operator=(Hereditary<T> const&) -> Hereditary& = delete;
+
         auto operator=(T const& value) -> Hereditary&
         {
             this->storage = value;
@@ -2181,6 +2241,14 @@ namespace icecream{ namespace detail
             , include_context_(parent->include_context_)
             , context_delimiter_(parent->context_delimiter_)
         {}
+
+        Config(Config const&) = delete;
+
+        Config(Config&&) = delete;
+
+        auto operator=(Config const&) -> Config& = delete;
+
+        auto operator=(Config&&) -> Config& = delete;
 
         auto is_enabled() const -> bool
         {
@@ -2487,7 +2555,13 @@ namespace icecream{ namespace detail
                 auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
                 if (c_locale != "C" && c_locale != "POSIX")
                 {
-                    return detail::xrtomb<wchar_t, std::wcrtomb>(str);
+                    #if defined(_MSC_VER)
+                        // Silence a warning due to a deprecated attribute in `std::wcrtomb`
+                        #pragma warning(suppress: 4996)
+                        return detail::xrtomb<wchar_t, std::wcrtomb>(str);
+                    #else
+                        return detail::xrtomb<wchar_t, std::wcrtomb>(str);
+                    #endif
                 }
                 else
                 {
@@ -2559,6 +2633,14 @@ namespace detail {
     public:
 
         using Config::Config;
+
+        Config_(Config_ const&) = delete;
+
+        Config_(Config_&&) = delete;
+
+        auto operator=(Config_ const&) -> Config_& = delete;
+
+        auto operator=(Config_&&) -> Config_& = delete;
 
         constexpr static size_t INDENT_BASE = 4;
 
@@ -2940,8 +3022,8 @@ namespace detail {
 
         explicit PrintingNode(StringView leaf)
             : content(leaf.to_string())
-            , n_code_unit(this->get_leaf().size())
-            , n_code_point(count_utf8_code_point(this->get_leaf()))
+            , n_code_unit(leaf.size())
+            , n_code_point(count_utf8_code_point(leaf))
         {}
 
         PrintingNode(
@@ -3169,13 +3251,13 @@ namespace detail {
         switch (getOstreamTypeMode(ostrm))
         {
         case OstreamTypeMode::character:
-            if (value > 127)
-            {
-                return PrintingNode("*Error* Integral value outside the range of the char type");
-            }
-            else if (std::is_same<remove_cvref_t<T>, bool>::value)
+            if (std::is_same<remove_cvref_t<T>, bool>::value)
             {
                 return PrintingNode("*Error* in formatting string");
+            }
+            else if (value > static_cast<T>(127))
+            {
+                return PrintingNode("*Error* Integral value outside the range of the char type");
             }
             else
             {
@@ -3195,6 +3277,8 @@ namespace detail {
             print_binary(true);
             return PrintingNode(ostrm.str());
 
+        case OstreamTypeMode::debug:
+        case OstreamTypeMode::string:
         default:
             return PrintingNode("*Error* in formatting string");
         }
@@ -3429,6 +3513,9 @@ namespace detail {
             }
             break;
 
+        case OstreamTypeMode::binary:
+        case OstreamTypeMode::BINARY:
+        case OstreamTypeMode::non_binary_integer:
         default:
             ICECREAM_UNREACHABLE;
 
@@ -3469,6 +3556,9 @@ namespace detail {
             }
             break;
 
+        case OstreamTypeMode::binary:
+        case OstreamTypeMode::BINARY:
+        case OstreamTypeMode::non_binary_integer:
         default:
             ICECREAM_UNREACHABLE;
         }
@@ -3511,6 +3601,9 @@ namespace detail {
             }
             break;
 
+        case OstreamTypeMode::binary:
+        case OstreamTypeMode::BINARY:
+        case OstreamTypeMode::non_binary_integer:
         default:
             ICECREAM_UNREACHABLE;
         }
@@ -3534,6 +3627,9 @@ namespace detail {
             print_text<quote>(config.wide_string_transcoder()(code_units), config, ostrm);
             break;
 
+        case OstreamTypeMode::binary:
+        case OstreamTypeMode::BINARY:
+        case OstreamTypeMode::non_binary_integer:
         default:
             ICECREAM_UNREACHABLE;
         }
@@ -3558,6 +3654,10 @@ namespace detail {
             ostrm << '"';
             return PrintingNode(ostrm.str());
 
+        case OstreamTypeMode::binary:
+        case OstreamTypeMode::BINARY:
+        case OstreamTypeMode::character:
+        case OstreamTypeMode::non_binary_integer:
         default:
             return PrintingNode("*Error* in formatting string");
         }
@@ -3645,6 +3745,7 @@ namespace detail {
         case OstreamTypeMode::BINARY:
             return do_print_integral(std::char_traits<CharT>::to_int_type(value), config, ostrm);
 
+        case OstreamTypeMode::string:
         default:
             return PrintingNode("*Error* in formatting string");
         }
@@ -3790,7 +3891,7 @@ namespace detail {
 
     template <typename T>
     auto do_print_variant(
-        T&& value, StringView fmt, Config_ const& config
+        T&&, StringView, Config_ const&
     ) -> typename std::enable_if<!is_variant<remove_ref_t<T>>::value, PrintingNode>::type
     {
         ICECREAM_UNREACHABLE;
@@ -3817,7 +3918,7 @@ namespace detail {
         return do_print_variant(std::forward<T>(value), fmt, config);
     }
 
-    template <int... N, typename T>
+    template <size_t... N, typename T>
     inline auto tuple_traverser(
         int_sequence<N...>,
         T const& t,
@@ -4098,7 +4199,7 @@ namespace detail {
         else if (is_sized<R>::value)  // So it has a value and it is normalized
         {
             auto stop_it = begin(range);
-            std::advance(stop_it, *mb_stop);
+            std::advance(stop_it, static_cast<ptrdiff_t>(*mb_stop));
             return make_slice_functor<R>(start_it, stop_it, step);
         }
         else
@@ -4152,7 +4253,7 @@ namespace detail {
         else if (is_sized<R>::value)
         {
             auto stop_it = begin(range);
-            std::advance(stop_it, *mb_stop);
+            std::advance(stop_it, static_cast<ptrdiff_t>(*mb_stop));
             if (stop_it != end(range)) ++stop_it;
 
             return make_slice_functor<R>(
@@ -5300,7 +5401,7 @@ namespace detail {
         }
 
     private:
-        template <int... N, typename... Ts>
+        template <size_t... N, typename... Ts>
         auto dispatch(int_sequence<N...>, Ts&&... args) -> void
         {
             // Pick the name of an IC macro's "to be printed" argument. Usually that would
@@ -5724,5 +5825,9 @@ namespace {
     auto& icecream_private_config_5f803a3bcdb4 = icecream::detail::Config_::global();
     auto& icecream_public_config_5f803a3bcdb4 = static_cast<::icecream::Config&>(icecream_private_config_5f803a3bcdb4);
 }
+
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 
 #endif // ICECREAM_HPP_INCLUDED

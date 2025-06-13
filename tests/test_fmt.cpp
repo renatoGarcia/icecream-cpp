@@ -8,6 +8,11 @@
 #include <tuple>
 #include <vector>
 
+#if defined(_MSC_VER)
+  #pragma warning(push)
+  #pragma warning(disable: 4571 4868)
+#endif
+
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
 
@@ -143,3 +148,7 @@ TEST_CASE("fmt lib")
         REQUIRE(str == "ic| v0: 5\n");
     }
 }
+
+#if defined(_MSC_VER)
+  #pragma warning(pop)
+#endif
