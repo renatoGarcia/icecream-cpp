@@ -1,7 +1,7 @@
 #include "icecream.hpp"
 
 #if defined(_MSC_VER)
-  #pragma warning(disable: 4571 4868)
+  #pragma warning(disable: 4571 4868 5045)
 #endif
 
 #if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ <= 6)

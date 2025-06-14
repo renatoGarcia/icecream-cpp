@@ -64,10 +64,11 @@
     // C4866: compiler may not enforce left-to-right evaluation order for call
     // C4868: compiler may not enforce left-to-right evaluation order in braced initializer list
     // C5027: move assignment operator was implicitly defined as deleted
+    // C5045: Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
     // These both are triggered in `Variant` class, due to the unamed union:
     // C4582: constructor is not implicitly called
     // C4583: destructor is not implicitly called
-    #pragma warning(disable: 4127 4355 4514 4623 4626 4820 4866 4868 5027 4582 4583)
+    #pragma warning(disable: 4127 4355 4514 4623 4626 4820 4866 4868 5027 5045 4582 4583)
 #endif
 
 #if !defined(__APPLE__) && (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 15000)
