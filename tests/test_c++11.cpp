@@ -2,7 +2,7 @@
 #include "common.hpp"
 
 #if defined(_MSC_VER)
-  #pragma warning(disable: 4365 4435 4626 4820 4571 4710 4711 4868 5262)
+  #pragma warning(disable: 4365 4435 4626 4820 4571 4710 4711 4868 5045 5262)
 #endif
 
 #if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ <= 6)

@@ -170,8 +170,9 @@ public:
     }
 };
 
+FMT_BEGIN_NAMESPACE
 template <>
-struct fmt::formatter<IOStreamFmtFormattable>
+struct formatter<IOStreamFmtFormattable>
     : formatter<std::string>
 {
     auto format(IOStreamFmtFormattable v, format_context& ctx) const -> format_context::iterator
@@ -179,6 +180,8 @@ struct fmt::formatter<IOStreamFmtFormattable>
         return fmt::format_to(ctx.out(), "<fmt IOStreamFmtFormattable {}>", v.i);
     }
 };
+FMT_END_NAMESPACE
+
 #endif
 
 // --------------------------------------------------------------------------------

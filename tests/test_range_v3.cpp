@@ -1,5 +1,5 @@
 #if defined(_MSC_VER)
-  #pragma warning(disable: 4571 4868)
+  #pragma warning(disable: 4571 4868 5045)
 #endif
 
 #include <range/v3/view.hpp>
