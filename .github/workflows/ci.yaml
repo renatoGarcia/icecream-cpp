@@ -27,14 +27,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [gcc6, gcc9, gcc14, clang8, clang19]
+        version: [gcc54, gcc9, gcc14, clang8, clang19]
         cpp: [11, 14, 17, 20, 23]
         exclude:
-          - version: gcc6
+          - version: gcc54
             cpp: 17
-          - version: gcc6
+          - version: gcc54
             cpp: 20
-          - version: gcc6
+          - version: gcc54
             cpp: 23
           - version: gcc9
             cpp: 20
@@ -47,7 +47,7 @@ jobs:
         include:
           - range_v3: ON
           - range_v3: OFF
-            version: gcc6
+            version: gcc54
           - range_v3: OFF
             cpp: 11
 
