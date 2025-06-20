@@ -71,9 +71,9 @@
     #pragma warning(disable: 4127 4355 4514 4623 4626 4820 4866 4868 5027 5045 4582 4583)
 #endif
 
-#if !defined(__APPLE__) && (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 15000)
-    #define ICECREAM_CUCHAR_HEADER
-    #include <cuchar>
+#if (!defined(__APPLE__) && (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 15000))
+    #define ICECREAM_UCHAR_HEADER
+    #include <uchar.h>
 #endif
 
 #if defined(__cpp_lib_optional) || (__cplusplus >= 201703L)
@@ -1234,11 +1234,11 @@ namespace icecream{ namespace detail
 
         auto rfind(value_type ch, size_t pos = npos) const -> size_t
         {
-            auto const size = this->count_;
+            auto const size_ = this->count_;
 
-            if (size == 0) return npos;
+            if (size_ == 0) return npos;
 
-            auto idx = pos < size ? pos : size;
+            auto idx = pos < size_ ? pos : size_;
 
             for (++idx; idx-- > 0;)
             {
@@ -2192,28 +2192,28 @@ namespace icecream{ namespace detail
         {}
 
         // A root object (without a parent) must always have a value.
-        Hereditary(T const& value)
-            : storage_(value)
+        Hereditary(T const& t)
+            : storage_(t)
             , parent_{nullptr}
         {}
 
         // A root object (without a parent) must always have a value.
-        Hereditary(T&& value)
-            : storage_(std::move(value))
+        Hereditary(T&& t)
+            : storage_(std::move(t))
             , parent_{nullptr}
         {}
 
         auto operator=(Hereditary<T> const&) -> Hereditary& = delete;
 
-        auto operator=(T const& value) -> Hereditary&
+        auto operator=(T const& t) -> Hereditary&
         {
-            this->storage_ = value;
+            this->storage_ = t;
             return *this;
         }
 
-        auto operator=(T&& value) -> Hereditary&
+        auto operator=(T&& t) -> Hereditary&
         {
-            this->storage_ = std::move(value);
+            this->storage_ = std::move(t);
             return *this;
         }
 
@@ -2616,11 +2616,11 @@ namespace icecream{ namespace detail
         detail::Hereditary<std::function<std::string(detail::U32StringView str)>> unicode_transcoder_{
             [](detail::U32StringView str) -> std::string
             {
-              #ifdef ICECREAM_CUCHAR_HEADER
+              #ifdef ICECREAM_UCHAR_HEADER
                 auto const c_locale = std::string{std::setlocale(LC_ALL, nullptr)};
                 if (c_locale != "C" && c_locale != "POSIX")
                 {
-                    return detail::xrtomb<char32_t, std::c32rtomb>(str);
+                    return detail::xrtomb<char32_t, c32rtomb>(str);
                 }
                 else
               #endif
@@ -2676,20 +2676,20 @@ namespace detail {
         auto output() const -> std::function<void(std::string const&)>
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            auto const& output = this->output_.value();
-            return [&output](std::string const& str) -> void
+            auto const& out = this->output_.value();
+            return [&out](std::string const& str) -> void
             {
-                return output(str);
+                return out(str);
             };
         }
 
         auto prefix() const -> std::function<std::string()>
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            auto const& prefix = this->prefix_.value();
-            return [&prefix]() -> std::string
+            auto const& pref = this->prefix_.value();
+            return [&pref]() -> std::string
             {
-                return prefix();
+                return pref();
             };
         }
 
@@ -4468,13 +4468,13 @@ namespace detail {
             {
                 auto const iterable_fmt = fmt.substr(0, i);
                 auto const element_fmt = fmt.substr(i + 1, StringView::npos);
-                return {iterable_fmt, element_fmt};
+                return std::make_tuple(iterable_fmt, element_fmt);
             }
         }
 
         // If there isn't a colon cut point, all the input `fmt` string is the iterable
         // formatting
-        return {fmt, ""};
+        return std::make_tuple(fmt, "");
     }
 
     // --------------------------------------------------
@@ -5847,6 +5847,7 @@ namespace detail {
 namespace {
     auto& icecream_private_config_5f803a3bcdb4 = icecream::detail::Config_::global();
     auto& icecream_public_config_5f803a3bcdb4 = static_cast<::icecream::Config&>(icecream_private_config_5f803a3bcdb4);
+    inline void silenceWarning() { (void)icecream_public_config_5f803a3bcdb4; }
 }
 
 #if defined(_MSC_VER)

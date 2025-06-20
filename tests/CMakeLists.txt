@@ -2,6 +2,9 @@ if(POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
 endif()
 
+option(ENABLE_RANGE_V3 "If ON the tests to Range-v3 library will be enabled" OFF)
+option(ENABLE_FMT "If ON the tests to {fmt} library will be enabled" OFF)
+
 find_package(Catch2 REQUIRED)
 find_package(Boost REQUIRED)
 

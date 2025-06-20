@@ -717,7 +717,7 @@ TEST_CASE("range")
         auto str = std::string{};
         IC_CONFIG.output(str);
 
-        auto v0 = std::vector<std::tuple<int, double>> {{1, 1.1}, {2, 1.2}};
+        auto v0 = std::vector<std::tuple<int, double>> {std::make_tuple(1, 1.1), std::make_tuple(2, 1.2)};
         IC(v0);
         REQUIRE(str == "ic| v0: [(1, 1.1), (2, 1.2)]\n");
     }
