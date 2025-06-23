@@ -1,11 +1,11 @@
+#if defined(_MSC_VER)
+  #pragma warning(disable: 4571 4868 5045)
+#endif
+
 #include "icecream.hpp"
 
 #include <string>
 #include <string_view>
-
-#if defined(_MSC_VER)
-  #pragma warning(disable: 4571 4868 5045)
-#endif
 
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch.hpp>
