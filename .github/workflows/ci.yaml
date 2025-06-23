@@ -80,18 +80,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, windows-2019]
+        os: [windows-2025]
         cpp: [14, 17, 20, 23]
-        exclude:
-          - os: windows-2019
-            cpp: 20
-          - os: windows-2019
-            cpp: 23
         include:
-          - os: windows-2022
-            name: vs2022
-          - os: windows-2019
-            name: vs2019
+          - os: windows-2025
+            name: MSVC 17.14
           - range_v3: ON
           - range_v3: OFF
             cpp: 14
