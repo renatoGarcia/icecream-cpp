@@ -3,12 +3,12 @@
 This is a "Hello World" project, showing how to integrate Icecream-cpp using CMake, and
 optionally also [Nix](https://nixos.org) or [Conan](https://conan.io).
 
-Note that in this examples Icecream-cpp will be installed in the system. If you chose to
-include the header file on your project, all you will need is `#include` it on your source
-and compile the project as usual.
+Note that in this examples Icecream-cpp will be installed in the system. If you chose copy
+the header file to your project instead, all that you will need is `#include` it in your
+source and compile the project as usual.
 
-All the next instructions consider that you are with an open shell inside the
-example_project directory.
+All the next instructions assumes that you are in an shell opened inside the
+"example_project" directory.
 
 ## Building it with Conan
 
