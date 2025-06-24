@@ -6,44 +6,41 @@ cmake_policy(SET CMP0048 NEW)
 project(icecream-cpp VERSION 1.0.0 LANGUAGES CXX)
 
 include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)
 
-option(BUILD_TESTING "" OFF)
+option(BUILD_TESTING "If ON the tests will be enabled" OFF)
 include(CTest)
 
-if(UNIX)
-  include(GNUInstallDirs)
-  set(DEF_INSTALL_CMAKE_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/icecream-cpp")
-  set(DEF_INSTALL_INCLUDE_DIR "${CMAKE_INSTALL_INCLUDEDIR}")
-elseif(WIN32 AND NOT CYGWIN)
-  set(DEF_INSTALL_CMAKE_DIR "CMake")
-  set(DEF_INSTALL_INCLUDE_DIR "include")
-else()
-  set(INSTALL_DIR "" CACHE PATH)
-  set(DEF_INSTALL_CMAKE_DIR "${INSTALL_DIR}/cmake/icecream-cpp")
-  set(DEF_INSTALL_INCLUDE_DIR "${INSTALL_DIR}/include")
-endif()
+add_library(icecream-cpp INTERFACE)
 
-configure_package_config_file(icecream-cpp-config.cmake.in
-  "${PROJECT_BINARY_DIR}/icecream-cpp-config.cmake"
-  INSTALL_DESTINATION ${DEF_INSTALL_CMAKE_DIR}
-  PATH_VARS DEF_INSTALL_INCLUDE_DIR
+install(
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/icecream.hpp"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
 )
+
+install(
+  TARGETS icecream-cpp
+  EXPORT icecream-cpp-targets
+)
+
+install(
+  EXPORT icecream-cpp-targets
+  FILE icecream-cpp-targets.cmake
+  NAMESPACE icecream-cpp::
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/icecream-cpp"
+)
+
 write_basic_package_version_file(
-  "${PROJECT_BINARY_DIR}/icecream-cpp-config-version.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/icecream-cpp-config-version.cmake"
   COMPATIBILITY SameMajorVersion
   ARCH_INDEPENDENT
 )
 
 install(
   FILES
-    "${PROJECT_BINARY_DIR}/icecream-cpp-config.cmake"
-    "${PROJECT_BINARY_DIR}/icecream-cpp-config-version.cmake"
-  DESTINATION ${DEF_INSTALL_CMAKE_DIR}
-)
-
-install(
-  FILES "icecream.hpp"
-  DESTINATION ${DEF_INSTALL_INCLUDE_DIR}
+    "${CMAKE_CURRENT_SOURCE_DIR}/icecream-cpp-config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/icecream-cpp-config-version.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/icecream-cpp"
 )
 
 if(BUILD_TESTING)

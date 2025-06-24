@@ -201,9 +201,9 @@ A working example of how to use Icecream-cpp in a flake project is available
 If using CMake:
 ```CMake
 find_package(icecream-cpp)
-include_directories(${icecream-cpp_INCLUDE_DIRS})
+target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
 ```
-will add the installed directory within the include paths list.
+Where `<target>` is the executable or library being compiled.
 
 After including the `icecream.hpp` header in a source file:
 
