@@ -8,6 +8,20 @@
   #pragma warning(disable: 4514)
 #endif
 
+
+template <typename T>
+auto id_f(T&& t) -> T
+{
+    return std::forward<T>(t);
+}
+
+
+inline auto sum(int i0, int i1) -> int
+{
+    return i0 + i1;
+}
+
+
 class MyClass
 {
 public:
