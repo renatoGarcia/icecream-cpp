@@ -5070,6 +5070,10 @@ namespace detail {
             detail::conjunction<detail::is_printable<Ts>...>::value
         >::type
     {
+      #if defined(ICECREAM_DISABLE)
+        return;
+      #endif
+
         if (!config.is_enabled()) return;
 
         auto const prefix = config.prefix()();
@@ -5153,6 +5157,10 @@ namespace detail {
         StringView function
     ) -> void
     {
+      #if defined(ICECREAM_DISABLE)
+        return;
+      #endif
+
         if (!config.is_enabled()) return;
 
         auto const prefix = config.prefix()();

@@ -21,6 +21,7 @@ and forward.
   * [Output formatting](#output-formatting)
   * [C strings](#c-strings)
   * [Character Encoding](#character-encoding)
+  * [Macro disabling](#macro-disabling)
   * [Configuration](#configuration)
      * [enable/disable](#enabledisable)
      * [output](#output)
@@ -575,6 +576,27 @@ sure that the strings are in *execution encoding* before we send them to output.
 done by applying the [`wide_string_transcoder`](#wide_string_transcoder) and
 [`unicode_transcoder`](#unicode_transcoder) functions respectively.
 
+### Macro disabling
+
+All the Icecream-cpp printing will be disabled in a translation unit if the
+`ICECREAM_DISABLE` macro is defined before the `icecream.hpp` header inclusion.
+
+This can be done either by defining it in the source code:
+
+```C++
+#define ICECREAM_DISABLE
+#include <icecream.hpp>
+```
+
+or as an argument to the compiler. A `-DICECREAM_DISABLE` with
+[GCC](https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html#index-D-1) and
+[Clang](https://clang.llvm.org/docs/ClangCommandLineReference.html#cmdoption-clang-D-macro),
+and a `/DICECREAM_DISABLE` in
+[MSVC](https://learn.microsoft.com/en-us/cpp/build/reference/d-preprocessor-definitions)
+for example.
+
+This will disable only the printing output, all other functionalities will still work. In
+particular, all the changes to the global [`IC_CONFIG`](#configuration) will be effective.
 
 ### Configuration
 

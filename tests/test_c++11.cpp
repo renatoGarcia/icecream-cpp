@@ -36,12 +36,6 @@ auto test_empty_ic(std::string& str) -> void
     IC();
 }
 
-template <typename T>
-auto id_f(T&& t) -> T
-{
-    return std::forward<T>(t);
-}
-
 struct NonPrintable
 {};
 
@@ -72,12 +66,6 @@ auto operator<<(std::ostream& os, MyIterable<NonPrintable> const&) -> std::ostre
 auto return_7() -> int
 {
     return 7;
-}
-
-
-auto sum(int i0, int i1) -> int
-{
-    return i0 + i1;
 }
 
 
@@ -170,16 +158,18 @@ TEST_CASE("apply")
         IC_CONFIG_SCOPE();
         auto str = std::string{};
         IC_CONFIG.output(str);
-        IC_A(sum, 1, 2);
+        auto r = IC_A(sum, 1, 2);
         REQUIRE(str == "ic| 1: 1, 2: 2\n");
+        REQUIRE(r == 3);
     }
 
     {
         IC_CONFIG_SCOPE();
         auto str = std::string{};
         IC_CONFIG.output(str);
-        IC_FA("#x", sum, 10, 20);
+        auto r = IC_FA("#x", sum, 10, 20);
         REQUIRE(str == "ic| 10: 0xa, 20: 0x14\n");
+        REQUIRE(r == 30);
     }
 
     {
