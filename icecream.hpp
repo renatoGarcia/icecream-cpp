@@ -2176,6 +2176,46 @@ namespace icecream{ namespace detail
         T it_;
     };
 
+    template <>
+    class Output<std::ostream>
+    {
+    public:
+        Output(std::ostream& stream)
+            : stream_{stream}
+        {}
+
+        // Expects `str` in "output encoding".
+        auto operator()(StringView str) -> void
+        {
+            static_assert(
+                sizeof(std::streamsize) <= sizeof(size_t),
+                "std::streamsize must not be wider than size_t"
+                "Please report a bug on https://github.com/renatoGarcia/icecream-cpp/issues"
+            );
+
+            auto remaining = str.size();
+            auto* data = str.data();
+
+            while (remaining > 0)
+            {
+                // This will handle the unlikely situation where a huge str is big
+                // enough to its size overflow when converted to a `std::streamsize`
+                auto chunk_size =
+                    (remaining > static_cast<size_t>(std::numeric_limits<std::streamsize>::max()))
+                        ? std::numeric_limits<std::streamsize>::max()
+                        : static_cast<std::streamsize>(remaining);
+
+                this->stream_.write(data, chunk_size);
+
+                data += chunk_size;
+                remaining -= static_cast<size_t>(chunk_size);
+            }
+        }
+
+    private:
+        std::ostream& stream_;
+    };
+
 
     // -------------------------------------------------- Hereditary
 
@@ -2516,9 +2556,7 @@ namespace icecream{ namespace detail
         auto set_output(std::ostream& stream) -> void
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-
-            using OSIt = std::ostreambuf_iterator<char>;
-            this->output_ = detail::Output<OSIt>{OSIt{stream}};
+            this->output_ = detail::Output<std::ostream>{stream};
         }
 
         template <typename T>
@@ -2548,9 +2586,7 @@ namespace icecream{ namespace detail
         detail::Hereditary<bool> enabled_{true};
 
         detail::Hereditary<std::function<void(std::string const&)>> output_{
-            detail::Output<std::ostreambuf_iterator<char>>{
-                std::ostreambuf_iterator<char>{std::cerr}
-            }
+            detail::Output<std::ostream>{std::cerr}
         };
 
         detail::Hereditary<detail::Prefix> prefix_{
@@ -2679,7 +2715,7 @@ namespace detail {
             auto const& out = this->output_.value();
             return [&out](std::string const& str) -> void
             {
-                return out(str);
+                out(str);
             };
         }
 
