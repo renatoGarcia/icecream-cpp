@@ -126,6 +126,18 @@ TEST_CASE("output")
         IC(1, 2);
         REQUIRE(str == "ic| 1: 1, 2: 2\n");
     }
+
+    {
+        IC_CONFIG_SCOPE();
+        auto sstr = std::ostringstream{};
+        auto cout_buff = std::cout.rdbuf();
+        IC_CONFIG.output(std::cout);
+        std::cout.rdbuf(sstr.rdbuf());
+        IC(1, 2);
+        std::cout.rdbuf(cout_buff);
+        IC_CONFIG.output(sstr);
+        REQUIRE(sstr.str() == "ic| 1: 1, 2: 2\n");
+    }
 }
 
 
