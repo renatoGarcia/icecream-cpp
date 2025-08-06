@@ -225,7 +225,7 @@
 #define ICECREAM_UNPACK_32 ICECREAM_UNPACK_31, std::get<31>(std::move(ret_tuple))
 
 #define ICECREAM_SCOPE_VARS                                                                                    \
-        auto const* const icecream_parent_config_5f803a3bcdb4 = &icecream_private_config_5f803a3bcdb4;         \
+        auto* const icecream_parent_config_5f803a3bcdb4 = &icecream_private_config_5f803a3bcdb4;               \
         ::icecream::detail::Config_ icecream_private_config_5f803a3bcdb4(icecream_parent_config_5f803a3bcdb4); \
         ::icecream::Config& icecream_public_config_5f803a3bcdb4 = icecream_private_config_5f803a3bcdb4;
 
@@ -1509,6 +1509,11 @@ namespace icecream{ namespace detail
             return get<T>(this->storage);
         }
 
+        auto value()-> T&
+        {
+            return get<T>(this->storage);
+        }
+
         auto operator*() -> T&
         {
             return get<T>(this->storage);
@@ -2227,7 +2232,7 @@ namespace icecream{ namespace detail
     public:
         // A child constructed without a value will delegate the value requests to its
         // parent.
-        Hereditary(Hereditary<T> const& parent)
+        Hereditary(Hereditary<T>& parent)
             : parent_{&parent}
         {}
 
@@ -2257,6 +2262,23 @@ namespace icecream{ namespace detail
             return *this;
         }
 
+        auto value() -> T&
+        {
+            if (this->storage_)
+            {
+                return this->storage_.value();
+            }
+            else if (this->parent_)
+            {
+                return this->parent_->value();
+            }
+            else
+            {
+                ICECREAM_UNREACHABLE;
+                return this->storage_.value();
+            }
+        }
+
         auto value() const -> T const&
         {
             if (this->storage_)
@@ -2276,7 +2298,7 @@ namespace icecream{ namespace detail
 
     private:
         Optional<T> storage_;
-        Hereditary<T> const* parent_;
+        Hereditary<T>* parent_;
     };
 
 } // namespace detail
@@ -2288,7 +2310,7 @@ namespace icecream{ namespace detail
     {
     public:
 
-        explicit Config(Config const* parent)
+        explicit Config(Config* parent)
             : enabled_(parent->enabled_)
             , output_(parent->output_)
             , prefix_(parent->prefix_)
@@ -2574,7 +2596,7 @@ namespace icecream{ namespace detail
         template <typename T>
         auto set_output(T iterator) ->
             typename std::enable_if<
-            detail::is_T_output_iterator<T, char>::value
+                detail::is_T_output_iterator<T, char>::value
             >::type
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
@@ -2709,14 +2731,10 @@ namespace detail {
             return global_;
         }
 
-        auto output() const -> std::function<void(std::string const&)>
+        auto write_to_output(std::string const& str) -> void
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            auto const& out = this->output_.value();
-            return [&out](std::string const& str) -> void
-            {
-                out(str);
-            };
+            this->output_.value()(str);
         }
 
         auto prefix() const -> std::function<std::string()>
@@ -5097,7 +5115,7 @@ namespace detail {
 
     template <typename... Ts>
     auto print_args(
-        Config_ const& config,
+        Config_& config,
         StringView file,
         int line,
         StringView function,
@@ -5167,27 +5185,25 @@ namespace detail {
 
         if (one_line_forest_n_code_points > config.line_wrap_width())
         {
-            config.output()(
+            config.write_to_output(
                 config.output_transcoder()(
-                    print_multi_line_forest(prefix, context, forest, config.line_wrap_width())
+                    print_multi_line_forest(prefix, context, forest, config.line_wrap_width()).append("\n")
                 )
             );
         }
         else
         {
-            config.output()(
+            config.write_to_output(
                 config.output_transcoder()(
-                    print_one_line_forest(prefix, context, delimiter, forest)
+                    print_one_line_forest(prefix, context, delimiter, forest).append("\n")
                 )
             );
         }
-
-        config.output()(config.output_transcoder()("\n"));
     }
 
     // Handles the printing of a nullary IC() call.
     inline auto print_nullary(
-        Config_ const& config,
+        Config_& config,
         StringView file,
         int line,
         StringView function
@@ -5218,8 +5234,7 @@ namespace detail {
                     + '"';
             }();
 
-        auto const str = prefix + context + "\n";
-        config.output()(config.output_transcoder()(str));
+        config.write_to_output(config.output_transcoder()(prefix + context + "\n"));
     }
 
     /** This function will receive a string as "foo, bar, baz" and return a vector with
@@ -5407,7 +5422,7 @@ namespace detail {
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, ""}
         Dispatcher(
             bool is_ic_apply,
-            Config_ const& config,
+            Config_& config,
             StringView file,
             int line,
             StringView function,
@@ -5427,7 +5442,7 @@ namespace detail {
         // Dispatcher{bla, #__VA_ARGS__} to Dispatcher{bla, }
         Dispatcher(
             bool is_ic_apply,
-            Config_ const& config,
+            Config_& config,
             StringView file,
             int line,
             StringView function,
@@ -5529,7 +5544,7 @@ namespace detail {
         }
 
         bool is_ic_apply_;
-        Config_ const& config_;
+        Config_& config_;
         StringView file_;
         int line_;
         StringView function_;
@@ -5546,7 +5561,7 @@ namespace detail {
         Proj proj_;
         std::string elements_fmt_;
         Optional<Slice> mb_slice_;
-        Config_ const* config_ = nullptr;
+        Config_* config_ = nullptr;
         int line_;
         std::string src_location_;
         std::string file_;
@@ -5636,7 +5651,7 @@ namespace detail {
         Proj proj;
         Optional<Slice> mb_slice;
         std::string elements_fmt;
-        Config_ const& config;
+        Config_& config;
         int line;
         std::string file;
         std::string function;
