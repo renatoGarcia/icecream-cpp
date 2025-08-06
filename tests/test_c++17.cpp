@@ -132,6 +132,6 @@ TEST_CASE("output transcoding")
 
         auto v0 = 3.14f;
         IC(v0);
-        REQUIRE(str == "ic| v0: 3.14;\n;");
+        REQUIRE(str == "ic| v0: 3.14\n;");
     }
 }

@@ -1212,6 +1212,6 @@ TEST_CASE("output transcoding")
 
         auto v0 = int{12345};
         IC(v0);
-        REQUIRE(str == "ic| v0: 12345|\n|");
+        REQUIRE(str == "ic| v0: 12345\n|");
     }
 }

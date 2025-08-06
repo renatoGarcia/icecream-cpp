@@ -17,15 +17,15 @@
 TEST_CASE("Hereditary")
 {
     {
-        auto v0 = icecream::detail::Hereditary<int>{1};
+        icecream::detail::Hereditary<int> v0{1};
         REQUIRE(v0.value() == 1);
         v0 = 2;
         REQUIRE(v0.value() == 2);
     }
 
     {
-        auto v0 = icecream::detail::Hereditary<double>{2.2};
-        auto v1 = icecream::detail::Hereditary<double>(v0);
+        icecream::detail::Hereditary<double> v0{2.2};
+        icecream::detail::Hereditary<double> v1(v0);
         REQUIRE(v0.value() == 2.2);
         REQUIRE(v1.value() == 2.2);
 
@@ -42,7 +42,7 @@ TEST_CASE("Hereditary")
         auto v0 = int{7};
         auto v2 = int{8};
 
-        auto v1 = icecream::detail::Hereditary<int>{v0};
+        icecream::detail::Hereditary<int> v1{v0};
         REQUIRE(v1.value() == v0);
 
         v1 = v2;
