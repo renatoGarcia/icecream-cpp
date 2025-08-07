@@ -2737,32 +2737,28 @@ namespace detail {
             this->output_.value()(str);
         }
 
-        auto prefix() const -> std::function<std::string()>
+        auto gen_prefix() -> std::string
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            auto const& pref = this->prefix_.value();
-            return [&pref]() -> std::string
-            {
-                return pref();
-            };
+            return this->prefix_.value()();
         }
 
-        auto wide_string_transcoder() const -> std::function<std::string(WStringView)>
+        auto transcode_wide_string(WStringView str) const -> std::string
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            return this->wide_string_transcoder_.value();
+            return this->wide_string_transcoder_.value()(str);
         }
 
-        auto unicode_transcoder() const -> std::function<std::string(U32StringView)>
+        auto transcode_unicode(U32StringView str) const -> std::string
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            return this->unicode_transcoder_.value();
+            return this->unicode_transcoder_.value()(str);
         }
 
-        auto output_transcoder() const -> std::function<std::string(StringView)>
+        auto transcode_output(StringView str) const -> std::string
         {
             std::lock_guard<std::mutex> guard(this->attribute_mutex);
-            return this->output_transcoder_.value();
+            return this->output_transcoder_.value()(str);
         }
 
     private:
@@ -3577,7 +3573,7 @@ namespace detail {
         {
         case OstreamTypeMode::character:
         case OstreamTypeMode::string:
-            ostrm << config.unicode_transcoder()(code_units);
+            ostrm << config.transcode_unicode(code_units);
             break;
 
         case OstreamTypeMode::none:
@@ -3587,7 +3583,7 @@ namespace detail {
                 if (is_code_point_valid(cu))
                 {
                     print_text<quote>(
-                        config.unicode_transcoder()(U32StringView(&cu, 1)), config, ostrm
+                        config.transcode_unicode(U32StringView(&cu, 1)), config, ostrm
                     );
                 }
                 else
@@ -3619,7 +3615,7 @@ namespace detail {
         {
         case OstreamTypeMode::character:
         case OstreamTypeMode::string:
-            ostrm << config.unicode_transcoder()(to_utf32_u32string(code_units));
+            ostrm << config.transcode_unicode(to_utf32_u32string(code_units));
             break;
 
         case OstreamTypeMode::none:
@@ -3664,12 +3660,12 @@ namespace detail {
         {
         case OstreamTypeMode::character:
         case OstreamTypeMode::string:
-            ostrm << config.wide_string_transcoder()(code_units);
+            ostrm << config.transcode_wide_string(code_units);
             break;
 
         case OstreamTypeMode::none:
         case OstreamTypeMode::debug:
-            print_text<quote>(config.wide_string_transcoder()(code_units), config, ostrm);
+            print_text<quote>(config.transcode_wide_string(code_units), config, ostrm);
             break;
 
         case OstreamTypeMode::binary:
@@ -5098,7 +5094,7 @@ namespace detail {
 
         if (!config.is_enabled()) return;
 
-        auto const prefix = config.prefix()();
+        auto const prefix = config.gen_prefix();
         auto const context =
             [&]() -> std::string
             {
@@ -5154,15 +5150,17 @@ namespace detail {
         if (one_line_forest_n_code_points > config.line_wrap_width())
         {
             config.write_to_output(
-                config.output_transcoder()(
-                    print_multi_line_forest(prefix, context, forest, config.line_wrap_width()).append("\n")
+                config.transcode_output(
+                    print_multi_line_forest(
+                        prefix, context, forest, config.line_wrap_width()
+                    ).append("\n")
                 )
             );
         }
         else
         {
             config.write_to_output(
-                config.output_transcoder()(
+                config.transcode_output(
                     print_one_line_forest(prefix, context, delimiter, forest).append("\n")
                 )
             );
@@ -5183,7 +5181,7 @@ namespace detail {
 
         if (!config.is_enabled()) return;
 
-        auto const prefix = config.prefix()();
+        auto const prefix = config.gen_prefix();
         auto const context =
             [&]() -> std::string
             {
@@ -5202,7 +5200,7 @@ namespace detail {
                     + '"';
             }();
 
-        config.write_to_output(config.output_transcoder()(prefix + context + "\n"));
+        config.write_to_output(config.transcode_output(prefix + context + "\n"));
     }
 
     /** This function will receive a string as "foo, bar, baz" and return a vector with
