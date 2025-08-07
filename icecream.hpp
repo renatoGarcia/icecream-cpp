@@ -2994,38 +2994,6 @@ namespace detail {
         }
     }
 
-    // char -> char
-    inline auto transcoder_dispatcher(Config_ const&, StringView str) -> std::string
-    {
-        return str.to_string();
-    }
-
-    // wchar_t -> char
-    inline auto transcoder_dispatcher(Config_ const& config, WStringView str) -> std::string
-    {
-        return config.wide_string_transcoder()(str);
-    }
-
-  #if defined(__cpp_char8_t)
-    // char8_t -> char
-    inline auto transcoder_dispatcher(Config_ const& config, U8StringView str) -> std::string
-    {
-        return config.unicode_transcoder()(to_utf32_u32string(str));
-    }
-  #endif
-
-    // char16_t -> char
-    inline auto transcoder_dispatcher(Config_ const& config, U16StringView str) -> std::string
-    {
-        return config.unicode_transcoder()(to_utf32_u32string(str));
-    }
-
-    // char32_t -> char
-    inline auto transcoder_dispatcher(Config_ const& config, U32StringView str) -> std::string
-    {
-        return config.unicode_transcoder()(str);
-    }
-
     class PrintingNode
     {
     private:
