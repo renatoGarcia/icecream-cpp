@@ -105,6 +105,59 @@ jobs:
       - name: run
         run: ctest -V -C Release
 
+  mingw:
+    name: MinGW ${{ matrix.sys }} C++${{ matrix.cpp }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cpp: [11, 14, 17, 20, 23]
+        sys:
+          - mingw64
+          - mingw32
+          - ucrt64
+          - clang64
+          - msys
+        include:
+          - range_v3: ON
+          - range_v3: OFF
+            cpp: 11
+          - range_v3: OFF
+            sys: mingw32
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.sys }}
+          update: true
+          pacboy: >-
+            gcc:p
+            cmake:p
+            ninja:p
+            boost:p
+            fmt:p
+            ${{ matrix.sys != 'mingw32' && 'range-v3:p' || '' }}
+      - name: setup catch2
+        run: |
+          mkdir -p cmake/catch2
+          curl -L -o cmake/catch2/catch.hpp https://github.com/catchorg/Catch2/releases/download/v2.13.10/catch.hpp
+          cat > cmake/FindCatch2.cmake << 'EOF'
+          add_library(Catch2::Catch2 INTERFACE IMPORTED)
+          set_target_properties(Catch2::Catch2 PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}"
+          )
+          set(Catch2_FOUND TRUE)
+          EOF
+      - name: build
+        run: |
+          cmake . -G Ninja -DCMAKE_MODULE_PATH=$(pwd)/cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror -Wno-c2y-extensions' -DCMAKE_BUILD_TYPE=Release
+          cmake --build .
+      - name: run
+        run: ctest -V
+
   macos:
     name: Xcode C++${{ matrix.cpp }}
     runs-on: macos-14

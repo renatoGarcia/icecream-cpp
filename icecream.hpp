@@ -71,7 +71,11 @@
     #pragma warning(disable: 4127 4355 4514 4623 4626 4820 4866 4868 5027 5045 4582 4583)
 #endif
 
-#if (!defined(__APPLE__) && (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 15000))
+#if !(                                                                              \
+      defined(__APPLE__)                                        /* macOS         */ \
+      || (defined(_LIBCPP_VERSION) && _LIBCPP_VERSION < 15000)  /* libc++ < 15.0 */ \
+      || (defined(__MSVCRT_VERSION__) && !defined( _UCRT))      /* msvcrt        */ \
+    )
     #define ICECREAM_UCHAR_HEADER
     #include <uchar.h>
 #endif
@@ -4081,6 +4085,25 @@ namespace detail {
 
     // -------------------------------------------------- Range classes
 
+    // Check if a value of type From fits in type To. Uses SFINAE to avoid tautological
+    // comparison warnings when From type have the same size or is shorter than To type.
+    template<typename To, typename From>
+    auto fits_in(From v) -> typename std::enable_if<
+        (sizeof(From) > sizeof(To)), bool
+    >::type
+    {
+        return v >= std::numeric_limits<To>::lowest()
+            && v <= std::numeric_limits<To>::max();
+    }
+
+    template<typename To, typename From>
+    auto fits_in(From) -> typename std::enable_if<
+        (sizeof(From) <= sizeof(To)), bool
+    >::type
+    {
+        return true;
+    }
+
     // Direct representation of a slicing string.
     struct Slice
     {
@@ -4141,10 +4164,7 @@ namespace detail {
                     )
 
                     // or if there is an overflow to convert from long to ptrdiff
-                    || (
-                        lnum > std::numeric_limits<ptrdiff_t>::max()
-                        || lnum < std::numeric_limits<ptrdiff_t>::lowest()
-                    )
+                    || !fits_in<ptrdiff_t>(lnum)
                 ) {
                     return {};
                 }
