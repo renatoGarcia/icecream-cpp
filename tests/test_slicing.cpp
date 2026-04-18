@@ -38,6 +38,9 @@ TEST_CASE("bidirectional positive step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[0:5:1]", v0);
         REQUIRE(str == "ic| v0: [0:5:1]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[0:5:1]", v0);
+        REQUIRE(str == "ic| v0: [0:5:1]->[10, 11, 12, 13, 14]\n");
     }
 
     {
@@ -47,6 +50,9 @@ TEST_CASE("bidirectional positive step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[0:5:]", v0);
+        REQUIRE(str == "ic| v0: [0:5:]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[0:5:]", v0);
         REQUIRE(str == "ic| v0: [0:5:]->[10, 11, 12, 13, 14]\n");
     }
 
@@ -58,6 +64,9 @@ TEST_CASE("bidirectional positive step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[-40:15:]", v0);
         REQUIRE(str == "ic| v0: [-40:15:]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[-40:15:]", v0);
+        REQUIRE(str == "ic| v0: [-40:15:]->[10, 11, 12, 13, 14]\n");
     }
 
     {
@@ -67,6 +76,9 @@ TEST_CASE("bidirectional positive step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[1:-2:]", v0);
+        REQUIRE(str == "ic| v0: [1:-2:]->[11, 12]\n");
+
+        str = IC_FR("[1:-2:]", v0);
         REQUIRE(str == "ic| v0: [1:-2:]->[11, 12]\n");
     }
 
@@ -78,6 +90,9 @@ TEST_CASE("bidirectional positive step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[2:0:]", v0);
         REQUIRE(str == "ic| v0: [2:0:]->[]\n");
+
+        str = IC_FR("[2:0:]", v0);
+        REQUIRE(str == "ic| v0: [2:0:]->[]\n");
     }
 
     {
@@ -87,6 +102,9 @@ TEST_CASE("bidirectional positive step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[0:3:2]", v0);
+        REQUIRE(str == "ic| v0: [0:3:2]->[10, 12]\n");
+
+        str = IC_FR("[0:3:2]", v0);
         REQUIRE(str == "ic| v0: [0:3:2]->[10, 12]\n");
     }
 
@@ -98,6 +116,9 @@ TEST_CASE("bidirectional positive step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[:]", v0);
         REQUIRE(str == "ic| v0: [:]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[:]", v0);
+        REQUIRE(str == "ic| v0: [:]->[10, 11, 12, 13, 14]\n");
     }
 
     {
@@ -107,6 +128,9 @@ TEST_CASE("bidirectional positive step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[::]", v0);
+        REQUIRE(str == "ic| v0: [::]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[::]", v0);
         REQUIRE(str == "ic| v0: [::]->[10, 11, 12, 13, 14]\n");
     }
 
@@ -118,6 +142,9 @@ TEST_CASE("bidirectional positive step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[3:]", v0);
         REQUIRE(str == "ic| v0: [3:]->[13, 14]\n");
+
+        str = IC_FR("[3:]", v0);
+        REQUIRE(str == "ic| v0: [3:]->[13, 14]\n");
     }
 
     {
@@ -128,6 +155,9 @@ TEST_CASE("bidirectional positive step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[:3]", v0);
         REQUIRE(str == "ic| v0: [:3]->[10, 11, 12]\n");
+
+        str = IC_FR("[:3]", v0);
+        REQUIRE(str == "ic| v0: [:3]->[10, 11, 12]\n");
     }
 
     {
@@ -137,6 +167,9 @@ TEST_CASE("bidirectional positive step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[:-1]", v0);
+        REQUIRE(str == "ic| v0: [:-1]->[10, 11, 12, 13]\n");
+
+        str = IC_FR("[:-1]", v0);
         REQUIRE(str == "ic| v0: [:-1]->[10, 11, 12, 13]\n");
     }
 }
@@ -152,6 +185,9 @@ TEST_CASE("bidirectional negative step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[4:0:-1]", v0);
         REQUIRE(str == "ic| v0: [4:0:-1]->[14, 13, 12, 11]\n");
+
+        str = IC_FR("[4:0:-1]", v0);
+        REQUIRE(str == "ic| v0: [4:0:-1]->[14, 13, 12, 11]\n");
     }
 
     {
@@ -161,6 +197,9 @@ TEST_CASE("bidirectional negative step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[4:-5:-1]", v0);
+        REQUIRE(str == "ic| v0: [4:-5:-1]->[14, 13, 12, 11]\n");
+
+        str = IC_FR("[4:-5:-1]", v0);
         REQUIRE(str == "ic| v0: [4:-5:-1]->[14, 13, 12, 11]\n");
     }
 
@@ -172,6 +211,9 @@ TEST_CASE("bidirectional negative step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[-1:-6:-1]", v0);
         REQUIRE(str == "ic| v0: [-1:-6:-1]->[14, 13, 12, 11, 10]\n");
+
+        str = IC_FR("[-1:-6:-1]", v0);
+        REQUIRE(str == "ic| v0: [-1:-6:-1]->[14, 13, 12, 11, 10]\n");
     }
 
     {
@@ -181,6 +223,9 @@ TEST_CASE("bidirectional negative step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[20:-15:-1]", v0);
+        REQUIRE(str == "ic| v0: [20:-15:-1]->[14, 13, 12, 11, 10]\n");
+
+        str = IC_FR("[20:-15:-1]", v0);
         REQUIRE(str == "ic| v0: [20:-15:-1]->[14, 13, 12, 11, 10]\n");
     }
 
@@ -192,6 +237,9 @@ TEST_CASE("bidirectional negative step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[0:2:-1]", v0);
         REQUIRE(str == "ic| v0: [0:2:-1]->[]\n");
+
+        str = IC_FR("[0:2:-1]", v0);
+        REQUIRE(str == "ic| v0: [0:2:-1]->[]\n");
     }
 
     {
@@ -201,6 +249,9 @@ TEST_CASE("bidirectional negative step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[0:-2:-1]", v0);
+        REQUIRE(str == "ic| v0: [0:-2:-1]->[]\n");
+
+        str = IC_FR("[0:-2:-1]", v0);
         REQUIRE(str == "ic| v0: [0:-2:-1]->[]\n");
     }
 
@@ -212,6 +263,9 @@ TEST_CASE("bidirectional negative step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[-1:0:-2]", v0);
         REQUIRE(str == "ic| v0: [-1:0:-2]->[14, 12]\n");
+
+        str = IC_FR("[-1:0:-2]", v0);
+        REQUIRE(str == "ic| v0: [-1:0:-2]->[14, 12]\n");
     }
 
     {
@@ -221,6 +275,9 @@ TEST_CASE("bidirectional negative step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[::-1]", v0);
+        REQUIRE(str == "ic| v0: [::-1]->[14, 13, 12, 11, 10]\n");
+
+        str = IC_FR("[::-1]", v0);
         REQUIRE(str == "ic| v0: [::-1]->[14, 13, 12, 11, 10]\n");
     }
 
@@ -232,6 +289,9 @@ TEST_CASE("bidirectional negative step")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[2::-1]", v0);
         REQUIRE(str == "ic| v0: [2::-1]->[12, 11, 10]\n");
+
+        str = IC_FR("[2::-1]", v0);
+        REQUIRE(str == "ic| v0: [2::-1]->[12, 11, 10]\n");
     }
 
     {
@@ -241,6 +301,9 @@ TEST_CASE("bidirectional negative step")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[:-3:-1]", v0);
+        REQUIRE(str == "ic| v0: [:-3:-1]->[14, 13]\n");
+
+        str = IC_FR("[:-3:-1]", v0);
         REQUIRE(str == "ic| v0: [:-3:-1]->[14, 13]\n");
     }
 }
@@ -256,6 +319,9 @@ TEST_CASE("bidirectional - wrong formatting")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[a:5:1]", v0);
         REQUIRE(str == "ic| v0: <invalid range slicing>\n");
+
+        str = IC_FR("[a:5:1]", v0);
+        REQUIRE(str == "ic| v0: <invalid range slicing>\n");
     }
 
     {
@@ -265,6 +331,9 @@ TEST_CASE("bidirectional - wrong formatting")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[]", v0);
+        REQUIRE(str == "ic| v0: <invalid range slicing>\n");
+
+        str = IC_FR("[]", v0);
         REQUIRE(str == "ic| v0: <invalid range slicing>\n");
     }
 
@@ -276,6 +345,9 @@ TEST_CASE("bidirectional - wrong formatting")
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[:::]", v0);
         REQUIRE(str == "ic| v0: <invalid range slicing>\n");
+
+        str = IC_FR("[:::]", v0);
+        REQUIRE(str == "ic| v0: <invalid range slicing>\n");
     }
 
     {
@@ -285,6 +357,9 @@ TEST_CASE("bidirectional - wrong formatting")
 
         auto v0 = std::vector<int>{10, 11, 12, 13, 14};
         IC_F("[::0]", v0);
+        REQUIRE(str == "ic| v0: <slice step cannot be zero>\n");
+
+        str = IC_FR("[::0]", v0);
         REQUIRE(str == "ic| v0: <slice step cannot be zero>\n");
     }
 }
@@ -300,6 +375,9 @@ TEST_CASE("forward unknown size")
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[0:5:1]", v0);
         REQUIRE(str == "ic| v0: [0:5:1]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[0:5:1]", v0);
+        REQUIRE(str == "ic| v0: [0:5:1]->[10, 11, 12, 13, 14]\n");
     }
 
     {
@@ -309,6 +387,9 @@ TEST_CASE("forward unknown size")
 
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[0:3:1]", v0);
+        REQUIRE(str == "ic| v0: [0:3:1]->[10, 11, 12]\n");
+
+        str = IC_FR("[0:3:1]", v0);
         REQUIRE(str == "ic| v0: [0:3:1]->[10, 11, 12]\n");
     }
 
@@ -320,6 +401,9 @@ TEST_CASE("forward unknown size")
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[:2]", v0);
         REQUIRE(str == "ic| v0: [:2]->[10, 11]\n");
+
+        str = IC_FR("[:2]", v0);
+        REQUIRE(str == "ic| v0: [:2]->[10, 11]\n");
     }
 
     {
@@ -329,6 +413,9 @@ TEST_CASE("forward unknown size")
 
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[:]", v0);
+        REQUIRE(str == "ic| v0: [:]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[:]", v0);
         REQUIRE(str == "ic| v0: [:]->[10, 11, 12, 13, 14]\n");
     }
 
@@ -340,6 +427,9 @@ TEST_CASE("forward unknown size")
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[::2]", v0);
         REQUIRE(str == "ic| v0: [::2]->[10, 12, 14]\n");
+
+        str = IC_FR("[::2]", v0);
+        REQUIRE(str == "ic| v0: [::2]->[10, 12, 14]\n");
     }
 
     {
@@ -350,6 +440,9 @@ TEST_CASE("forward unknown size")
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[0:15:1]", v0);
         REQUIRE(str == "ic| v0: [0:15:1]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[0:15:1]", v0);
+        REQUIRE(str == "ic| v0: [0:15:1]->[10, 11, 12, 13, 14]\n");
     }
 
     {
@@ -359,6 +452,9 @@ TEST_CASE("forward unknown size")
 
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[3]", v0);
+        REQUIRE(str == "ic| v0: [3]->[13]\n");
+
+        str = IC_FR("[3]", v0);
         REQUIRE(str == "ic| v0: [3]->[13]\n");
     }
 }
@@ -374,6 +470,9 @@ TEST_CASE("forward unknown size - wrong formatting")
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[-1]", v0);
         REQUIRE(str == "ic| \n    v0: <this range supports only non-negative start and stop slice indexes>\n");
+
+        str = IC_FR("[-1]", v0);
+        REQUIRE(str == "ic| \n    v0: <this range supports only non-negative start and stop slice indexes>\n");
     }
 
     {
@@ -384,6 +483,9 @@ TEST_CASE("forward unknown size - wrong formatting")
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[::-1]", v0);
         REQUIRE(str == "ic| v0: <this range supports only strictly positive slice steps>\n");
+
+        str = IC_FR("[::-1]", v0);
+        REQUIRE(str == "ic| v0: <this range supports only strictly positive slice steps>\n");
     }
 
     {
@@ -393,6 +495,9 @@ TEST_CASE("forward unknown size - wrong formatting")
 
         auto v0 = std::forward_list<int>{10, 11, 12, 13, 14};
         IC_F("[::0]", v0);
+        REQUIRE(str == "ic| v0: <slice step cannot be zero>\n");
+
+        str = IC_FR("[::0]", v0);
         REQUIRE(str == "ic| v0: <slice step cannot be zero>\n");
     }
 }
@@ -408,6 +513,9 @@ TEST_CASE("forward known size")
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[0:5:1]", v0);
         REQUIRE(str == "ic| v0: [0:5:1]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[0:5:1]", v0);
+        REQUIRE(str == "ic| v0: [0:5:1]->[10, 11, 12, 13, 14]\n");
     }
 
     {
@@ -417,6 +525,9 @@ TEST_CASE("forward known size")
 
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[0:3:1]", v0);
+        REQUIRE(str == "ic| v0: [0:3:1]->[10, 11, 12]\n");
+
+        str = IC_FR("[0:3:1]", v0);
         REQUIRE(str == "ic| v0: [0:3:1]->[10, 11, 12]\n");
     }
 
@@ -428,6 +539,9 @@ TEST_CASE("forward known size")
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[0::3]", v0);
         REQUIRE(str == "ic| v0: [0::3]->[10, 13]\n");
+
+        str = IC_FR("[0::3]", v0);
+        REQUIRE(str == "ic| v0: [0::3]->[10, 13]\n");
     }
 
     {
@@ -437,6 +551,9 @@ TEST_CASE("forward known size")
 
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[0:-3]", v0);
+        REQUIRE(str == "ic| v0: [0:-3]->[10, 11]\n");
+
+        str = IC_FR("[0:-3]", v0);
         REQUIRE(str == "ic| v0: [0:-3]->[10, 11]\n");
     }
 
@@ -448,6 +565,9 @@ TEST_CASE("forward known size")
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[-3:-1]", v0);
         REQUIRE(str == "ic| v0: [-3:-1]->[12, 13]\n");
+
+        str = IC_FR("[-3:-1]", v0);
+        REQUIRE(str == "ic| v0: [-3:-1]->[12, 13]\n");
     }
 
     {
@@ -457,6 +577,9 @@ TEST_CASE("forward known size")
 
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[:2]", v0);
+        REQUIRE(str == "ic| v0: [:2]->[10, 11]\n");
+
+        str = IC_FR("[:2]", v0);
         REQUIRE(str == "ic| v0: [:2]->[10, 11]\n");
     }
 
@@ -468,6 +591,9 @@ TEST_CASE("forward known size")
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[:]", v0);
         REQUIRE(str == "ic| v0: [:]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[:]", v0);
+        REQUIRE(str == "ic| v0: [:]->[10, 11, 12, 13, 14]\n");
     }
 
     {
@@ -477,6 +603,9 @@ TEST_CASE("forward known size")
 
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[::2]", v0);
+        REQUIRE(str == "ic| v0: [::2]->[10, 12, 14]\n");
+
+        str = IC_FR("[::2]", v0);
         REQUIRE(str == "ic| v0: [::2]->[10, 12, 14]\n");
     }
 
@@ -488,6 +617,9 @@ TEST_CASE("forward known size")
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[0:15:1]", v0);
         REQUIRE(str == "ic| v0: [0:15:1]->[10, 11, 12, 13, 14]\n");
+
+        str = IC_FR("[0:15:1]", v0);
+        REQUIRE(str == "ic| v0: [0:15:1]->[10, 11, 12, 13, 14]\n");
     }
 
     {
@@ -498,6 +630,9 @@ TEST_CASE("forward known size")
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[3]", v0);
         REQUIRE(str == "ic| v0: [3]->[13]\n");
+
+        str = IC_FR("[3]", v0);
+        REQUIRE(str == "ic| v0: [3]->[13]\n");
     }
 
     {
@@ -507,6 +642,9 @@ TEST_CASE("forward known size")
 
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[-3]", v0);
+        REQUIRE(str == "ic| v0: [-3]->[12]\n");
+
+        str = IC_FR("[-3]", v0);
         REQUIRE(str == "ic| v0: [-3]->[12]\n");
     }
 }
@@ -522,6 +660,9 @@ TEST_CASE("forward known size - wrong formatting")
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[::-1]", v0);
         REQUIRE(str == "ic| v0: <this range supports only strictly positive slice steps>\n");
+
+        str = IC_FR("[::-1]", v0);
+        REQUIRE(str == "ic| v0: <this range supports only strictly positive slice steps>\n");
     }
 
     {
@@ -531,6 +672,9 @@ TEST_CASE("forward known size - wrong formatting")
 
         auto v0 = SizedForwardList{10, 11, 12, 13, 14};
         IC_F("[::0]", v0);
+        REQUIRE(str == "ic| v0: <slice step cannot be zero>\n");
+
+        str = IC_FR("[::0]", v0);
         REQUIRE(str == "ic| v0: <slice step cannot be zero>\n");
     }
 }

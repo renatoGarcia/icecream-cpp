@@ -304,6 +304,9 @@
     #define IC_V(...) ::icecream::detail::IC_V_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
     #define IC_FV(...) ::icecream::detail::IC_FV_(__VA_ARGS__).complete(icecream_private_config_5f803a3bcdb4, __LINE__, __FILE__, ICECREAM_FUNCTION)
 
+    #define IC_R(...) ICECREAM_DISPATCH(false, "", #__VA_ARGS__).string_run(__VA_ARGS__)
+    #define IC_FR(fmt, ...) ICECREAM_DISPATCH(false, fmt, #__VA_ARGS__).string_run(__VA_ARGS__)
+
     #if defined(__GNUC__)
         // Disable global and outer scope name shadowing warnings
         //
@@ -2575,7 +2578,7 @@ namespace icecream{ namespace detail
             return *this;
         }
 
-    protected:
+    public:
 
         Config() = default;
 
@@ -5442,7 +5445,7 @@ namespace detail {
         template <typename T>
         auto unary_run(T&& arg) -> T&&
         {
-            this->dispatch(make_int_sequence<1>(), arg);
+            this->dispatch(config_, make_int_sequence<1>(), arg);
             return std::forward<T>(arg);
         }
 
@@ -5451,7 +5454,7 @@ namespace detail {
         template <typename... Ts>
         auto unary_run(Ts&&... args) -> void
         {
-            this->dispatch(make_int_sequence<sizeof...(Ts)>(), args...);
+            this->dispatch(config_, make_int_sequence<sizeof...(Ts)>(), args...);
         }
 
         // Runs the Dispatcher and returns a tuple with all the arguments.
@@ -5464,13 +5467,24 @@ namespace detail {
         template <typename... Ts>
         auto tuple_run(Ts&&... args) -> std::tuple<custody_t<Ts>...>
         {
-            this->dispatch(make_int_sequence<sizeof...(Ts)>(), args...);
+            this->dispatch(config_, make_int_sequence<sizeof...(Ts)>(), args...);
             return std::tuple<custody_t<Ts>...>(std::forward<Ts>(args)...);
         }
 
+        // Runs the Dispatcher and returns the formatted string.
+        // Can be passed to any ostream or fmt::
+        template <typename... Ts>
+        auto string_run(Ts&&... args) -> std::string
+        {
+            Config_ local_config(&config_);
+            local_config.set_output(buffer);
+            this->dispatch(local_config, make_int_sequence<sizeof...(Ts)>(), std::forward<Ts>(args)...);
+            return buffer.str();
+        }
+
     private:
-        template <size_t... N, typename... Ts>
-        auto dispatch(int_sequence<N...>, Ts&&... args) -> void
+        template <size_t... N, typename... Us>
+        auto dispatch(Config_& config, int_sequence<N...>, Us&&... args) -> void
         {
             // Pick the name of an IC macro's "to be printed" argument. Usually that would
             // just return the argument string itself. However, when using the IC_ macro
@@ -5507,7 +5521,7 @@ namespace detail {
                 arg_names.erase(arg_names.begin());
             }
 
-            if (sizeof...(Ts) == 0 && !this->is_ic_apply_)
+            if (sizeof...(Us) == 0 && !this->is_ic_apply_)
             {
                 // Even if it has no arguments (besides the callable name), an `IC_A`
                 // macro isn't a nullary `IC()` call.
@@ -5516,14 +5530,14 @@ namespace detail {
             else
             {
                 print_args(
-                    config_,
+                    config,
                     file_,
                     line_,
                     function_,
-                    PrintingArgument<formatting_argumet_type<Ts>>{
+                    PrintingArgument<formatting_argumet_type<Us>>{
                         arg_names.at(N),
                         get_fmt(args, this->default_format_),
-                        get_value(std::forward<Ts>(args))
+                        get_value(std::forward<Us>(args))
                     }...
                 );
             }
@@ -5536,6 +5550,7 @@ namespace detail {
         StringView function_;
         StringView default_format_;
         StringView arg_names_;
+        std::ostringstream buffer;
     };
 
     // --------------------------------------------------- Range View

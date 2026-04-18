@@ -34,6 +34,25 @@ TEST_CASE("printing")
     }
 
     {
+        auto str = IC_R(10);
+        REQUIRE(str.empty());
+        REQUIRE(std::is_same<decltype(IC_R(10)), std::string>::value);
+    }
+
+    {
+        auto str = IC_FR("#x", 10);
+        REQUIRE(str.empty());
+        REQUIRE(std::is_same<decltype(IC_FR("#x", 10)), std::string>::value);
+    }
+
+    {
+        auto v0 = int{1};
+        auto str = IC_FR("#x", v0, 10);
+        REQUIRE(str.empty());
+        REQUIRE(std::is_same<decltype(IC_FR("#x", v0, 10)), std::string>::value);
+    }
+
+    {
         IC_CONFIG_SCOPE();
         auto str = std::string{};
         IC_CONFIG.output(str);
@@ -50,6 +69,12 @@ TEST_CASE("printing")
         auto r = IC_F("#x", v0);
         REQUIRE(str.empty());
         REQUIRE(r == 1);
+    }
+
+    {
+        auto v0 = int{1};
+        auto str = IC_FR("#x", v0);
+        REQUIRE(str.empty());
     }
 
     {
@@ -75,6 +100,13 @@ TEST_CASE("printing")
       #endif
         REQUIRE(str.empty());
         REQUIRE(r == 50);
+    }
+
+    {
+        auto mc = MyClass{50};
+        auto str = IC_R(mc);
+        REQUIRE(str.empty());
+        REQUIRE(mc.ret_val() == 50);
     }
 
     {

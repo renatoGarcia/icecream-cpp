@@ -216,7 +216,7 @@ all the functionalities of Icecream-cpp library will be available by the functio
 [`IC`](#direct-printing), [`IC_A`](#return-value-and-icecream-apply-macro), and
 [`IC_V`](#range-views-pipeline); together with its respective counterparts `IC_F`,
 `IC_FA`, and `IC_FV`; that behave the same but accept an [output formatting
-string](#output-formatting) as its first argument.
+string](#output-formatting) as its first argument. `IC_R`and `IC_FR` [returns formatted `std::string`](#return-formatted-string) instead of printing it.
 
 
 ### Direct printing
@@ -485,6 +485,48 @@ used by Icecream-cpp.
 To `IC_FV`, the formatting syntax if the same as the [Range format
 string](#range-format-string).
 
+### Return formatted string
+
+`IC` and `IC_F` returns unchanged values. If you need a formatted value, you can use a `IC_R` (return) or `IC_FR` (format and return). For example, this vector:
+
+
+```c++
+auto v = std::vector<int>{10, 11, 12, 13, 14};
+auto str = IC_R(v);
+```
+
+will be assigned to `str` as:
+```
+ic| v: [10, 11, 12, 13, 14]
+```
+
+You can slice any values from it using [range format](#range-format-string):
+```c++
+auto str = IC_FR("[0:2]", v);
+```
+
+The `str` now contains:
+```
+ic| v: [10, 11, 12]
+```
+
+It can be used to create complex output by mixing IceCream with [formatting libraries](#printing-strategies) like [{fmt}](#fmt-1). 
+
+This code:
+```c++
+IC_CONFIG.prefix("");
+auto v = std::vector<int>{10, 11, 12, 13, 14};
+auto i = 21;
+fmt::print("Pushing {} to the {}", IC_FR("#x", i), IC_R(v))
+```
+
+will print:
+```
+Pushing i: 0x15 to the v: [10, 11, 12, 13, 14]
+```
+
+
+
 
 ### C strings
 
@@ -715,7 +757,10 @@ auto str = std::string{};
 IC_CONFIG.output(str);
 IC(1, 2);
 ```
-Will print the output `"ic| 1: 1, 2: 2\n"` in the `str` string.
+Will print the output `"ic| 1: 1, 2: 2\n"` in the `str` string. `IC_R` and `IC_FR` returns the same string:
+```c++
+auto str = IC_R(1, 2);
+```
 
 > [!WARNING]
 > Icecream-cpp won't take ownership of the `t` argument, so care must be taken by the user
@@ -1521,7 +1566,19 @@ ic| s: {f: 3.14, ii: [1, 2, 3]}
 ```
 
 This strategy has a lowest precedence of all the printing strategies. So if the printing
-type is supported by any one of them it will used instead.
+type is supported by any one of them it will used instead. You can mix this dump with any strategy, e.g. with `fmt::print()`.
+
+The code:
+```c++
+IC_CONFIG.prefix("");
+S s = {3.14, {1,2,3}};    
+fmt::print("Testing class {}", IC_R(s));   
+```
+will print:
+```
+Testing class s: {f: 3.14, ii: [1, 2, 3]}
+```
+
 
 ### Third-party libraries
 

@@ -21,6 +21,9 @@ TEST_CASE("char8_t")
         auto v0 = char8_t {u8'a'};
         IC(v0);
         REQUIRE(str == "ic| v0: 'a'\n");
+
+        str = IC_R(v0);
+        REQUIRE(str == "ic| v0: 'a'\n");
     }
 
     {
@@ -30,6 +33,9 @@ TEST_CASE("char8_t")
 
         auto v0 = char8_t {u8'a'};
         IC_F("#o", v0);
+        REQUIRE(str == "ic| v0: 0141\n");
+
+        str = IC_FR("#o", v0);
         REQUIRE(str == "ic| v0: 0141\n");
     }
 
@@ -41,6 +47,9 @@ TEST_CASE("char8_t")
         auto v0 = char8_t{0x80};  // invalid UTF-8 code unit
         IC(v0);
         REQUIRE(str == "ic| v0: '\\x{80}'\n");
+
+        str = IC_R(v0);
+        REQUIRE(str == "ic| v0: '\\x{80}'\n");
     }
 
     {
@@ -50,6 +59,9 @@ TEST_CASE("char8_t")
 
         auto v0 = char8_t{0x80};  // invalid UTF-8 code unit
         IC_F("c", v0);
+        REQUIRE(str == "ic| v0: �\n");
+
+        str = IC_FR("c", v0);
         REQUIRE(str == "ic| v0: �\n");
     }
 
@@ -61,6 +73,9 @@ TEST_CASE("char8_t")
         auto v0 = std::u8string {u8"u8str \uAB8C"}; // Cherokee Small Letter MO
         IC(v0);
         REQUIRE(str == "ic| v0: \"u8str \xEA\xAE\x8C\"\n");
+
+        str = IC_R(v0);
+        REQUIRE(str == "ic| v0: \"u8str \xEA\xAE\x8C\"\n");
     }
 
     {
@@ -71,6 +86,9 @@ TEST_CASE("char8_t")
         char8_t const* const v0 = u8"char8_t test \uAB8C";
         IC(v0);
         REQUIRE(str == "ic| v0: \"char8_t test \xEA\xAE\x8C\"\n");
+
+        str = IC_R(v0);
+        REQUIRE(str == "ic| v0: \"char8_t test \xEA\xAE\x8C\"\n");
     }
 
     {
@@ -80,6 +98,9 @@ TEST_CASE("char8_t")
 
         auto v0 = std::u8string_view {u8"u8str \uAB8C"}; // Cherokee Small Letter MO
         IC(v0);
+        REQUIRE(str == "ic| v0: \"u8str \xEA\xAE\x8C\"\n");
+
+        str = IC_R(v0);
         REQUIRE(str == "ic| v0: \"u8str \xEA\xAE\x8C\"\n");
     }
 }
@@ -104,6 +125,9 @@ TEST_CASE("transcode functions")
         char8_t const* v0 = u8"char8_t test A";
         IC_F("s", v0);
         REQUIRE(str == "ic| v0: foo\n");
+
+        str = IC_FR("s", v0);
+        REQUIRE(str == "ic| v0: foo\n");
     }
 
     {
@@ -121,6 +145,9 @@ TEST_CASE("transcode functions")
 
         auto v0 = std::u8string_view{u8"string B"};
         IC_F("s", v0);
+        REQUIRE(str == "ic| v0: foo\n");
+
+        str = IC_FR("s", v0);
         REQUIRE(str == "ic| v0: foo\n");
     }
 }

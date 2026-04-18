@@ -76,6 +76,9 @@ TEST_CASE("fmt lib")
 
         IC(v0);
         REQUIRE(str == result);
+
+        str = IC_R(v0);
+        REQUIRE(str == result);
     }
 
     {
@@ -93,6 +96,9 @@ TEST_CASE("fmt lib")
             "ic| \n"
             "    v0: [10, 20, 30, 40, 50, 60]\n";
         IC(v0);
+        REQUIRE(str == result);
+
+        str = IC_R(v0);
         REQUIRE(str == result);
     }
 
@@ -119,6 +125,9 @@ TEST_CASE("fmt lib")
 
         IC(v0);
         REQUIRE(str == result);
+
+        str = IC_R(v0);
+        REQUIRE(str == result);
     }
 
     {
@@ -135,6 +144,9 @@ TEST_CASE("fmt lib")
             "    v0: (10, 20, 30, 40, 50, 60)\n";
         IC(v0);
         REQUIRE(str == result);
+
+        str = IC_R(v0);
+        REQUIRE(str == result);
     }
 
     {
@@ -144,6 +156,9 @@ TEST_CASE("fmt lib")
 
         auto v0 = FmtFormatAs{5};
         IC(v0);
+        REQUIRE(str == "ic| v0: 5\n");
+
+        str = IC_R(v0);
         REQUIRE(str == "ic| v0: 5\n");
     }
 }

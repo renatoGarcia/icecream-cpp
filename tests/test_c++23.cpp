@@ -29,6 +29,9 @@ TEST_CASE("STL formatting lib")
 
         IC(v0);
         REQUIRE(str == result);
+
+        str = IC_R(v0);
+        REQUIRE(str == result);
     }
 
     {
@@ -44,6 +47,9 @@ TEST_CASE("STL formatting lib")
             "    v0: (10, 20, 30, 40, 50, 60)\n";
 
         IC(v0);
+        REQUIRE(str == result);
+
+        str = IC_R(v0);
         REQUIRE(str == result);
     }
   #endif

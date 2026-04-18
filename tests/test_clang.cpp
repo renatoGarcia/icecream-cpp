@@ -43,7 +43,10 @@ TEST_CASE("dump_string")
       #endif
 
         IC(v0);
-        REQUIRE_THAT(str, Catch::Matches(result));
+        REQUIRE(str == result);
+
+        str = IC_R(v0);
+        REQUIRE(str == result);
     }
 
     {
@@ -81,6 +84,9 @@ TEST_CASE("dump_string")
 
         IC(v0);
         REQUIRE(str == result);
+
+        str = IC_R(v0);
+        REQUIRE(str == result);
     }
 
     {
@@ -100,6 +106,9 @@ TEST_CASE("dump_string")
 
         IC(v0);
         REQUIRE(str == "ic| v0: {x: 1, y: 2, en: 1}\n");
+
+        str = IC_R(v0);
+        REQUIRE(str == "ic| v0: {x: 1, y: 2, en: 1}\n");
     }
 
     {
@@ -117,6 +126,9 @@ TEST_CASE("dump_string")
         };
 
         IC(v0);
+        REQUIRE(str == "ic| v0: {p: {x: 1, y: 2}, i: 7}\n");
+
+        str = IC_R(v0);
         REQUIRE(str == "ic| v0: {p: {x: 1, y: 2}, i: 7}\n");
     }
 

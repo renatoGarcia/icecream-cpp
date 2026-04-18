@@ -21,6 +21,9 @@ TEST_CASE("std_string_view")
         auto v0 = std::string_view {"str 1"};
         IC(v0);
         REQUIRE(str == "ic| v0: \"str 1\"\n");
+
+        str = IC_R(v0);
+        REQUIRE(str == "ic| v0: \"str 1\"\n");
     }
 
     {
@@ -32,6 +35,9 @@ TEST_CASE("std_string_view")
         auto v1 = std::string_view {v0.data() + 1, 3};
         IC(v1);
         REQUIRE(str == "ic| v1: \"BCD\"\n");
+
+        str = IC_R(v1);
+        REQUIRE(str == "ic| v1: \"BCD\"\n");
     }
 
     {
@@ -42,6 +48,9 @@ TEST_CASE("std_string_view")
         auto v0 = std::wstring_view {L"wstr 1"};
         IC(v0);
         REQUIRE(str == "ic| v0: \"wstr 1\"\n");
+
+        str = IC_R(v0);
+        REQUIRE(str == "ic| v0: \"wstr 1\"\n");
     }
 
     {
@@ -51,6 +60,9 @@ TEST_CASE("std_string_view")
 
         auto v0 = std::u16string_view {u"u16str \u03B1"};
         IC(v0);
+        REQUIRE(str == "ic| v0: \"u16str \xce\xb1\"\n");
+
+        str = IC_R(v0);
         REQUIRE(str == "ic| v0: \"u16str \xce\xb1\"\n");
     }
 
@@ -64,6 +76,9 @@ TEST_CASE("std_string_view")
         auto v0 = std::u16string_view(v);
         IC(v0);
         REQUIRE(str == "ic| v0: \"u16str\\x{d801}\"\n");
+
+        str = IC_R(v0);
+        REQUIRE(str == "ic| v0: \"u16str\\x{d801}\"\n");
     }
 
     {
@@ -73,6 +88,9 @@ TEST_CASE("std_string_view")
 
         auto v0 = std::u32string_view {U"u32str \U0001F427"};
         IC(v0);
+        REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
+
+        str = IC_R(v0);
         REQUIRE(str == "ic| v0: \"u32str \xF0\x9F\x90\xA7\"\n");
     }
 }
@@ -96,6 +114,9 @@ TEST_CASE("transcode functions")
         char16_t const* v0 = u"char16_t test \u03B1";
         IC_F("s", v0);
         REQUIRE(str == "ic| v0: foo\n");
+
+        str = IC_FR("s", v0);
+        REQUIRE(str == "ic| v0: foo\n");
     }
 
     {
@@ -113,6 +134,9 @@ TEST_CASE("transcode functions")
 
         auto v0 = std::wstring_view(L"wide string test");
         IC(v0);
+        REQUIRE(str == "ic| v0: \"qux\"\n");
+
+        str = IC_R(v0);
         REQUIRE(str == "ic| v0: \"qux\"\n");
     }
 }
