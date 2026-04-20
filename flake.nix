@@ -51,12 +51,12 @@
             nativeBuildInputs = with pkgs.buildPackages; [
               (fmt.override { inherit stdenv; })
               boost
-              catch2
               clang-tools
               cmakeCurses
               conan
               range-v3
             ] ++ app.nativeBuildInputs;
+            hardeningDisable = [ "fortify" ];
        };
 
     in {

@@ -13,7 +13,6 @@ class CompressorRecipe(ConanFile):
         cppstd = int(self.settings.compiler.cppstd.value)
 
         self.requires("boost/1.86.0")
-        self.requires("catch2/2.13.10")
         self.requires("fmt/11.0.2")
 
         if (
