@@ -5,7 +5,6 @@ endif()
 option(ENABLE_RANGE_V3 "If ON the tests to Range-v3 library will be enabled" OFF)
 option(ENABLE_FMT "If ON the tests to {fmt} library will be enabled" OFF)
 
-find_package(Catch2 REQUIRED)
 find_package(Boost REQUIRED)
 
 if (ENABLE_RANGE_V3)
@@ -26,7 +25,7 @@ include_directories(${PROJECT_SOURCE_DIR})
 function(declare_test name)
   add_executable(test_${name} test_${name}.cpp)
   add_test(NAME test_${name} COMMAND test_${name})
-  target_link_libraries(test_${name} PRIVATE Catch2::Catch2 Boost::headers)
+  target_link_libraries(test_${name} PRIVATE Boost::headers)
 
   if (ENABLE_RANGE_V3)
     target_link_libraries(test_${name} PRIVATE range-v3::range-v3)

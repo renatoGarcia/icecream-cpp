@@ -12,7 +12,7 @@
 #endif
 
 #define CATCH_CONFIG_MAIN
-#include <catch2/catch.hpp>
+#include "catch.hpp"
 
 
 auto operator<<(std::ostream& os, std::optional<MyClass> const& value) -> std::ostream&
