@@ -10,9 +10,11 @@
     };
   };
 
-  outputs = inputs@{ self, nixpkgs, ... }:
+  outputs =
+    inputs@{ self, nixpkgs, ... }:
     let
-      application = { pkgs }:
+      application =
+        { pkgs }:
         pkgs.stdenv.mkDerivation {
           pname = "icecream-example";
           version = "1.0";
@@ -27,14 +29,17 @@
           ];
         };
 
-      pkgs = (import nixpkgs {
-        system = "x86_64-linux";
-        overlays = [
-          inputs.icecream-cpp.overlays.default
-        ];
-      });
+      pkgs = (
+        import nixpkgs {
+          system = "x86_64-linux";
+          overlays = [
+            inputs.icecream-cpp.overlays.default
+          ];
+        }
+      );
 
-    in {
+    in
+    {
       packages.x86_64-linux = {
         default = application { inherit pkgs; };
       };

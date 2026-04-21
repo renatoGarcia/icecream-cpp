@@ -167,7 +167,12 @@ Icecream-cpp can be included as a flakes input:
 inputs.icecream-cpp.url = "github:renatoGarcia/icecream-cpp";
 ```
 
-The flake defines an overlay for use when importing `nixpkgs`:
+The package can be referenced directly:
+```Nix
+inputs.icecream-cpp.packages.${system}.default
+```
+
+Alternatively, the flake provides an overlay for use when importing `nixpkgs`:
 ```Nix
 import nixpkgs {
   system = "x86_64-linux";
