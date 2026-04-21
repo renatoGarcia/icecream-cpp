@@ -481,100 +481,157 @@ namespace icecream{ namespace detail
     using is_bounded_array = typename is_bounded_array_impl<T>::type;
 
 
+    // -------------------------------------------------- detection idiom
+
+    // Implements the "detection idiom" from Fundamentals TS.
+    // https://en.cppreference.com/cpp/experimental/is_detected
+    // Amazing talk explaining how it works: https://www.youtube.com/watch?v=o1ekBpEFcPc
+
+    // C++11 void_t equivalent
+    template <typename...>
+    struct make_void { using type = void; };
+    template <typename... Ts>
+    using void_t = typename make_void<Ts...>::type;
+
+
+    struct nonesuch {
+        nonesuch() = delete;
+        ~nonesuch() = delete;
+        nonesuch(nonesuch const&) = delete;
+        void operator=(nonesuch const&) = delete;
+    };
+
+
+    // is_detected<Op, Args...> -> checks if Op<Args...> is well-formed
+    template <typename Void, template <typename...> class Op, typename... Args>
+    struct is_detected_impl : std::false_type {};
+
+    template <template <typename...> class Op, typename... Args>
+    struct is_detected_impl<void_t<Op<Args...>>, Op, Args...> : std::true_type {};
+
+    template <template <typename...> class Op, typename... Args>
+    using is_detected = is_detected_impl<void, Op, Args...>;
+
+
+    // detected_or<Default, Op, Args...> -> evaluates to Op<Args...> when valid, Default otherwise
+    template <typename Default, typename Void, template <typename...> class Op, typename... Args>
+    struct detected_or_impl { using type = Default; };
+
+    template <typename Default, template <typename...> class Op, typename... Args>
+    struct detected_or_impl<Default, void_t<Op<Args...>>, Op, Args...>
+    { using type = Op<Args...>; };
+
+    template <typename Default, template <typename...> class Op, typename... Args>
+    using detected_or = typename detected_or_impl<Default, void, Op, Args...>::type;
+
+
+    // detected_t<Op, Args...> -> evaluates to Op<Args...> when valido, nonesuch otherwise
+    template <template <typename...> class Op, typename... Args>
+    using detected_t = detected_or<nonesuch, Op, Args...>;
+
+
+    // is_detected_exact<Expected, Op, Args...> -> true if Op<Args...> is valid and its type is exactly Expected
+    template <typename Expected, template <typename...> class Op, typename... Args>
+    using is_detected_exact = std::is_same<Expected, detected_t<Op, Args...>>;
+
+
     // -------------------------------------------------- is_invocable
 
-    // Checks if T is nullary invocable, i.e.: the statement T() is valid.
+    // Checks if T is nullary invocable, i.e., the statement T() is valid.
 
     template <typename T>
-    auto is_invocable_impl(int) -> decltype(std::declval<T&>()(), std::true_type{});
+    using invocable_expr = decltype(std::declval<T&>()());
 
     template <typename T>
-    auto is_invocable_impl(...) -> std::false_type;
+    using is_invocable = is_detected<invocable_expr, T>;
+
+
+    // -------------------------------------------------- invoke_result
+
+    // Returns the result type of nullary function, or nonesuch if not invocable.
 
     template <typename T>
-    using is_invocable = decltype(is_invocable_impl<T>(0));
+    using invoke_result = detected_or<nonesuch, invocable_expr, T>;
 
 
     // -------------------------------------------------- is_string_convertible
 
-    // Checks if T is "string convertible", i.e.: is accepted as argument to a std::string
+    // Checks if T is "string convertible", i.e., is accepted as argument to a std::string
     // constructor.
 
     template <typename T>
-    auto is_string_convertible_impl(int) -> decltype(std::string(std::declval<T&>()), std::true_type{});
+    using string_convertible_expr = decltype(std::string(std::declval<T&>()));
 
     template <typename T>
-    auto is_string_convertible_impl(...) -> std::false_type;
-
-    template <typename T>
-    using is_string_convertible = decltype(is_string_convertible_impl<T>(0));
+    using is_string_convertible = is_detected<string_convertible_expr, T>;
 
 
-    // -------------------------------------------------- returned_type
-
-    // Returns the result type of nullary function
-
-    template <typename T>
-    auto returned_type_impl(int) -> decltype(std::declval<T&>()());
-
-    template <typename T>
-    auto returned_type_impl(...) -> void;
-
-    template <typename T>
-    using returned_type = decltype(returned_type_impl<T>(0));
-
-
-    // -------------------------------------------------- resolve_view_t
+    // -------------------------------------------------- pipe_result
 
     // Applies the pipe operator between a range and a value of type T, and returns the
-    // resulting view type.
+    // resulting view type, or nonesuch if the pipe operator is not applicable.
 
     template <typename T>
-    auto resolve_view_t_impl(int) -> decltype(std::declval<std::vector<int>&>() | std::declval<T&>());
+    using pipe_expr = decltype(std::declval<std::vector<int>&>() | std::declval<T&>());
 
     template <typename T>
-    auto resolve_view_t_impl(...) -> void;
+    using pipe_result = detected_or<nonesuch, pipe_expr, T>;
+
+
+    // -------------------------------------------------- sized checks
+
+    // Checks if a class `T` has either a `size()` method or a `size(T&)` overload.
 
     template <typename T>
-    using resolve_view_t = decltype(resolve_view_t_impl<T>(0));
+    using size_method_expr = decltype(std::declval<T&>().size());
 
-
-    // -------------------------------------------------- is_sized
-
-    // Checks if a class `T` has either a `size()` method or a `size(T const&)` overload.
+    // Checks if a class `T` has a `T.size()` method.
+    template <typename T>
+    using has_size_method = is_detected<size_method_expr, T>;
 
     template <typename T>
-    auto has_size_method_impl(int) ->
-        decltype(
-            std::declval<T&>().size(),
-            std::true_type{}
-        );
+    using size_function_expr = decltype(size(std::declval<T&>()));
+
+    // Checks if a class `T` has a `size(T&)` overload.
+    template <typename T>
+    using has_size_function_overload = is_detected<size_function_expr, T>;
 
     template <typename T>
-    auto has_size_method_impl(...) -> std::false_type;
+    using is_sized = typename disjunction<has_size_method<T>, has_size_function_overload<T>>::type;
 
-    template <typename T>
-    auto has_size_overload_impl(int) ->
-        decltype(
-            size(std::declval<T&>()),
-            std::true_type{}
-        );
 
-    template <typename T>
-    auto has_size_overload_impl(...) -> std::false_type;
+    // -------------------------------------------------- get_reference_t
 
-    template <typename T>
-    using is_sized =
-        typename disjunction<
-            decltype(has_size_method_impl<T>(0)),
-            decltype(has_size_overload_impl<T>(0))
+    // Gets the reference type (the dereference result) of an iterator `I`, or nonesuch if
+    // not dereferenceable.
+
+    template <typename I>
+    using dereference_expr = decltype(*std::declval<I&>());
+
+    template <typename I>
+    using get_reference_t = detected_or<nonesuch, dereference_expr, I>;
+
+
+    // -------------------------------------------------- is_input_iterator
+
+    // Checks if `I` is an input iterator by testing for increment and dereference
+    // operators. This is less strict than the full C++ InputIterator requirements (e.g.,
+    // we don't check for sentinel/iterator pairing or category traits), but is sufficient
+    // for our use case.
+
+    template <typename I>
+    using pre_increment_expr = decltype(++std::declval<I&>());
+
+    template <typename I>
+    using post_increment_expr = decltype(std::declval<I&>()++);
+
+    template <typename I>
+    using is_input_iterator =
+        typename conjunction<
+            is_detected_exact<I&, pre_increment_expr, I>,
+            is_detected_exact<I, post_increment_expr, I>,
+            is_detected<dereference_expr, I>
         >::type;
-
-    template <typename T>
-    using has_size_method = decltype(has_size_method_impl<T>(0));
-
-    template <typename T>
-    using has_size_function_overload = decltype(has_size_overload_impl<T>(0));
 
 
     // -------------------------------------------------- is_sentinel_for
@@ -582,20 +639,18 @@ namespace icecream{ namespace detail
     // Checks if `S` is a sentinel type to an iterator `I`
 
     template <typename S, typename I>
-    auto is_sentinel_for_impl(int) ->
-        decltype (
-            S(std::declval<S&>()),
-            std::declval<S&>() = std::declval<S&>(),
-            std::declval<I&>() != std::declval<S&>(),
-            std::declval<I&>() == std::declval<S&>(),
-            std::true_type{}
-        );
+    using sentinel_for_expr = void_t<
+        decltype(S(std::declval<S const&>())),
+        decltype(std::declval<I&>() = std::declval<S&>()),
+        decltype(std::declval<I&>() != std::declval<S&>()),
+        decltype(std::declval<I&>() == std::declval<S&>())
+    >;
 
     template <typename S, typename I>
-    auto is_sentinel_for_impl(...) -> std::false_type;
-
-    template <typename S, typename I>
-    using is_sentinel_for = decltype(is_sentinel_for_impl<S, I>(0));
+    using is_sentinel_for = typename conjunction<
+        is_input_iterator<I>,
+        is_detected<sentinel_for_expr, S, I>
+    >::type;
 
 
     // -------------------------------------------------- is_range
@@ -603,54 +658,29 @@ namespace icecream{ namespace detail
     // Checks if the type `R` is a range.
 
     template <typename R>
-    auto is_range_impl(int) ->
-        decltype (
-            begin(std::declval<R&>()),
-            end(std::declval<R&>()),
-            std::true_type{}
-        );
+    using range_expr = void_t<
+        decltype(begin(std::declval<R&>())),
+        decltype(end(std::declval<R&>()))
+    >;
 
     template <typename R>
-    auto is_range_impl(...) -> std::false_type;
-
-    template <typename R>
-    using is_range = decltype(is_range_impl<R>(0));
+    using is_range = is_detected<range_expr, R>;
 
 
     // -------------------------------------------------- get_iterator_t
 
-    // Gets the iterator type of a range `R`
+    // Gets the iterator type of a range `R`, or nonesuch if R is not a range.
 
     template <typename R>
-    using get_iterator_t = decltype(begin(std::declval<R&>()));
+    using iterator_t_expr = decltype(begin(std::declval<R&>()));
 
-
-    // -------------------------------------------------- get_reference_t
-
-    // Gets the reference type (the derreference result) of an iterator `I`
-
-    template <typename I>
-    using get_reference_t = decltype(*std::declval<I&>());
-
-
-    // -------------------------------------------------- is_input_iterator
-
-    template <typename T>
-    auto is_input_iterator_impl(int) ->
-        decltype (
-            *std::declval<T&>(),    // is dereferenciable
-            ++std::declval<T&>(),   // is pre-incrementable
-            std::true_type{}
-        );
-
-    template <typename T>
-    auto is_input_iterator_impl(...) -> std::false_type;
-
-    template <typename T>
-    using is_input_iterator = decltype(is_input_iterator_impl<T>(0));
+    template <typename R>
+    using get_iterator_t = detected_or<nonesuch, iterator_t_expr, R>;
 
 
     // -------------------------------------------------- is_input_range
+
+    // Checks if `T` is an input range type.
 
     template <typename T>
     using is_input_range =
@@ -663,24 +693,19 @@ namespace icecream{ namespace detail
     // -------------------------------------------------- is_forward_iterator
 
     template <typename I>
-    auto is_forward_iterator_impl(int) ->
-        decltype (
-            I(std::declval<I&>()),   // is copyable
-            I(),                     // is default initializable
-            std::declval<I&>() == std::declval<I&>(),   // is copyable
-            std::declval<I&>() != std::declval<I&>(),   // is copyable
-            std::true_type{}
-        );
-
-    template <typename I>
-    auto is_forward_iterator_impl(...) -> std::false_type;
+    using forward_iterator_extra_expr = void_t<
+        decltype(I(std::declval<I const&>())),         // is copyable
+        decltype(I()),                                 // is default initializable
+        decltype(std::declval<I&>() == std::declval<I&>()),
+        decltype(std::declval<I&>() != std::declval<I&>())
+    >;
 
     template <typename I>
     using is_forward_iterator =
         typename conjunction<
             is_input_iterator<I>,
             is_sentinel_for<I, I>,
-            decltype(is_forward_iterator_impl<I>(0))
+            is_detected<forward_iterator_extra_expr, I>
         >::type;
 
 
@@ -697,21 +722,17 @@ namespace icecream{ namespace detail
     // -------------------------------------------------- is_bidirectional_iterator
 
     template <typename I>
-    auto is_bidirectional_iterator_impl(int) ->
-        decltype (
-            --std::declval<I&>(),
-            std::declval<I&>()--,
-            std::true_type{}
-        );
+    using pre_decrement_expr = decltype(--std::declval<I&>());
 
     template <typename I>
-    auto is_bidirectional_iterator_impl(...) -> std::false_type;
+    using post_decrement_expr = decltype(std::declval<I&>()--);
 
     template <typename I>
     using is_bidirectional_iterator =
         typename conjunction<
             is_forward_iterator<I>,
-            decltype(is_bidirectional_iterator_impl<I>(0))
+            is_detected_exact<I&, pre_decrement_expr, I>,
+            is_detected_exact<I, post_decrement_expr, I>
         >::type;
 
 
@@ -727,38 +748,24 @@ namespace icecream{ namespace detail
 
     // -------------------------------------------------- has_push_back_T
 
-    // Checks if the `C` class has a push_back(`T`) method
+    // Checks if there are a `C.push_back(T)` method.
 
     template <typename C, typename T>
-    auto has_push_back_T_impl(int) ->
-        decltype(
-            std::declval<C&>().push_back(std::declval<T&>()),
-            std::true_type{}
-        );
+    using push_back_expr = decltype(std::declval<C&>().push_back(std::declval<T&>()));
 
     template <typename C, typename T>
-    auto has_push_back_T_impl(...) -> std::false_type;
-
-    template <typename C, typename T>
-    using has_push_back_T = decltype(has_push_back_T_impl<C, T>(0));
+    using has_push_back_T = is_detected<push_back_expr, C, T>;
 
 
     // --------------------------------------------------is_streamable
 
-    // Checks if `T` has an insertion overload, i.e.: `std::ostream& << T&`
+    // Checks if the insertion overload `std::ostream& << T&` is valid.
 
     template <typename T>
-    auto is_streamable_impl(int) ->
-        decltype(
-            std::declval<std::ostream&>() << std::declval<T&>(),
-            std::true_type{}
-        );
+    using streamable_expr = decltype(std::declval<std::ostream&>() << std::declval<T&>());
 
     template <typename T>
-    auto is_streamable_impl(...) -> std::false_type;
-
-    template <typename T>
-    using is_streamable = decltype(is_streamable_impl<T>(0));
+    using is_streamable = is_detected<streamable_expr, T>;
 
 
     // --------------------------------------------------is_stl_formattable
@@ -766,19 +773,15 @@ namespace icecream{ namespace detail
     // Checks if type `T` is formattable by STL Formatting library
 
   #if defined(ICECREAM_STL_FORMAT)
-    template <class T>
-    auto is_stl_formattable_impl(int) ->
-        decltype(
-            std::formatter<T, char>{},
-            std::true_type{}
-        );
+    template <typename T>
+    using stl_formattable_expr = decltype(std::formatter<remove_cvref_t<T>, char>{});
+
+    template <typename T>
+    using is_stl_formattable = is_detected<stl_formattable_expr, T>;
+  #else
+    template <typename>
+    using is_stl_formattable = std::false_type;
   #endif
-
-    template <class T>
-    auto is_stl_formattable_impl(...) -> std::false_type ;
-
-    template <class T>
-    using is_stl_formattable = decltype(is_stl_formattable_impl<remove_cvref_t<T>>(0));
 
 
     // --------------------------------------------------is_fmt_formattable
@@ -786,19 +789,15 @@ namespace icecream{ namespace detail
     // Checks if type `T` is formattable by {fmt} library
 
   #if defined(ICECREAM_FMT_ENABLED)
-    template <class T>
-    auto is_fmt_formattable_impl(int) ->
-        decltype(
-            fmt::formatter<T, char>{},
-            std::true_type{}
-        );
+    template <typename T>
+    using fmt_formattable_expr = decltype(fmt::formatter<remove_cvref_t<T>, char>{});
+
+    template <typename T>
+    using is_fmt_formattable = is_detected<fmt_formattable_expr, T>;
+  #else
+    template <typename>
+    using is_fmt_formattable = std::false_type;
   #endif
-
-    template <class T>
-    auto is_fmt_formattable_impl(...) -> std::false_type ;
-
-    template <class T>
-    using is_fmt_formattable = decltype(is_fmt_formattable_impl<remove_cvref_t<T>>(0));
 
 
     // --------------------------------------------------is_baseline_printable
@@ -806,26 +805,21 @@ namespace icecream{ namespace detail
     template <typename T>
     using is_baseline_printable =
         typename disjunction<
-        is_streamable<T>, is_stl_formattable<T>, is_fmt_formattable<T>
+            is_streamable<T>,
+            is_stl_formattable<T>,
+            is_fmt_formattable<T>
         >::type;
 
 
     // -------------------------------------------------- has_to_string
 
-    // Checks if there is a `size(T const&)` overload to a `T` type.
+    // Checks if there is a `to_string(T const&)` overload for type `T`.
 
     template <typename T>
-    auto has_to_string_impl(int) ->
-        decltype(
-            to_string(std::declval<T&>()),
-            std::true_type{}
-        );
+    using to_string_expr = decltype(to_string(std::declval<T&>()));
 
     template <typename T>
-    auto has_to_string_impl(...) -> std::false_type;
-
-    template <typename T>
-    using has_to_string = decltype(has_to_string_impl<T>(0));
+    using has_to_string = is_detected<to_string_expr, T>;
 
 
     // -------------------------------------------------- is_tuple
@@ -1008,10 +1002,7 @@ namespace icecream{ namespace detail
             is_std_string<remove_ref_t<T>>,
             is_string_view<remove_ref_t<T>>,
             is_c_string<remove_ref_t<T>>,
-            conjunction<
-                is_invocable<T>,
-                is_streamable<returned_type<T>>
-            >
+            is_streamable<invoke_result<T>>
         >::type;
 
 
@@ -1020,17 +1011,10 @@ namespace icecream{ namespace detail
     // Checks if `Iterator` is an output iterator with type `Item`
 
     template <typename Iterator, typename Item>
-    auto is_T_output_iterator_impl(int) ->
-        decltype(
-            *std::declval<Iterator&>() = std::declval<Item&>(),
-            std::true_type{}
-        );
+    using output_iterator_expr = decltype(*std::declval<Iterator&>() = std::declval<Item&>());
 
     template <typename Iterator, typename Item>
-    auto is_T_output_iterator_impl(...) -> std::false_type;
-
-    template <typename Iterator, typename Item>
-    using is_T_output_iterator = decltype(is_T_output_iterator_impl<Iterator, Item>(0));
+    using is_T_output_iterator = is_detected<output_iterator_expr, Iterator, Item>;
 
 
     // -------------------------------------------------- is_handled_by_clang_dump_struct
@@ -2082,7 +2066,7 @@ namespace icecream{ namespace detail
         template <typename T>
         struct Function
         {
-            static_assert(is_invocable<T>::value, "");
+            static_assert(is_streamable<invoke_result<T>>::value, "");
 
             Function(T const& func)
                 : func_{func}
@@ -5780,7 +5764,7 @@ namespace detail {
 
     // PartialView | IC_V
     template <typename T, typename Proj>
-    requires std::ranges::view<resolve_view_t<T>>
+    requires std::ranges::view<pipe_result<T>>
     auto operator|(T&& t, RangeViewArgs<Proj> view_args)
     {
         auto rv = RangeView<Proj>(view_args);
@@ -5790,7 +5774,7 @@ namespace detail {
 
     // IC_V | PartialView
     template <typename T, typename Proj>
-    requires std::ranges::view<resolve_view_t<T>>
+    requires std::ranges::view<pipe_result<T>>
     auto operator|(RangeViewArgs<Proj> view_args, T&& t)
     {
         auto rv = RangeView<Proj>(view_args);
@@ -5801,7 +5785,7 @@ namespace detail {
     // Range | IC_V
     // Here we don't know yet if we are in a Range-v3 or STL Ranges pipeline.
     template <typename T, typename Proj>
-    requires (!std::ranges::view<T> && !std::ranges::view<resolve_view_t<T>>)
+    requires (!std::ranges::view<T> && !std::ranges::view<pipe_result<T>>)
     auto operator|(T& t, RangeViewArgs<Proj> view_args) -> std::pair<T&, RangeViewArgs<Proj>>
     {
         return {t, std::move(view_args)};
@@ -5809,7 +5793,7 @@ namespace detail {
 
     // Pair (Range, IC_V) | PartialView
     template <typename T0, typename T1, typename Proj>
-    requires std::ranges::view<resolve_view_t<T1>>
+    requires std::ranges::view<pipe_result<T1>>
     auto operator|(std::pair<T0&, RangeViewArgs<Proj>> t0, T1&& t1)
     {
         auto rv = RangeView<Proj>(t0.second);
@@ -5837,7 +5821,7 @@ namespace detail {
     template <typename T, typename Proj>
     auto operator|(T&& t, RangeViewArgs<Proj> view_args)
         -> typename std::enable_if<
-            std::is_base_of<ranges::view_base, resolve_view_t<T>>::value,
+            std::is_base_of<ranges::view_base, pipe_result<T>>::value,
             decltype(std::forward<T>(t) | rv3v::transform(std::declval<RangeView<Proj>&>()))
         >::type
     {
@@ -5850,7 +5834,7 @@ namespace detail {
     template <typename T, typename Proj>
     auto operator|(RangeViewArgs<Proj> view_args, T&& t)
         -> typename std::enable_if<
-            std::is_base_of<ranges::view_base, resolve_view_t<T>>::value,
+            std::is_base_of<ranges::view_base, pipe_result<T>>::value,
             decltype(rv3v::transform(std::declval<RangeView<Proj>&>()) | std::forward<T>(t))
         >::type
     {
@@ -5864,7 +5848,7 @@ namespace detail {
     template <typename T, typename Proj>
     auto operator|(T& t, RangeViewArgs<Proj> view_args)
         -> typename std::enable_if<
-            !std::is_base_of<ranges::view_base, T>::value && !std::is_base_of<ranges::view_base, resolve_view_t<T>>::value,
+            !std::is_base_of<ranges::view_base, T>::value && !std::is_base_of<ranges::view_base, pipe_result<T>>::value,
             std::pair<T&, RangeViewArgs<Proj>>
         >::type
     {
@@ -5875,7 +5859,7 @@ namespace detail {
     template <typename T0, typename T1, typename Proj>
     auto operator|(std::pair<T0&, RangeViewArgs<Proj>> t0, T1&& t1)
         -> typename std::enable_if<
-            std::is_base_of<ranges::view_base, resolve_view_t<T1>>::value,
+            std::is_base_of<ranges::view_base, pipe_result<T1>>::value,
             decltype(t0.first | rv3v::transform(std::declval<RangeView<Proj>&>()) | std::forward<T1>(t1))
         >::type
     {
