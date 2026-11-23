@@ -1,5 +1,5 @@
 from conan import ConanFile
-from conans.model.version import Version
+from conan.tools.scm import Version
 
 
 class CompressorRecipe(ConanFile):

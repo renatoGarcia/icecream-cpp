@@ -57,7 +57,7 @@ jobs:
           - libcxx: libc++
             version: clang19
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: create container
         run: docker run -dit --name ic-test -v $(pwd):/home/src renatogarcia/icecream-ci:${{ matrix.version }}-3 /bin/sh
       - name: prepare
@@ -89,13 +89,12 @@ jobs:
           - range_v3: OFF
             cpp: 14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Conan
         run: pip3 install conan==2.11.0 --upgrade
       - name: Prepare
         run: |
-          conan profile detect
-          conan install ./tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=conan --build=missing
+          conan install ./tests -pr:a .github/conan/msvc.profile -s compiler.cppstd=${{ matrix.cpp }} --output-folder=conan --build=missing
       - name: build
         # C4710 and C4711 warnings aren't affected by the '/external', so we disable them here globally
         # C4619 ignore silencing unknown warnings
@@ -114,20 +113,17 @@ jobs:
         cpp: [11, 14, 17, 20, 23]
         sys:
           - mingw64
-          - mingw32
           - ucrt64
           - clang64
         include:
           - range_v3: ON
           - range_v3: OFF
             cpp: 11
-          - range_v3: OFF
-            sys: mingw32
     defaults:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: msys2/setup-msys2@v2
         with:
           msystem: ${{ matrix.sys }}
@@ -138,7 +134,7 @@ jobs:
             ninja:p
             boost:p
             fmt:p
-            ${{ matrix.sys != 'mingw32' && 'range-v3:p' || '' }}
+            range-v3:p
       - name: build
         run: |
           cmake . -G Ninja -DCMAKE_MODULE_PATH=$(pwd)/cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DICECREAM_BUILD_TESTS=ON -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror -Wno-c2y-extensions' -DCMAKE_BUILD_TYPE=Release
@@ -148,7 +144,7 @@ jobs:
 
   macos:
     name: Xcode C++${{ matrix.cpp }}
-    runs-on: macos-14
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
@@ -160,9 +156,10 @@ jobs:
     env:
       CPP_STANDARD: ${{ matrix.cpp }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: prepare
-        run: pipx install conan==2.11.0
+        # macos-latest has apple-clang 21, which Conan 2.11.0 does not know
+        run: pipx install conan==2.34.0
       - name: build
         run: |
           conan profile detect
@@ -180,7 +177,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: extractions/setup-just@v2
+      - uses: actions/checkout@v7
+      - uses: extractions/setup-just@v4
       - name: CPM, subproject and installed-package consumers
         run: just test-all
