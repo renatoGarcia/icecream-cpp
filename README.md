@@ -112,7 +112,6 @@ IceCream](https://github.com/gruns/icecream) library.
 **Contents**
 * [Rationale](#rationale)
 * [Install](#install)
-  * [Quick Start](#quick-start)
 * [Basic Usage](#basic-usage)
   * [Direct printing](#direct-printing)
   * [Range views pipeline](#range-views-pipeline)
@@ -142,19 +141,40 @@ conciseness: print any variable, format it as desired, with as little code as po
 
 ## Install
 
-Icecream-cpp is a single-file, header-only library with only the STL as dependency. The
-simplest way to use it is to copy `icecream.hpp` into your project.
+Icecream-cpp is a single-file, header-only library with only the STL as dependency. Choose
+one of the methods below.
 
-To install system-wide with CMake support, run from the project root:
+### Copy the header
 
-```Shell
-mkdir build
-cd build
-cmake ..
-cmake --install .
+Copy `icecream.hpp` into your project, next to your sources or into any directory in the
+include path, and include it:
+
+```C++
+#include "icecream.hpp"
 ```
 
-### CMake subproject
+### System-wide install (CMake)
+
+To install it with CMake support, run from the project root:
+
+```Shell
+cmake -S . -B build
+cmake --install build
+```
+
+To install in a non-default location, add `--prefix <dir>` to the `cmake --install` command,
+and configure your project with `-DCMAKE_PREFIX_PATH=<dir>` so it can be found.
+
+Then, in your project:
+
+```CMake
+find_package(icecream-cpp REQUIRED)
+target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
+```
+Where `<target>` is the executable or library being compiled. See
+[example_project/CMakeLists.txt](example_project/CMakeLists.txt) for a working example.
+
+### CMake subproject (CPM, FetchContent)
 
 Icecream-cpp can also be added to a CMake project as a subproject, with
 [CPM](https://github.com/cpm-cmake/CPM.cmake), `FetchContent` or `add_subdirectory`.
@@ -174,17 +194,37 @@ target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
 ```
 The target is named `icecream-cpp::icecream-cpp` both here and with an installed package.
 
-The Icecream-cpp tests are not built when it is used as a subproject, and Boost is not
-needed. The tests are controlled only by the `ICECREAM_BUILD_TESTS` option (default `OFF`),
-not by `BUILD_TESTING`, so a parent project enabling its own tests does not enable these. To
-build them, which requires Boost, configure Icecream-cpp itself with
-`-DICECREAM_BUILD_TESTS=ON`.
-
 ### Conan
 
 Released versions are available on
-[Conan](https://conan.io/center/recipes/icecream-cpp). See
-[example_project/conanfile.txt](example_project/conanfile.txt) for a usage example.
+[Conan](https://conan.io/center/recipes/icecream-cpp). Add it to your `conanfile.txt`:
+
+```ini
+[requires]
+icecream-cpp/1.0.0
+
+[generators]
+CMakeDeps
+CMakeToolchain
+```
+
+Then, in your `CMakeLists.txt`:
+
+```CMake
+find_package(icecream-cpp REQUIRED)
+target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
+```
+
+And build with:
+
+```Shell
+conan install . --output-folder=build
+cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Debug
+cmake --build .
+```
+
+See [example_project](example_project) for a working example.
 
 ### Nix
 
@@ -209,31 +249,10 @@ import nixpkgs {
 ```
 This adds an `icecream-cpp` derivation to the `nixpkgs` attribute set.
 
+Your CMake project then uses the same `find_package` and `target_link_libraries` lines shown
+in [System-wide install](#system-wide-install-cmake).
+
 See [example_project/flake.nix](example_project/flake.nix) for a working example.
-
-### Quick Start
-
-With CMake:
-```CMake
-find_package(icecream-cpp)
-target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
-```
-Where `<target>` is the executable or library being compiled.
-
-Then include the header:
-
-```C++
-#include <icecream.hpp>
-
-int main(int, char*[])
-{
-    auto x = 42;
-    auto name = std::string{"foo"};
-    IC(x, name);  // prints: ic| x: 42, name: "foo"
-    return 0;
-}
-```
-
 
 ## Basic Usage
 
