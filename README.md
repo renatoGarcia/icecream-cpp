@@ -154,6 +154,32 @@ cmake ..
 cmake --install .
 ```
 
+### CMake subproject
+
+Icecream-cpp can also be added to a CMake project as a subproject, with
+[CPM](https://github.com/cpm-cmake/CPM.cmake), `FetchContent` or `add_subdirectory`.
+With CPM:
+```CMake
+CPMAddPackage("gh:renatoGarcia/icecream-cpp@<version>")
+target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
+```
+With `FetchContent`:
+```CMake
+include(FetchContent)
+FetchContent_Declare(icecream-cpp
+  GIT_REPOSITORY https://github.com/renatoGarcia/icecream-cpp.git
+  GIT_TAG        <version>)
+FetchContent_MakeAvailable(icecream-cpp)
+target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
+```
+The target is named `icecream-cpp::icecream-cpp` both here and with an installed package.
+
+The Icecream-cpp tests are not built when it is used as a subproject, and Boost is not
+needed. The tests are controlled only by the `ICECREAM_BUILD_TESTS` option (default `OFF`),
+not by `BUILD_TESTING`, so a parent project enabling its own tests does not enable these. To
+build them, which requires Boost, configure Icecream-cpp itself with
+`-DICECREAM_BUILD_TESTS=ON`.
+
 ### Conan
 
 Released versions are available on

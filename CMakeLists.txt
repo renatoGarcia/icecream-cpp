@@ -8,10 +8,17 @@ project(icecream-cpp VERSION 1.0.0 LANGUAGES CXX)
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
 
-option(BUILD_TESTING "If ON the tests will be enabled" OFF)
-include(CTest)
+option(ICECREAM_BUILD_TESTS "If ON the Icecream-cpp tests will be built" OFF)
 
 add_library(icecream-cpp INTERFACE)
+add_library(icecream-cpp::icecream-cpp ALIAS icecream-cpp)
+
+target_include_directories(
+  icecream-cpp
+  INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 
 install(
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/icecream.hpp"
@@ -43,6 +50,7 @@ install(
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/icecream-cpp"
 )
 
-if(BUILD_TESTING)
+if(ICECREAM_BUILD_TESTS)
+  enable_testing()
   add_subdirectory(tests)
 endif()

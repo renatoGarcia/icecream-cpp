@@ -68,11 +68,11 @@ jobs:
       - name: build
         run: |
           docker exec ic-test /bin/sh -c " \
-          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DBUILD_TESTING=ON -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror' -DCMAKE_BUILD_TYPE=Release && \
+          cmake /home/src -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DICECREAM_BUILD_TESTS=ON -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror' -DCMAKE_BUILD_TYPE=Release && \
           cmake --build ."
       - name: run
         run: |
-          docker exec ic-test ctest -V
+          docker exec ic-test ctest -V --no-tests=error
 
   windows:
     name: ${{ matrix.name }} C++${{ matrix.cpp }}
@@ -100,10 +100,10 @@ jobs:
         # C4710 and C4711 warnings aren't affected by the '/external', so we disable them here globally
         # C4619 ignore silencing unknown warnings
         run: |
-          cmake . -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake" -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DBUILD_TESTING=ON -DCMAKE_CXX_FLAGS="/experimental:external /Wall /WX /external:W0 /external:anglebrackets /EHsc /wd4619 /wd4710 /wd4711" -DCMAKE_BUILD_TYPE=Release
+          cmake . -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake" -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DICECREAM_BUILD_TESTS=ON -DCMAKE_CXX_FLAGS="/experimental:external /Wall /WX /external:W0 /external:anglebrackets /EHsc /wd4619 /wd4710 /wd4711" -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
       - name: run
-        run: ctest -V -C Release
+        run: ctest -V --no-tests=error -C Release
 
   mingw:
     name: MinGW ${{ matrix.sys }} C++${{ matrix.cpp }}
@@ -141,10 +141,10 @@ jobs:
             ${{ matrix.sys != 'mingw32' && 'range-v3:p' || '' }}
       - name: build
         run: |
-          cmake . -G Ninja -DCMAKE_MODULE_PATH=$(pwd)/cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DBUILD_TESTING=ON -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror -Wno-c2y-extensions' -DCMAKE_BUILD_TYPE=Release
+          cmake . -G Ninja -DCMAKE_MODULE_PATH=$(pwd)/cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DICECREAM_BUILD_TESTS=ON -DCMAKE_CXX_STANDARD=${{ matrix.cpp }} -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror -Wno-c2y-extensions' -DCMAKE_BUILD_TYPE=Release
           cmake --build .
       - name: run
-        run: ctest -V
+        run: ctest -V --no-tests=error
 
   macos:
     name: Xcode C++${{ matrix.cpp }}
@@ -167,7 +167,20 @@ jobs:
         run: |
           conan profile detect
           conan install ./tests -s compiler.cppstd=${{ matrix.cpp }} --output-folder=build --build=missing
-          cmake . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DBUILD_TESTING=ON -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror' -DCMAKE_BUILD_TYPE=Release
+          cmake . -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake -DENABLE_RANGE_V3=${{ matrix.range_v3 }} -DENABLE_FMT=ON -DICECREAM_BUILD_TESTS=ON -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wconversion -Wshadow -pedantic -Werror' -DCMAKE_BUILD_TYPE=Release
           cmake --build .
       - name: run
-        run: ctest -V
+        run: ctest -V --no-tests=error
+
+  consumer:
+    name: consumer tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v2
+      - name: CPM, subproject and installed-package consumers
+        run: just test-all
