@@ -14,7 +14,7 @@ include(cmake/CPM.cmake)
 
 CPMAddPackage(
   NAME icecream-cpp
-  VERSION "1.0.0"
+  VERSION "1.1.0"
   GITHUB_REPOSITORY "renatoGarcia/icecream-cpp"
   SYSTEM YES
 )

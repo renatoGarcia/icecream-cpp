@@ -180,7 +180,7 @@ Icecream-cpp can also be added to a CMake project as a subproject, with
 [CPM](https://github.com/cpm-cmake/CPM.cmake), `FetchContent` or `add_subdirectory`.
 With CPM:
 ```CMake
-CPMAddPackage("gh:renatoGarcia/icecream-cpp@<version>")
+CPMAddPackage("gh:renatoGarcia/icecream-cpp@1.1.0")
 target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
 ```
 With `FetchContent`:
@@ -188,7 +188,7 @@ With `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(icecream-cpp
   GIT_REPOSITORY https://github.com/renatoGarcia/icecream-cpp.git
-  GIT_TAG        <version>)
+  GIT_TAG        v1.1.0)
 FetchContent_MakeAvailable(icecream-cpp)
 target_link_libraries(<target> PRIVATE icecream-cpp::icecream-cpp)
 ```
@@ -201,7 +201,7 @@ Released versions are available on
 
 ```ini
 [requires]
-icecream-cpp/1.0.0
+icecream-cpp/1.1.0
 
 [generators]
 CMakeDeps
